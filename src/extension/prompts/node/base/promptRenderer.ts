@@ -25,6 +25,7 @@ import { getUniqueReferences, PromptReference } from '../../../prompt/common/con
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { IIntent } from '../../../prompt/node/intents';
 import { PromptElementCtor } from './promptElement';
+import { PromptTokenUsageMetadata, IPromptSectionTokenUsage } from '../../common/tokenUsageMetadata';
 
 /**
  * Allows us to use dependency injection to pass the fully fledged IChatEndpoint to the prompt element being rendered.
@@ -110,6 +111,14 @@ export class PromptRenderer<P extends BasePromptElementProps> extends BasePrompt
 			this._requestLogger.addPromptTrace(this.ctorName!, this.endpoint, result, this.tracer as HTMLTracer);
 		}
 
+		// Collect token usage per section before message collapse
+		const tokenUsageMetadata = await this.collectTokenUsageMetadata(result);
+		if (tokenUsageMetadata) {
+			// Store metadata in the result - use the constructor as key
+			const existingMetadata = result.metadata.getAll(PromptTokenUsageMetadata);
+			existingMetadata.push(tokenUsageMetadata);
+		}
+
 		// Collapse consecutive system messages because CAPI currently expects a single
 		// system message per prompt. Note: this may slightly reduce the actual
 		// token usage under the `RenderPromptResult.tokenCount`.
@@ -134,6 +143,131 @@ export class PromptRenderer<P extends BasePromptElementProps> extends BasePrompt
 		const references = result.references.filter(ref => this.validateReference(ref));
 		this._instantiationService.dispose(); // Dispose the hydrated instantiation service
 		return { ...result, references: getUniqueReferences(references) };
+	}
+
+	/**
+	 * Collects detailed token usage information for each section of the prompt
+	 */
+	private async collectTokenUsageMetadata(result: RenderPromptResult): Promise<PromptTokenUsageMetadata | undefined> {
+		try {
+			const sections: IPromptSectionTokenUsage[] = [];
+			
+			// Track token usage by message role and content type
+			for (let i = 0; i < result.messages.length; i++) {
+				const message = result.messages[i];
+				const messagePrefix = this.getMessageRoleDescription(message.role, i);
+				
+				// Count tokens for each content part in the message
+				for (let j = 0; j < message.content.length; j++) {
+					const content = message.content[j];
+					if (content.type === Raw.ChatCompletionContentPartKind.Text && content.text.trim()) {
+						const sectionName = message.content.length > 1 
+							? `${messagePrefix} (Part ${j + 1})`
+							: messagePrefix;
+						
+						// Use the tokenizer to count tokens for this content part
+						const tokenCount = await this.countTokensForContent(content.text);
+						
+						sections.push({
+							section: sectionName,
+							tokenCount,
+							content: this.getSafeContentPreview(content.text),
+							wasTruncated: false, // We don't have truncation info at this level
+							priority: this.getPriorityForRole(message.role)
+						});
+					}
+				}
+			}
+
+			// If we don't have detailed sections, create a summary
+			if (sections.length === 0) {
+				sections.push({
+					section: 'Total Prompt',
+					tokenCount: result.tokenCount,
+					content: 'Complete prompt content',
+					wasTruncated: false
+				});
+			}
+
+			const tokenUsageInfo = {
+				totalTokens: result.tokenCount,
+				maxTokens: this.endpoint.modelMaxPromptTokens,
+				usagePercentage: (result.tokenCount / this.endpoint.modelMaxPromptTokens) * 100,
+				sections,
+				model: this.endpoint.family || 'unknown',
+				timestamp: Date.now(),
+				isNearLimit: (result.tokenCount / this.endpoint.modelMaxPromptTokens) > 0.8
+			};
+
+			return new PromptTokenUsageMetadata(tokenUsageInfo);
+		} catch (error) {
+			this._logService.warn(`Failed to collect token usage metadata: ${error}`);
+			return undefined;
+		}
+	}
+
+	/**
+	 * Count tokens for a specific text content using the appropriate tokenizer
+	 */
+	private async countTokensForContent(text: string): Promise<number> {
+		try {
+			// Use the same tokenizer acquisition pattern as the constructor
+			const tokenizerProvider = this._instantiationService.invokeFunction((accessor) => {
+				return accessor.get(ITokenizerProvider);
+			});
+			const tokenizer = tokenizerProvider.acquireTokenizer(this.endpoint);
+			return await tokenizer.tokenLength({ type: Raw.ChatCompletionContentPartKind.Text, text });
+		} catch (error) {
+			this._logService.warn(`Failed to count tokens for content: ${error}`);
+			// Fall back to rough estimation
+			return Math.ceil(text.length / 4);
+		}
+	}
+
+	/**
+	 * Get a descriptive name for the message role
+	 */
+	private getMessageRoleDescription(role: Raw.ChatRole, index: number): string {
+		switch (role) {
+			case Raw.ChatRole.System:
+				return index === 0 ? 'System Instructions' : `System Message ${index + 1}`;
+			case Raw.ChatRole.User:
+				return 'User Query';
+			case Raw.ChatRole.Assistant:
+				return 'Assistant Response';
+			case Raw.ChatRole.Tool:
+				return 'Tool Result';
+			default:
+				return `${role} Message`;
+		}
+	}
+
+	/**
+	 * Get priority level for different message roles
+	 */
+	private getPriorityForRole(role: Raw.ChatRole): number {
+		switch (role) {
+			case Raw.ChatRole.User:
+				return 1; // Highest priority - user's actual query
+			case Raw.ChatRole.System:
+				return 2; // High priority - system instructions
+			case Raw.ChatRole.Tool:
+				return 3; // Medium priority - tool context
+			case Raw.ChatRole.Assistant:
+				return 4; // Lower priority - conversation history
+			default:
+				return 5; // Lowest priority - unknown
+		}
+	}
+
+	/**
+	 * Create a safe preview of content for display
+	 */
+	private getSafeContentPreview(text: string): string {
+		// Limit preview length and clean up whitespace
+		const maxLength = 200;
+		const cleaned = text.replace(/\s+/g, ' ').trim();
+		return cleaned.length > maxLength ? cleaned.substring(0, maxLength) + '...' : cleaned;
 	}
 
 	private validateReference(reference: PromptReference) {
