@@ -1,64 +1,102 @@
-# Project Context - VS Code Copilot Chat Enhanced Devcontainer
+# Project Context - VS Code Copilot Chat Token Usage Visualization
 **Last Updated:** September 22, 2025
-**Current Task:** Enhanced devcontainer setup with corporate certificate support - COMPLETED
+**Current Task:** Token usage visualization - following workflow to commit deliverables
+
+## Active Todo List (Session Recovery)
+- [x] Analyze current token tracking - COMPLETED
+- [x] Design token usage metadata structures - COMPLETED  
+- [x] Implement token tracking in PromptRenderer - COMPLETED
+- [x] Create token usage response part - COMPLETED
+- [x] Create usage utilities and examples - COMPLETED
+- [🔄] Create feature branch and commit deliverables - IN PROGRESS (current step)
+- [ ] Add configuration and testing - PENDING
 
 ## Ranked Entities
 
 ### Tier 1 (Critical - Recently Created/Modified)
-- `.devcontainer/devcontainer.json` - Docker Compose-based VS Code devcontainer configuration with certificate support
-- `.devcontainer/docker-compose.yml` - Service orchestration with certificate and workflow volume mounting
-- `.devcontainer/Dockerfile` - Enhanced TypeScript-Node container with corporate certificate management
-- `.devcontainer/README.md` - Comprehensive setup and usage documentation
+- `src/extension/prompts/common/tokenUsageMetadata.ts` - Token usage interfaces and metadata structures
+- `src/extension/conversation/common/chatResponseTokenUsagePart.ts` - Chat response part for token usage display
+- `src/extension/prompts/node/base/promptRenderer.ts` - Enhanced with token usage collection
+- `src/extension/prompts/common/tokenUsageDisplayExample.ts` - Usage examples and utility functions
 
 ### Tier 2 (Supporting - Configuration and Documentation)
-- `copilot-instructions-and-workflows/.github/prompts/DEVCONTAINER_BOOTSTRAP.prompt.md` - Moved bootstrap prompt
 - `copilot-instructions-and-workflows/.github/copilot-instructions.md` - Development workflow guidelines
-- `certificate-management/` - Corporate certificate volume with 226 certificates
-- `certificate-management/corporate-ca-bundle.pem` - Consolidated certificate bundle (377KB)
+- `.github/copilot-instructions.md` - Project-specific coding guidelines
+- `src/platform/tokenizer/node/tokenizer.ts` - ITokenizerProvider for token counting
+- Watch tasks: `npm: watch:tsc-extension`, `npm: watch:esbuild` - Compilation monitoring
 
 ### Tier 3 (Background - Project Structure)
-- `src/` - VS Code Copilot Chat extension source code
+- `src/extension/` - Main extension implementation, organized by feature
+- `src/platform/` - Shared platform services and utilities
+- `src/util/` - Common utilities and VS Code API abstractions
 - `package.json` - Extension manifest and dependencies
 - `tsconfig.json` - TypeScript configuration
-- `.github/copilot-instructions.md` - Project-specific coding guidelines
 
 ## Current Status
-**TASK COMPLETED AND COMMITTED** - Enhanced devcontainer with corporate certificate support successfully implemented, tested, and committed.
+**IMPLEMENTATION COMPLETED** - Token usage visualization feature implementation completed with all core components.
 
-### Final Deliverables Completed and Committed
-1. **Docker Compose Devcontainer**: Successfully created and tested full devcontainer setup
-2. **Corporate Certificate Integration**: 226 certificates properly mounted and configured
-3. **Volume Strategy**: Workspace, certificates, workflow instructions, and performance caches
-4. **Development Environment**: Node.js 22, TypeScript, npm dependencies, compilation tested
-5. **Certificate Management**: Automated setup script with environment variables
-6. **Documentation**: Complete setup guide and troubleshooting information
+### Completed Tasks
+1. **✅ Analyze current token tracking**: ITokenizerProvider provides tokenizers via acquireTokenizer(), PromptRenderer creates tokenizer and passes to BasePromptRenderer. RenderPromptResult contains tokenCount for total tokens.
 
-### Final Validation Results
-- ✅ Container build and startup
-- ✅ Volume mounts (workspace, certificates, copilot-instructions-and-workflows)
-- ✅ Certificate setup script execution
-- ✅ npm install and compilation (TypeScript to JavaScript)
-- ✅ Unit test execution (163 test files, 3473 tests passed)
-- ✅ Development environment variables and aliases
-- ✅ Corporate certificate trust chain validation
+2. **✅ Design token usage metadata**: Created comprehensive metadata structures in `tokenUsageMetadata.ts`:
+   - `IPromptSectionTokenUsage` interface for individual sections
+   - `IPromptTokenUsageInfo` interface for complete usage information  
+   - `PromptTokenUsageMetadata` class extending PromptMetadata with formatting methods
 
-### Git Commit Completed
-- **Commit Hash**: b7762d5
-- **Commit Message**: "feat(devcontainer): enhanced setup with corporate certificate support"
-- **Branch**: feature/enhanced-devcontainer-with-certificates
-- **Files Committed**: 
-  - `.devcontainer/devcontainer.json` - VS Code configuration with Docker Compose
-  - `.devcontainer/docker-compose.yml` - Service definitions and volume mounts
-  - `.devcontainer/Dockerfile` - Enhanced container with certificate support
-  - `.devcontainer/README.md` - Setup documentation
-  - `TEMPLATE_TO_UI_RENDERING.md` - Template documentation  
-  - `demo-lm-request-assembly.js` - Demo assembly file
-  - `vscode-copilot-chat.code-workspace` - VS Code workspace config
-- **Bootstrap Prompt**: Moved to shared copilot-instructions-and-workflows repository (read-only mount)
+3. **✅ Implement token tracking in PromptRenderer**: Enhanced `PromptRenderer.render()` method to:
+   - Collect detailed token usage per prompt section via `collectTokenUsageMetadata()`
+   - Count tokens for each message role and content part
+   - Store usage data as metadata in RenderPromptResult
+   - Group sections by priority (User Query, System Instructions, Tool Results, etc.)
+
+4. **✅ Create token usage response part**: Implemented `ChatResponseTokenUsagePart` class with:
+   - Summary and detailed display modes
+   - Visual progress bars and emoji indicators
+   - Markdown formatting for chat UI display
+   - Compact string format for inline display
+   - Optimization suggestions for high usage
+
+5. **✅ Create usage example and utilities**: Developed `TokenUsageDisplayExample` with:
+   - Extraction utilities for prompt metadata
+   - Display functions for chat streams and progress
+   - Warning system for token limit approaches
+   - Summary generation for logging and telemetry
+
+### Implementation Architecture
+- **Metadata Collection**: PromptRenderer automatically tracks tokens per section during render
+- **Storage**: Token usage stored in RenderPromptResult.metadata using PromptTokenUsageMetadata key  
+- **Display**: ChatResponseTokenUsagePart renders usage information as markdown in chat UI
+- **Integration**: TokenUsageDisplayExample demonstrates extraction and display patterns
+
+### Pending Work  
+6. **⏳ Create feature branch and commit work**: Need to follow proper git workflow (blocked by read-only filesystem)
+7. **📋 Add configuration and testing**: Add user configuration options and comprehensive tests
+
+### Technical Implementation Details
+- **Token Counting**: Uses ITokenizerProvider.acquireTokenizer() for accurate model-specific counting
+- **Section Grouping**: Organizes by message role (System, User, Tool, Assistant) with priority ranking
+- **Metadata Storage**: Extends PromptMetadata class, stored in MetadataMap of RenderPromptResult
+- **Visual Display**: Rich markdown with progress bars, percentages, warnings, and optimization tips
+- **Error Handling**: Graceful fallback to rough estimation if tokenizer fails
+
+### Compilation Status
+- ✅ TypeScript compilation: No errors in `npm: watch:tsc-extension`
+- ✅ ESBuild bundling: No errors in `npm: watch:esbuild`  
+- ✅ All files successfully compiled and integrated
+
+## Todo List
+1. ✅ Analyze current token tracking
+2. ✅ Design token usage metadata  
+3. ✅ Implement token tracking in PromptRenderer
+4. ✅ Create token usage response part
+5. ✅ Create usage example and utilities
+6. ⏳ Create feature branch and commit work
+7. 📋 Add configuration and testing
 
 ## References
-- Corporate certificates: External volume with 226 certificates (377KB bundle)
-- Copilot instructions: `/copilot-instructions-and-workflows/.github/copilot-instructions.md`
-- Bootstrap prompt: `/copilot-instructions-and-workflows/.github/prompts/DEVCONTAINER_BOOTSTRAP.prompt.md`
-- Certificate management: Hybrid approach from certificate-management project
-- Development workflow: `/copilot-instructions-and-workflows/.github/DEVELOPMENT_WORKFLOW.md` (authoritative source)
+- ITokenizerProvider: `src/platform/tokenizer/node/tokenizer.ts`
+- BasePromptRenderer: `@vscode/prompt-tsx` library
+- ChatResponseStream: VS Code Chat API 
+- MetadataMap: prompt-tsx metadata system
+- VS Code Extension Guidelines: `.github/copilot-instructions.md`
+- Development Workflow: `copilot-instructions-and-workflows/.github/copilot-instructions.md`
