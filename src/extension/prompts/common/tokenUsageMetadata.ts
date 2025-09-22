@@ -56,9 +56,9 @@ export class PromptTokenUsageMetadata extends PromptMetadata {
 	 */
 	formatSummary(): string {
 		const { totalTokens, maxTokens, usagePercentage, sections } = this.tokenUsageInfo;
-		
+
 		let summary = `**Token Usage**: ${totalTokens.toLocaleString()}/${maxTokens.toLocaleString()} (${usagePercentage.toFixed(1)}%)\n\n`;
-		
+
 		// Group sections by type
 		const systemSections = sections.filter(s => s.section.includes('system') || s.section.includes('safety'));
 		const contextSections = sections.filter(s => s.section.includes('context') || s.section.includes('document') || s.section.includes('workspace'));
@@ -70,10 +70,10 @@ export class PromptTokenUsageMetadata extends PromptMetadata {
 			if (sectionGroup.length === 0) {
 				return;
 			}
-			
+
 			const groupTotal = sectionGroup.reduce((sum, s) => sum + s.tokenCount, 0);
 			const groupPercentage = (groupTotal / totalTokens * 100).toFixed(1);
-			
+
 			summary += `**${title}** (${groupTotal.toLocaleString()} tokens, ${groupPercentage}%)\n`;
 			for (const section of sectionGroup.sort((a, b) => b.tokenCount - a.tokenCount)) {
 				const percentage = (section.tokenCount / totalTokens * 100).toFixed(1);
@@ -101,7 +101,7 @@ export class PromptTokenUsageMetadata extends PromptMetadata {
 	 */
 	formatDetailedBreakdown(): string {
 		const { tokenUsageInfo } = this;
-		
+
 		let breakdown = `## Detailed Token Usage Report\n\n`;
 		breakdown += `**Model**: ${tokenUsageInfo.model}\n`;
 		breakdown += `**Total**: ${tokenUsageInfo.totalTokens}/${tokenUsageInfo.maxTokens} tokens (${tokenUsageInfo.usagePercentage.toFixed(2)}%)\n`;
@@ -115,7 +115,7 @@ export class PromptTokenUsageMetadata extends PromptMetadata {
 		breakdown += `\`${usageBar}\` ${tokenUsageInfo.usagePercentage.toFixed(1)}%\n\n`;
 
 		breakdown += `### Section Breakdown\n\n`;
-		
+
 		for (const section of tokenUsageInfo.sections.sort((a, b) => b.tokenCount - a.tokenCount)) {
 			const percentage = (section.tokenCount / tokenUsageInfo.totalTokens * 100).toFixed(2);
 			breakdown += `**${section.section}**\n`;
@@ -127,8 +127,8 @@ export class PromptTokenUsageMetadata extends PromptMetadata {
 				breakdown += `- ⚠️ Truncated due to token limits\n`;
 			}
 			if (section.content.length > 0) {
-				const displayContent = section.content.length > 200 ? 
-					section.content.substring(0, 200) + '...' : 
+				const displayContent = section.content.length > 200 ?
+					section.content.substring(0, 200) + '...' :
 					section.content;
 				breakdown += `- Content preview: \`${displayContent.replace(/\n/g, '\\n')}\`\n`;
 			}

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { MarkdownString } from '../../../vscodeTypes';
-import { IPromptTokenUsageInfo, IPromptSectionTokenUsage } from '../../prompts/common/tokenUsageMetadata';
+import { IPromptSectionTokenUsage, IPromptTokenUsageInfo } from '../../prompts/common/tokenUsageMetadata';
 
 /**
  * A chat response part that displays prompt token usage information
@@ -36,10 +36,10 @@ export class ChatResponseTokenUsagePart {
 		const filledLength = Math.round(barLength * usagePercentage / 100);
 		const emptyLength = barLength - filledLength;
 		const usageBar = '█'.repeat(filledLength) + '░'.repeat(emptyLength);
-		
+
 		// Add warning emoji if near limit
 		const warningIcon = isNearLimit ? '⚠️ ' : '';
-		
+
 		markdown += `${warningIcon}**Token Usage** \`${usageBar}\` ${usagePercentage.toFixed(1)}%\n\n`;
 		markdown += `**${totalTokens.toLocaleString()}** / **${maxTokens.toLocaleString()}** tokens (${model})\n\n`;
 
@@ -71,7 +71,7 @@ export class ChatResponseTokenUsagePart {
 		const { totalTokens, maxTokens, usagePercentage, sections, model, timestamp } = this.tokenUsageInfo;
 
 		let markdown = `## 📊 Detailed Token Usage Report\n\n`;
-		
+
 		// Header information
 		markdown += `| Field | Value |\n`;
 		markdown += `|-------|-------|\n`;
@@ -90,16 +90,16 @@ export class ChatResponseTokenUsagePart {
 
 		// Section breakdown
 		markdown += `### 📋 Section Breakdown\n\n`;
-		
+
 		// Group by section type for better organization
 		const systemSections = sections.filter(s => s.section.includes('system') || s.section.includes('safety'));
 		const contextSections = sections.filter(s => s.section.includes('context') || s.section.includes('document') || s.section.includes('workspace'));
 		const userSections = sections.filter(s => s.section.includes('user') || s.section.includes('query'));
 		const toolSections = sections.filter(s => s.section.includes('tool') || s.section.includes('function'));
-		const otherSections = sections.filter(s => 
-			!systemSections.includes(s) && 
-			!contextSections.includes(s) && 
-			!userSections.includes(s) && 
+		const otherSections = sections.filter(s =>
+			!systemSections.includes(s) &&
+			!contextSections.includes(s) &&
+			!userSections.includes(s) &&
 			!toolSections.includes(s)
 		);
 
@@ -107,27 +107,27 @@ export class ChatResponseTokenUsagePart {
 			if (groupSections.length === 0) {
 				return;
 			}
-			
+
 			const groupTotal = groupSections.reduce((sum: number, s: IPromptSectionTokenUsage) => sum + s.tokenCount, 0);
 			const groupPercentage = (groupTotal / totalTokens * 100).toFixed(1);
-			
+
 			markdown += `#### ${emoji} ${title} (${groupTotal.toLocaleString()} tokens, ${groupPercentage}%)\n\n`;
-			
+
 			// Sort by token count descending
 			const sortedSections = [...groupSections].sort((a, b) => b.tokenCount - a.tokenCount);
-			
+
 			for (const section of sortedSections) {
 				const percentage = (section.tokenCount / totalTokens * 100).toFixed(1);
 				const priority = section.priority !== undefined ? ` (Priority: ${section.priority})` : '';
 				const truncated = section.wasTruncated ? ' ⚠️ *Truncated*' : '';
-				
+
 				markdown += `**${section.section}**${priority}${truncated}\n`;
 				markdown += `- **Tokens:** ${section.tokenCount.toLocaleString()} (${percentage}%)\n`;
-				
+
 				if (section.content && section.content.length > 0) {
 					const previewLength = 150;
-					const contentPreview = section.content.length > previewLength ? 
-						section.content.substring(0, previewLength) + '...' : 
+					const contentPreview = section.content.length > previewLength ?
+						section.content.substring(0, previewLength) + '...' :
 						section.content;
 					markdown += `- **Preview:** \`${contentPreview.replace(/\n/g, '\\n')}\`\n`;
 				}

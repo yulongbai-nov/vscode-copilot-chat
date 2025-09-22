@@ -8,10 +8,12 @@ import type { ChatResponsePart, ChatResponseProgressPart, LanguageModelToolToken
 import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { toTextPart } from '../../../../platform/chat/common/globalStringUtils';
+import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
 import { IRequestLogger } from '../../../../platform/requestLogger/node/requestLogger';
+import { IExperimentationService } from '../../../../platform/telemetry/common/nullExperimentationService';
 import { ITokenizerProvider } from '../../../../platform/tokenizer/node/tokenizer';
 import { createServiceIdentifier } from '../../../../util/common/services';
 import { isLocation } from '../../../../util/common/types';
@@ -24,8 +26,9 @@ import { RendererVisualizations } from '../../../inlineChat/node/rendererVisuali
 import { getUniqueReferences, PromptReference } from '../../../prompt/common/conversation';
 import { IBuildPromptContext } from '../../../prompt/common/intents';
 import { IIntent } from '../../../prompt/node/intents';
+import { TokenUsageDisplayExample } from '../../common/tokenUsageDisplayExample';
+import { IPromptSectionTokenUsage, PromptTokenUsageMetadata } from '../../common/tokenUsageMetadata';
 import { PromptElementCtor } from './promptElement';
-import { PromptTokenUsageMetadata, IPromptSectionTokenUsage } from '../../common/tokenUsageMetadata';
 
 /**
  * Allows us to use dependency injection to pass the fully fledged IChatEndpoint to the prompt element being rendered.
@@ -67,7 +70,18 @@ export class PromptRenderer<P extends BasePromptElementProps> extends BasePrompt
 		const hydratedInstaService = instantiationService.createChild(new ServiceCollection([IPromptEndpoint, endpoint]));
 		return hydratedInstaService.invokeFunction((accessor) => {
 			const tokenizerProvider = accessor.get(ITokenizerProvider);
-			let renderer = new PromptRenderer(hydratedInstaService, endpoint, ctor, props, tokenizerProvider, accessor.get(IRequestLogger), accessor.get(IAuthenticationService), accessor.get(ILogService));
+			let renderer = new PromptRenderer(
+				hydratedInstaService, 
+				endpoint, 
+				ctor, 
+				props, 
+				tokenizerProvider, 
+				accessor.get(IRequestLogger), 
+				accessor.get(IAuthenticationService), 
+				accessor.get(ILogService),
+				accessor.get(IConfigurationService),
+				accessor.get(IExperimentationService)
+			);
 
 			const visualizations = RendererVisualizations.getIfVisualizationTestIsRunning();
 			if (visualizations) {
@@ -87,6 +101,8 @@ export class PromptRenderer<P extends BasePromptElementProps> extends BasePrompt
 		@IRequestLogger private readonly _requestLogger: IRequestLogger,
 		@IAuthenticationService authenticationService: IAuthenticationService,
 		@ILogService private readonly _logService: ILogService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IExperimentationService private readonly experimentationService: IExperimentationService,
 	) {
 		const tokenizer = tokenizerProvider.acquireTokenizer(endpoint);
 		super(endpoint, ctor, props, tokenizer);
@@ -117,6 +133,13 @@ export class PromptRenderer<P extends BasePromptElementProps> extends BasePrompt
 			// Store metadata in the result - use the constructor as key
 			const existingMetadata = result.metadata.getAll(PromptTokenUsageMetadata);
 			existingMetadata.push(tokenUsageMetadata);
+
+			// Check if token usage display is enabled and show it if configured
+			const tokenUsageEnabled = this.configurationService.getExperimentBasedConfig(ConfigKey.TokenUsageDisplay, this.experimentationService);
+			if (tokenUsageEnabled && progress) {
+				// Display token usage in the chat response
+				TokenUsageDisplayExample.showTokenUsageProgress(tokenUsageMetadata, progress);
+			}
 		}
 
 		// Collapse consecutive system messages because CAPI currently expects a single
@@ -151,23 +174,23 @@ export class PromptRenderer<P extends BasePromptElementProps> extends BasePrompt
 	private async collectTokenUsageMetadata(result: RenderPromptResult): Promise<PromptTokenUsageMetadata | undefined> {
 		try {
 			const sections: IPromptSectionTokenUsage[] = [];
-			
+
 			// Track token usage by message role and content type
 			for (let i = 0; i < result.messages.length; i++) {
 				const message = result.messages[i];
 				const messagePrefix = this.getMessageRoleDescription(message.role, i);
-				
+
 				// Count tokens for each content part in the message
 				for (let j = 0; j < message.content.length; j++) {
 					const content = message.content[j];
 					if (content.type === Raw.ChatCompletionContentPartKind.Text && content.text.trim()) {
-						const sectionName = message.content.length > 1 
+						const sectionName = message.content.length > 1
 							? `${messagePrefix} (Part ${j + 1})`
 							: messagePrefix;
-						
+
 						// Use the tokenizer to count tokens for this content part
 						const tokenCount = await this.countTokensForContent(content.text);
-						
+
 						sections.push({
 							section: sectionName,
 							tokenCount,
