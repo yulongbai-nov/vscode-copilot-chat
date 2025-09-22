@@ -5,18 +5,18 @@
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "devcontainer",
 	"workspaceFolder": "/workspace",
-	
+
 	// Features - same as original but managed through Docker Compose
 	"features": {
 		"ghcr.io/devcontainers/features/git-lfs:1": {}
 	},
-	
+
 	// VS Code customizations
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"dbaeumer.vscode-eslint",
-				"esbenp.prettier-vscode", 
+				"esbenp.prettier-vscode",
 				"connor4312.esbuild-problem-matchers",
 				"GitHub.copilot@prerelease",
 				"ms-vscode.extension-test-runner"
@@ -32,27 +32,27 @@
 			}
 		}
 	},
-	
+
 	// Host requirements
 	"hostRequirements": {
 		"cpus": 4
 	},
-	
+
 	// Container user
 	"containerUser": "node",
-	
+
 	// Lifecycle commands
 	"onCreateCommand": {
 		"setupCerts": "/opt/setup-corporate-certs.sh || echo 'Corporate certificates not available - continuing without them'",
 		"initGitLfs": "git lfs install --force",
 		"npmInstall": "npm install || true"
 	},
-	
+
 	"postCreateCommand": "echo '🎉 VS Code Copilot Chat development environment ready!' && echo '📋 Run: npm run watch to start development'",
-	
+
 	// Shutdown action
 	"shutdownAction": "none",
-	
+
 	// Environment variables (will be merged with Docker Compose)
 	"containerEnv": {
 		"DEBIAN_FRONTEND": "noninteractive",

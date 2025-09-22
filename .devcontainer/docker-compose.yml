@@ -8,78 +8,78 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_VERSION: 22
-    
+
     container_name: vscode-copilot-chat-dev
-    
+
     volumes:
       # Main workspace
       - type: bind
         source: ..
         target: /workspace
         consistency: cached
-      
+
       # Copilot instructions and workflows (read-only)
       - type: bind
         source: ../../copilot-instructions-and-workflows
         target: /copilot-instructions-and-workflows
         read_only: true
-      
+
       # Corporate certificate support from external volume
       - type: volume
         source: corporate_certificates
         target: /opt/corporate-certs
         read_only: true
-      
+
       # VS Code server extensions cache
       - vscode-server:/home/node/.vscode-server
       - vscode-server-insiders:/home/node/.vscode-server-insiders
-      
+
       # Node modules cache for better performance
       - node_modules_cache:/workspace/node_modules
-      
+
       # Git configuration from host (if available)
       - type: bind
         source: ${HOME:-${USERPROFILE}}/.gitconfig
         target: /home/node/.gitconfig
         read_only: true
-      
+
       # Docker socket for Docker-in-Docker
       - type: bind
         source: /var/run/docker.sock
         target: /var/run/docker-host.sock
-    
+
     environment:
       # Corporate certificate environment variables
       - REQUESTS_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
       - CURL_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
       - SSL_CERT_FILE=/opt/corporate-certs/corporate-ca-bundle.pem
       - NODE_EXTRA_CA_CERTS=/opt/corporate-certs/corporate-ca-bundle.pem
-      
+
       # Python/HTTP libraries
       - HTTPX_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
       - PYTHONHTTPSVERIFY=1
-      
+
       # Development environment
       - DEBIAN_FRONTEND=noninteractive
       - NODE_ENV=development
       - SHELL=/bin/bash
-      
+
       # Docker-in-Docker configuration
       - DOCKER_HOST=unix:///var/run/docker-host.sock
-      
+
       # VS Code configuration
       - WORKSPACE_FOLDER=/workspace
       - COPILOT_INSTRUCTIONS_PATH=/copilot-instructions-and-workflows
-    
+
     # Keep container running for VS Code
     command: sleep infinity
-    
+
     # Network configuration for development
     network_mode: "host"
-    
+
     # Enable Docker-in-Docker
     privileged: true
-    
+
     # Development dependencies
     depends_on:
       - certificate-check
@@ -108,7 +108,7 @@ volumes:
   # Corporate certificate volume (external - created by certificate-management)
   corporate_certificates:
     external: true
-    
+
   # Development cache volumes (local)
   vscode-server:
     driver: local
