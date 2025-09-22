@@ -1,19 +1,21 @@
 # Project Context - VS Code Copilot Chat Token Usage Visualization
 **Last Updated:** September 22, 2025
-**Current Task:** Token usage visualization - following workflow to commit deliverables
+**Current Task:** Configuration implementation - adding experimental token usage display setting
 
 ## Active Todo List (Session Recovery)
 - [x] Analyze current token tracking - COMPLETED
-- [x] Design token usage metadata structures - COMPLETED  
+- [x] Design token usage metadata structures - COMPLETED
 - [x] Implement token tracking in PromptRenderer - COMPLETED
 - [x] Create token usage response part - COMPLETED
 - [x] Create usage utilities and examples - COMPLETED
 - [x] Create feature branch and commit deliverables - COMPLETED ✅
-- [ ] Add configuration and testing - PENDING
+- [x] Add configuration and testing - IN PROGRESS (configuration added)
 
 ## Ranked Entities
 
 ### Tier 1 (Critical - Recently Created/Modified)
+- `src/platform/configuration/common/configurationService.ts` - Added TokenUsageDisplay experimental setting
+- `package.json` - Added github.copilot.chat.tokenUsage.display configuration in experimental section
 - `src/extension/prompts/common/tokenUsageMetadata.ts` - Token usage interfaces and metadata structures
 - `src/extension/conversation/common/chatResponseTokenUsagePart.ts` - Chat response part for token usage display
 - `src/extension/prompts/node/base/promptRenderer.ts` - Enhanced with token usage collection
@@ -40,7 +42,7 @@
 
 2. **✅ Design token usage metadata**: Created comprehensive metadata structures in `tokenUsageMetadata.ts`:
    - `IPromptSectionTokenUsage` interface for individual sections
-   - `IPromptTokenUsageInfo` interface for complete usage information  
+   - `IPromptTokenUsageInfo` interface for complete usage information
    - `PromptTokenUsageMetadata` class extending PromptMetadata with formatting methods
 
 3. **✅ Implement token tracking in PromptRenderer**: Enhanced `PromptRenderer.render()` method to:
@@ -64,11 +66,11 @@
 
 ### Implementation Architecture
 - **Metadata Collection**: PromptRenderer automatically tracks tokens per section during render
-- **Storage**: Token usage stored in RenderPromptResult.metadata using PromptTokenUsageMetadata key  
+- **Storage**: Token usage stored in RenderPromptResult.metadata using PromptTokenUsageMetadata key
 - **Display**: ChatResponseTokenUsagePart renders usage information as markdown in chat UI
 - **Integration**: TokenUsageDisplayExample demonstrates extraction and display patterns
 
-### Pending Work  
+### Pending Work
 6. **⏳ Create feature branch and commit work**: Need to follow proper git workflow (blocked by read-only filesystem)
 7. **📋 Add configuration and testing**: Add user configuration options and comprehensive tests
 
@@ -81,12 +83,12 @@
 
 ### Compilation Status
 - ✅ TypeScript compilation: No errors in `npm: watch:tsc-extension`
-- ✅ ESBuild bundling: No errors in `npm: watch:esbuild`  
+- ✅ ESBuild bundling: No errors in `npm: watch:esbuild`
 - ✅ All files successfully compiled and integrated
 
 ## Todo List
 1. ✅ Analyze current token tracking
-2. ✅ Design token usage metadata  
+2. ✅ Design token usage metadata
 3. ✅ Implement token tracking in PromptRenderer
 4. ✅ Create token usage response part
 5. ✅ Create usage example and utilities
@@ -96,7 +98,7 @@
 ## References
 - ITokenizerProvider: `src/platform/tokenizer/node/tokenizer.ts`
 - BasePromptRenderer: `@vscode/prompt-tsx` library
-- ChatResponseStream: VS Code Chat API 
+- ChatResponseStream: VS Code Chat API
 - MetadataMap: prompt-tsx metadata system
 - VS Code Extension Guidelines: `.github/copilot-instructions.md`
 - Development Workflow: `copilot-instructions-and-workflows/.github/copilot-instructions.md`

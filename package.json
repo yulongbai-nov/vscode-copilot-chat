@@ -2492,6 +2492,14 @@
 						],
 						"markdownDescription": "%github.copilot.config.imageUpload.enabled%"
 					},
+					"github.copilot.chat.tokenUsage.display": {
+						"type": "boolean",
+						"default": false,
+						"tags": [
+							"experimental"
+						],
+						"markdownDescription": "Display token usage information in chat responses showing prompt context breakdown and model consumption details."
+					},
 					"github.copilot.chat.edits.suggestRelatedFilesFromGitHistory": {
 						"type": "boolean",
 						"default": true,

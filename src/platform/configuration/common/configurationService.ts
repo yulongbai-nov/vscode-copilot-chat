@@ -752,6 +752,8 @@ export namespace ConfigKey {
 	/** Configure reasoning summary style sent to Responses API */
 	export const ResponsesApiReasoningSummary = defineExpSetting<'off' | 'detailed'>('chat.responsesApiReasoningSummary', 'off');
 	export const EnableChatImageUpload = defineExpSetting<boolean>('chat.imageUpload.enabled', true);
+	/** Display token usage information in chat responses */
+	export const TokenUsageDisplay = defineExpSetting<boolean>('chat.tokenUsage.display', false);
 
 	/** Add context from recently used files */
 	export const TemporalContextInlineChatEnabled = defineExpSetting<boolean>('chat.editor.temporalContext.enabled', false);
