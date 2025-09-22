@@ -1,0 +1,34 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../copilot-instructions-and-workflows"
+		}
+	],
+	"settings": {
+		"githubPullRequests.assignCreated": "${user}",
+		"githubPullRequests.defaultMergeMethod": "squash",
+		"githubPullRequests.ignoredPullRequestBranches": [
+			"main"
+		],
+		"typescript.format.enable": true,
+		"githubPullRequests.upstreamRemote": "never",
+		"extension-test-runner.debugOptions": {
+			"outFiles": [
+				"${workspaceFolder}/dist/**/*.js"
+			]
+		},
+		"files.associations": {
+			"**/*.conversation.json": "jsonc"
+		},
+		"workbench.editorAssociations": {
+			"{git,gitlens}:/**/*.w.json": "default",
+			"*.workspaceRecording.jsonl": "web-editor"
+		},
+		"github.copilot.chat.generateTests.codeLens": true,
+		"githubPullRequests.codingAgent.enabled": true,
+		"githubPullRequests.codingAgent.uiIntegration": true
+	}
+}
