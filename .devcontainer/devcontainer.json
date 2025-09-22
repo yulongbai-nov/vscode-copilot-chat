@@ -1,36 +1,61 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/typescript-node
+// VS Code Copilot Chat Development Container with Corporate Certificate Support
+// Uses hybrid approach from certificate-management project
 {
-	"name": "Node.js & TypeScript",
-	"image": "mcr.microsoft.com/devcontainers/typescript-node:1-22",
+	"name": "VS Code Copilot Chat with Corporate Certificates",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "devcontainer",
+	"workspaceFolder": "/workspace",
+	
+	// Features - same as original but managed through Docker Compose
 	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
-		"ghcr.io/devcontainers/features/azure-cli:1": {},
-		"ghcr.io/devcontainers/features/python:1": {},
-		"ghcr.io/devcontainers/features/dotnet:2": {},
-		"ghcr.io/devcontainers/features/desktop-lite:1": {},
 		"ghcr.io/devcontainers/features/git-lfs:1": {}
 	},
-	"containerEnv": {
-		"DEBIAN_FRONTEND": "noninteractive"
-	},
+	
+	// VS Code customizations
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"dbaeumer.vscode-eslint",
-				"esbenp.prettier-vscode",
+				"esbenp.prettier-vscode", 
 				"connor4312.esbuild-problem-matchers",
 				"GitHub.copilot@prerelease",
 				"ms-vscode.extension-test-runner"
-			]
+			],
+			"settings": {
+				"typescript.preferences.useAliasesForRenames": false,
+				"typescript.preferences.includePackageJsonAutoImports": "off",
+				"typescript.suggest.autoImports": false,
+				"editor.codeActionsOnSave": {
+					"source.fixAll.eslint": "explicit"
+				},
+				"terminal.integrated.defaultProfile.linux": "bash"
+			}
 		}
 	},
+	
+	// Host requirements
 	"hostRequirements": {
 		"cpus": 4
 	},
+	
+	// Container user
 	"containerUser": "node",
+	
+	// Lifecycle commands
 	"onCreateCommand": {
+		"setupCerts": "/opt/setup-corporate-certs.sh || echo 'Corporate certificates not available - continuing without them'",
 		"initGitLfs": "git lfs install --force",
 		"npmInstall": "npm install || true"
+	},
+	
+	"postCreateCommand": "echo '🎉 VS Code Copilot Chat development environment ready!' && echo '📋 Run: npm run watch to start development'",
+	
+	// Shutdown action
+	"shutdownAction": "none",
+	
+	// Environment variables (will be merged with Docker Compose)
+	"containerEnv": {
+		"DEBIAN_FRONTEND": "noninteractive",
+		"NODE_ENV": "development"
 	}
 }

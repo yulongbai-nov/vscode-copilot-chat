@@ -1,0 +1,116 @@
+# VS Code Copilot Chat Development Container with Corporate Certificate Support
+# Hybrid approach integrating certificate-management patterns
+
+services:
+  devcontainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_VERSION: 22
+    
+    container_name: vscode-copilot-chat-dev
+    
+    volumes:
+      # Main workspace
+      - type: bind
+        source: ..
+        target: /workspace
+        consistency: cached
+      
+      # Corporate certificate support from external volume
+      - type: volume
+        source: corporate_certificates
+        target: /opt/corporate-certs
+        read_only: true
+      
+      # VS Code server extensions cache
+      - vscode-server:/home/node/.vscode-server
+      - vscode-server-insiders:/home/node/.vscode-server-insiders
+      
+      # Node modules cache for better performance
+      - node_modules_cache:/workspace/node_modules
+      
+      # Git configuration from host (if available)
+      - type: bind
+        source: ${HOME:-${USERPROFILE}}/.gitconfig
+        target: /home/node/.gitconfig
+        read_only: true
+      
+      # Docker socket for Docker-in-Docker
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker-host.sock
+    
+    environment:
+      # Corporate certificate environment variables
+      - REQUESTS_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
+      - CURL_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
+      - SSL_CERT_FILE=/opt/corporate-certs/corporate-ca-bundle.pem
+      - NODE_EXTRA_CA_CERTS=/opt/corporate-certs/corporate-ca-bundle.pem
+      
+      # Python/HTTP libraries
+      - HTTPX_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
+      - PYTHONHTTPSVERIFY=1
+      
+      # Development environment
+      - DEBIAN_FRONTEND=noninteractive
+      - NODE_ENV=development
+      - SHELL=/bin/bash
+      
+      # Docker-in-Docker configuration
+      - DOCKER_HOST=unix:///var/run/docker-host.sock
+      
+      # VS Code configuration
+      - WORKSPACE_FOLDER=/workspace
+    
+    # Keep container running for VS Code
+    command: sleep infinity
+    
+    # Network configuration for development
+    network_mode: "host"
+    
+    # Enable Docker-in-Docker
+    privileged: true
+    
+    # Development dependencies
+    depends_on:
+      - certificate-check
+
+  # Helper service to verify certificate setup
+  certificate-check:
+    image: alpine:latest
+    volumes:
+      - corporate_certificates:/opt/corporate-certs:ro
+    command: >
+      sh -c "
+        echo '🔍 Checking corporate certificate setup...'
+        if [ -f /opt/corporate-certs/corporate-ca-bundle.pem ]; then
+          cert_count=$$(grep -c 'BEGIN CERTIFICATE' /opt/corporate-certs/corporate-ca-bundle.pem)
+          echo '✅ Corporate certificates found: $$cert_count certificates'
+          echo '📂 Certificate bundle size:' $$(ls -lh /opt/corporate-certs/corporate-ca-bundle.pem | awk '{print $$5}')
+        else
+          echo '⚠️  Corporate certificate bundle not found'
+          echo '📝 Initialize with: cd ../certificate-management && ./init-cert-volume.ps1'
+        fi
+        echo '🎯 Certificate check complete'
+      "
+
+# External volumes
+volumes:
+  # Corporate certificate volume (external - created by certificate-management)
+  corporate_certificates:
+    external: true
+    
+  # Development cache volumes (local)
+  vscode-server:
+    driver: local
+  vscode-server-insiders:
+    driver: local
+  node_modules_cache:
+    driver: local
+
+# Networks (optional - using host networking for simplicity)
+networks:
+  default:
+    driver: bridge
