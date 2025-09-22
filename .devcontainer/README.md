@@ -66,6 +66,10 @@ npm-clean
 
 # Test certificate connectivity
 test-certs
+
+# View copilot instructions and workflows
+ls -la /copilot-instructions-and-workflows
+cat /copilot-instructions-and-workflows/.github/copilot-instructions.md
 ```
 
 ### Certificate Management
@@ -89,6 +93,7 @@ Automatically configured:
 
 ### Volume Mounts
 - `/workspace`: Project source code
+- `/copilot-instructions-and-workflows`: Copilot instructions and workflows (read-only)
 - `/opt/corporate-certs`: Corporate certificates (read-only)
 - `/home/node/.vscode-server`: VS Code extensions cache
 - `/workspace/node_modules`: Cached dependencies

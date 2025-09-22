@@ -18,6 +18,12 @@ services:
         target: /workspace
         consistency: cached
       
+      # Copilot instructions and workflows (read-only)
+      - type: bind
+        source: ../../copilot-instructions-and-workflows
+        target: /copilot-instructions-and-workflows
+        read_only: true
+      
       # Corporate certificate support from external volume
       - type: volume
         source: corporate_certificates
@@ -63,6 +69,7 @@ services:
       
       # VS Code configuration
       - WORKSPACE_FOLDER=/workspace
+      - COPILOT_INSTRUCTIONS_PATH=/copilot-instructions-and-workflows
     
     # Keep container running for VS Code
     command: sleep infinity

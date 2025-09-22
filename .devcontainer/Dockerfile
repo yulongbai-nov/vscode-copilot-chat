@@ -92,7 +92,9 @@ RUN echo '# VS Code Copilot Chat Development Aliases' >> /home/node/.bashrc && \
     echo 'alias npm-clean="rm -rf node_modules package-lock.json && npm install"' >> /home/node/.bashrc && \
     echo 'alias test-watch="npm run test:unit -- --watch"' >> /home/node/.bashrc && \
     echo 'alias build-watch="npm run watch"' >> /home/node/.bashrc && \
-    echo 'alias test-certs="curl -s https://api.github.com && echo \"Certificate setup working!\""' >> /home/node/.bashrc
+    echo 'alias test-certs="curl -s https://api.github.com && echo \"Certificate setup working!\""' >> /home/node/.bashrc && \
+    echo 'alias copilot-instructions="cat /copilot-instructions-and-workflows/.github/copilot-instructions.md"' >> /home/node/.bashrc && \
+    echo 'alias workflow-help="ls -la /copilot-instructions-and-workflows && echo \"Available in /copilot-instructions-and-workflows\""' >> /home/node/.bashrc
 
 # Default command (will be overridden by docker-compose)
 CMD ["/bin/bash"]
