@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, expect, suite, test } from 'vitest';
-import { IPromptSectionTokenUsage, IPromptTokenUsageInfo } from '../../prompts/common/tokenUsageMetadata';
+import { IPromptSectionTokenUsage, IPromptTokenUsageInfo } from '../../../prompts/common/tokenUsageMetadata';
 import { ChatResponseTokenUsagePart } from '../chatResponseTokenUsagePart';
 
 suite('ChatResponseTokenUsagePart', () => {

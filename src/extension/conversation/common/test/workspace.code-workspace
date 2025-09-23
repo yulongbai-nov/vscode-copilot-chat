@@ -1,0 +1,44 @@
+{
+	"folders": [
+		{
+			"path": "../../../../.."
+		},
+		{
+			"path": "../../../../../../copilot-instructions-and-workflows"
+		}
+	],
+	"settings": {
+		"githubPullRequests.assignCreated": "${user}",
+		"githubPullRequests.defaultMergeMethod": "squash",
+		"githubPullRequests.ignoredPullRequestBranches": [
+			"main"
+		],
+		"typescript.format.enable": true,
+		"githubPullRequests.upstreamRemote": "never",
+		"extension-test-runner.debugOptions": {
+			"outFiles": [
+				"${workspaceFolder}/dist/**/*.js"
+			]
+		},
+		"files.associations": {
+			"**/*.conversation.json": "jsonc"
+		},
+		"workbench.editorAssociations": {
+			"{git,gitlens}:/**/*.w.json": "default",
+			"*.workspaceRecording.jsonl": "web-editor"
+		},
+		"web-editors.editorTypes": {
+			"ast.w": "https://microsoft.github.io/vscode-web-editor-text-tools/?editor=ast-viewer",
+			"textRange.w": "https://microsoft.github.io/vscode-web-editor-text-tools/?editor=selection-editor",
+			"jsonUi.w": "https://microsoft.github.io/vscode-web-editor-json-ui/",
+			"diff.w": "https://microsoft.github.io/vscode-web-editor-text-tools/?editor=diff",
+			"text.w": "https://microsoft.github.io/vscode-web-editor-text-tools/?editor=text",
+			"recording.w.json": "https://microsoft.github.io/vscode-workbench-recorder-viewer/",
+			"scoredEdits.w.json": "https://microsoft.github.io/vscode-workbench-recorder-viewer/?editRating",
+			"workspaceRecording.jsonl": "https://microsoft.github.io/vscode-workbench-recorder-viewer/?jsonl=true"
+		},
+		"github.copilot.chat.generateTests.codeLens": true,
+		"githubPullRequests.codingAgent.enabled": true,
+		"githubPullRequests.codingAgent.uiIntegration": true
+	}
+}
