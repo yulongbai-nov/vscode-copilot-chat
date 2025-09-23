@@ -75,7 +75,7 @@ export class PromptTokenUsageMetadata extends PromptMetadata {
 			const groupPercentage = (groupTotal / totalTokens * 100).toFixed(1);
 
 			summary += `**${title}** (${groupTotal.toLocaleString()} tokens, ${groupPercentage}%)\n`;
-			for (const section of sectionGroup.sort((a, b) => b.tokenCount - a.tokenCount)) {
+			for (const section of [...sectionGroup].sort((a, b) => b.tokenCount - a.tokenCount)) {
 				const percentage = (section.tokenCount / totalTokens * 100).toFixed(1);
 				const truncated = section.wasTruncated ? ' ⚠️ *truncated*' : '';
 				summary += `  • ${section.section}: ${section.tokenCount.toLocaleString()} tokens (${percentage}%)${truncated}\n`;
@@ -116,7 +116,7 @@ export class PromptTokenUsageMetadata extends PromptMetadata {
 
 		breakdown += `### Section Breakdown\n\n`;
 
-		for (const section of tokenUsageInfo.sections.sort((a, b) => b.tokenCount - a.tokenCount)) {
+		for (const section of [...tokenUsageInfo.sections].sort((a, b) => b.tokenCount - a.tokenCount)) {
 			const percentage = (section.tokenCount / tokenUsageInfo.totalTokens * 100).toFixed(2);
 			breakdown += `**${section.section}**\n`;
 			breakdown += `- Tokens: ${section.tokenCount.toLocaleString()} (${percentage}%)\n`;
