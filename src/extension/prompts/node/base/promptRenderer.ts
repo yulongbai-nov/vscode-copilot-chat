@@ -71,13 +71,13 @@ export class PromptRenderer<P extends BasePromptElementProps> extends BasePrompt
 		return hydratedInstaService.invokeFunction((accessor) => {
 			const tokenizerProvider = accessor.get(ITokenizerProvider);
 			let renderer = new PromptRenderer(
-				hydratedInstaService, 
-				endpoint, 
-				ctor, 
-				props, 
-				tokenizerProvider, 
-				accessor.get(IRequestLogger), 
-				accessor.get(IAuthenticationService), 
+				hydratedInstaService,
+				endpoint,
+				ctor,
+				props,
+				tokenizerProvider,
+				accessor.get(IRequestLogger),
+				accessor.get(IAuthenticationService),
 				accessor.get(ILogService),
 				accessor.get(IConfigurationService),
 				accessor.get(IExperimentationService)
