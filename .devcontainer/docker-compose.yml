@@ -24,21 +24,21 @@ services:
         target: /copilot-instructions-and-workflows
         read_only: true
 
-      # Merge-safe shared volumes (external)
+      # Merge-safe shared volumes (external via named volumes below)
       # Git global config (read-only, referenced by GIT_CONFIG_GLOBAL)
       - type: volume
-        source: ${GIT_CONFIG_VOLUME_NAME:-git_config}
+        source: git_config
         target: /opt/shared/git
         read_only: true
 
       # SSH keys for git operations (RW if known_hosts updates are needed)
       - type: volume
-        source: ${SSH_KEYS_VOLUME_NAME:-ssh_keys}
+        source: ssh_keys
         target: /home/node/.ssh
 
       # Corporate certificate bundle (optional shared mount)
       - type: volume
-        source: ${CERTS_VOLUME_NAME:-corporate_certificates}
+        source: corporate_certificates
         target: /opt/shared/certs
         read_only: true
 
@@ -122,6 +122,7 @@ volumes:
   # Corporate certificate volume (external - created by certificate-management)
   corporate_certificates:
     external: true
+    name: ${CERTS_VOLUME_NAME:-corporate_certificates}
 
   # Development cache volumes (local)
   vscode-server:
@@ -132,12 +133,12 @@ volumes:
     driver: local
 
   # External shared volumes (merge-safe; may already exist)
-  ${GIT_CONFIG_VOLUME_NAME:-git_config}:
+  git_config:
     external: true
-  ${SSH_KEYS_VOLUME_NAME:-ssh_keys}:
+    name: ${GIT_CONFIG_VOLUME_NAME:-git_config}
+  ssh_keys:
     external: true
-  ${CERTS_VOLUME_NAME:-corporate_certificates}:
-    external: true
+    name: ${SSH_KEYS_VOLUME_NAME:-ssh_keys}
 
 # Networks (optional - using host networking for simplicity)
 networks:
