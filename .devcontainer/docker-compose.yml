@@ -55,12 +55,6 @@ services:
       # Node modules cache for better performance
       - node_modules_cache:/workspace/node_modules
 
-      # Git configuration from host (if available)
-      - type: bind
-        source: ${HOME:-${USERPROFILE}}/.gitconfig
-        target: /home/node/.gitconfig
-        read_only: true
-
       # Docker socket for Docker-in-Docker
       - type: bind
         source: /var/run/docker.sock
