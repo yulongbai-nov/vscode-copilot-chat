@@ -29,7 +29,6 @@ services:
       - type: volume
         source: git_config
         target: /opt/shared/git
-        read_only: true
 
       # SSH keys for git operations (RW if known_hosts updates are needed)
       - type: volume
@@ -40,12 +39,6 @@ services:
       - type: volume
         source: corporate_certificates
         target: /opt/shared/certs
-        read_only: true
-
-      # Corporate certificate support from external volume
-      - type: volume
-        source: corporate_certificates
-        target: /opt/corporate-certs
         read_only: true
 
       # VS Code server extensions cache
@@ -62,13 +55,13 @@ services:
 
     environment:
       # Corporate certificate environment variables
-      - REQUESTS_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
-      - CURL_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
-      - SSL_CERT_FILE=/opt/corporate-certs/corporate-ca-bundle.pem
-      - NODE_EXTRA_CA_CERTS=/opt/corporate-certs/corporate-ca-bundle.pem
+      - REQUESTS_CA_BUNDLE=/opt/shared/certs/corporate-ca-bundle.pem
+      - CURL_CA_BUNDLE=/opt/shared/certs/corporate-ca-bundle.pem
+      - SSL_CERT_FILE=/opt/shared/certs/corporate-ca-bundle.pem
+      - NODE_EXTRA_CA_CERTS=/opt/shared/certs/corporate-ca-bundle.pem
 
       # Python/HTTP libraries
-      - HTTPX_CA_BUNDLE=/opt/corporate-certs/corporate-ca-bundle.pem
+      - HTTPX_CA_BUNDLE=/opt/shared/certs/corporate-ca-bundle.pem
       - PYTHONHTTPSVERIFY=1
 
       # Development environment
