@@ -22,9 +22,10 @@ services:
       - type: bind
         source: ../../copilot-instructions-and-workflows
         target: /copilot-instructions-and-workflows
+        read_only: true
 
       # Merge-safe shared volumes (external via named volumes below)
-      # Git global config (read-only, referenced by GIT_CONFIG_GLOBAL)
+      # Git global config (referenced by GIT_CONFIG_GLOBAL)
       - type: volume
         source: git_config
         target: /opt/shared/git
