@@ -43,6 +43,7 @@ import { SurveyCommandContribution } from '../../survey/vscode-node/surveyComman
 import { SetupTestsContribution } from '../../testing/vscode/setupTestContributions';
 import { ToolsContribution } from '../../tools/vscode-node/tools';
 import { TokenUsageStatusBarContribution } from '../../conversation/vscode-node/tokenUsageStatusBar';
+import { TokenManagementCommandsContribution } from '../../conversation/vscode-node/tokenManagementCommands';
 import { InlineCompletionContribution } from '../../typescriptContext/vscode-node/languageContextService';
 import * as workspaceChunkSearchContribution from '../../workspaceChunkSearch/node/workspaceChunkSearch.contribution';
 import * as workspaceIndexingContribution from '../../workspaceChunkSearch/vscode-node/workspaceChunkSearch.contribution';
@@ -110,5 +111,6 @@ export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(BYOKContrib),
 	asContributionFactory(McpSetupCommands),
 	asContributionFactory(TokenUsageStatusBarContribution),
+	asContributionFactory(TokenManagementCommandsContribution),
 	newWorkspaceContribution,
 ];
