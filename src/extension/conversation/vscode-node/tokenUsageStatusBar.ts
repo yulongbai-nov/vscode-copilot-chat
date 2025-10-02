@@ -182,7 +182,7 @@ export class TokenUsageStatusBarContribution extends Disposable implements IExte
 		super();
 
 		this._statusBarItem = this._register(new TokenUsageStatusBarItem());
-		
+
 		this.logService.debug('[TokenUsageStatusBar] Token usage status bar initialized');
 		// Status bar will be shown/hidden based on token usage updates
 	}

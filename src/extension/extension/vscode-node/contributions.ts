@@ -19,6 +19,8 @@ import { FeedbackCommandContribution } from '../../conversation/vscode-node/feed
 import { LanguageModelAccess } from '../../conversation/vscode-node/languageModelAccess';
 import { LogWorkspaceStateContribution } from '../../conversation/vscode-node/logWorkspaceState';
 import { RemoteAgentContribution } from '../../conversation/vscode-node/remoteAgents';
+import { TokenManagementCommandsContribution } from '../../conversation/vscode-node/tokenManagementCommands';
+import { TokenUsageStatusBarContribution } from '../../conversation/vscode-node/tokenUsageStatusBar';
 import { WalkthroughCommandContribution } from '../../getting-started/vscode-node/commands';
 import * as newWorkspaceContribution from '../../getting-started/vscode-node/newWorkspace.contribution';
 import { IgnoredFileProviderContribution } from '../../ignore/vscode-node/ignoreProvider';
@@ -42,8 +44,6 @@ import { SettingsSchemaFeature } from '../../settingsSchema/vscode-node/settings
 import { SurveyCommandContribution } from '../../survey/vscode-node/surveyCommands';
 import { SetupTestsContribution } from '../../testing/vscode/setupTestContributions';
 import { ToolsContribution } from '../../tools/vscode-node/tools';
-import { TokenUsageStatusBarContribution } from '../../conversation/vscode-node/tokenUsageStatusBar';
-import { TokenManagementCommandsContribution } from '../../conversation/vscode-node/tokenManagementCommands';
 import { InlineCompletionContribution } from '../../typescriptContext/vscode-node/languageContextService';
 import * as workspaceChunkSearchContribution from '../../workspaceChunkSearch/node/workspaceChunkSearch.contribution';
 import * as workspaceIndexingContribution from '../../workspaceChunkSearch/vscode-node/workspaceChunkSearch.contribution';

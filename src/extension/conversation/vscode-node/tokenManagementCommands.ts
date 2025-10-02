@@ -64,7 +64,7 @@ export class TokenManagementCommandsContribution extends Disposable implements I
 	 */
 	private async compactContext(): Promise<void> {
 		this.logService.info('[TokenManagementCommands] Compact context requested');
-		
+
 		// TODO: Implement context compaction logic
 		// This should:
 		// 1. Identify conversation history that can be compacted
@@ -83,7 +83,7 @@ export class TokenManagementCommandsContribution extends Disposable implements I
 	 */
 	private async delegateToSubagent(): Promise<void> {
 		this.logService.info('[TokenManagementCommands] Subagent delegation requested');
-		
+
 		// TODO: Implement subagent delegation logic
 		// This should:
 		// 1. Identify the current task/query
@@ -102,7 +102,7 @@ export class TokenManagementCommandsContribution extends Disposable implements I
 	 */
 	private async simplifyQuery(): Promise<void> {
 		this.logService.info('[TokenManagementCommands] Query simplification requested');
-		
+
 		// TODO: Implement query simplification guidance
 		// This should:
 		// 1. Analyze current query complexity
@@ -121,7 +121,7 @@ export class TokenManagementCommandsContribution extends Disposable implements I
 	 */
 	private async clearHistory(): Promise<void> {
 		this.logService.info('[TokenManagementCommands] Clear history requested');
-		
+
 		const selection = await vscode.window.showWarningMessage(
 			'Are you sure you want to clear the conversation history? This cannot be undone.',
 			{ modal: true },
@@ -135,7 +135,7 @@ export class TokenManagementCommandsContribution extends Disposable implements I
 			// 1. Clear conversation history from storage
 			// 2. Reset token counts
 			// 3. Notify user of success
-			
+
 			this.logService.info('[TokenManagementCommands] Conversation history cleared');
 			await vscode.window.showInformationMessage('Conversation history cleared successfully.');
 		} else {
@@ -149,7 +149,7 @@ export class TokenManagementCommandsContribution extends Disposable implements I
 	 */
 	private async showDetailedTokenUsage(): Promise<void> {
 		this.logService.info('[TokenManagementCommands] Detailed token usage requested');
-		
+
 		// TODO: Implement detailed token usage panel
 		// This should:
 		// 1. Show section-by-section token breakdown

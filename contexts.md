@@ -1,16 +1,16 @@
 # Project Context - Token Usage Visualization Enhancement
-**Last Updated:** October 2, 2025 (Act Phase Session 1 - Complete)
-**Current Task:** Phase 1-2 Complete, Ready for Phase 3 (Token-aware prompts)
+**Last Updated:** October 2, 2025 (Act Phase Session 2 - Phase 3 Complete)
+**Current Task:** Phase 1-3 Complete, Ready for Phase 4 (Agent Orchestration)
 **Branch:** feature/token-usage-visualization
-**Phase:** Act (Phase 1-2 Complete, Phase 3 Next)
+**Phase:** Act (Phase 1-3 Complete, Phase 4-6 Next)
 
 ## Active Todo List (Session Recovery)
 1. ✅ Fix tokenUsageStatusBar.ts location - Completed
 2. ✅ Register status bar item in extension activation - Completed
 3. ✅ Implement token management commands - Completed (stub implementations)
 4. ✅ Enhance ChatResponseTokenUsagePart with actions - Completed
-5. ⏳ Create token-aware prompt builder - Next
-6. ⏳ Implement agent orchestration with token awareness
+5. ✅ Create token-aware prompt builder - Completed
+6. ⏳ Implement agent orchestration with token awareness - Next
 7. ⏳ Add package.json contributions
 8. ⏳ Test and validate implementation
 
@@ -20,14 +20,14 @@
 - `src/extension/conversation/vscode-node/tokenUsageStatusBar.ts` — ✅ Status bar with TokenUsageStatusBarContribution (registered)
 - `src/extension/conversation/vscode-node/tokenManagementCommands.ts` — ✅ Command handlers with TokenManagementCommandsContribution (registered)
 - `src/extension/conversation/common/chatResponseTokenUsagePart.ts` — ✅ toMarkdownWithActions() method added with threshold-based command links
+- `src/extension/prompts/common/tokenAwarePromptBuilder.tsx` — ✅ TSX component for injecting token usage into system prompts
 - `src/extension/extension/vscode-node/contributions.ts` — ✅ Both contributions registered in vscodeNodeChatContributions
 - `docs/token-visualization-enhancement-context.md` — Master implementation plan
 - `.journals/2025-10-02-token-visualization-enhancement.md` — Active implementation journal
-- `manage_todo_list` — 4/8 todos complete (50%)
+- `manage_todo_list` — 5/8 todos complete (62.5%)
 
 ### Tier 2 (Implementation Targets - Next Phase)
-- `src/extension/prompts/common/tokenAwarePromptBuilder.ts` — Token-aware prompt injection (NEXT - to be created)
-- `src/extension/conversation/vscode-node/tokenAwareAgentOrchestrator.ts` — Agent orchestration (to be created)
+- `src/extension/conversation/vscode-node/tokenAwareAgentOrchestrator.ts` — Agent orchestration (NEXT - to be created)
 - `package.json` — Add command contributions, config settings (needs update)
 
 ### Tier 3 (Existing Infrastructure)
@@ -55,7 +55,7 @@
 
 ## Current Status
 
-### Completed (Phase 1-2: Infrastructure & Actions)
+### Completed (Phase 1-3: Infrastructure, Actions & Token-Aware Prompts)
 - ✅ TokenUsageStatusBarItem class with proper structure
 - ✅ Rich tooltip with markdown formatting
 - ✅ Threshold-based visual indicators (🟢🟡⚠️⛔)
@@ -65,11 +65,14 @@
 - ✅ Commands registered and callable
 - ✅ toMarkdownWithActions() method added to ChatResponseTokenUsagePart
 - ✅ Command links with threshold conditions (60%/80%/95%)
+- ✅ TokenAwarePromptBuilder component created (.tsx)
+- ✅ System prompt injection with adaptive guidance
+- ✅ Model self-management at 4 threshold levels
 - ✅ Compilation: Zero errors across all watch tasks
 
-### Next (Phase 3: Token-Aware Intelligence)
-- ⏳ Create TokenAwarePromptBuilder for model self-management
-- ⏳ Inject token usage into system prompts
+### Next (Phase 4: Agent Orchestration)
+- ⏳ Create TokenAwareAgentOrchestrator for automatic delegation
+- ⏳ Implement context compaction algorithms
 
 ### Pending
 - Phase 4-8 implementation (see journal for details)
@@ -77,22 +80,26 @@
 ## Next Steps
 1. ✅ ~~Add toMarkdownWithActions() to ChatResponseTokenUsagePart~~ - Complete
 2. ✅ ~~Wire action links with threshold conditions~~ - Complete
-3. Create TokenAwarePromptBuilder in prompts/common/
-4. Inject token usage metadata into system prompts
-5. Test token-aware model behavior
-6. Update package.json with command contributions
-7. End-to-end testing and validation
+3. ✅ ~~Create TokenAwarePromptBuilder in prompts/common/~~ - Complete
+4. Test token-aware prompt integration
+5. Create TokenAwareAgentOrchestrator for automatic delegation
+6. Implement context compaction algorithms
+7. Update package.json with command contributions
+8. End-to-end testing and validation
 
 ## Validation Checklist
 - [✅] Compilation passes in watch tasks (Zero errors)
 - [✅] Commands are registered and executable (5 commands)
 - [✅] Action links implemented in markdown with thresholds
+- [✅] TokenAwarePromptBuilder created with TSX
+- [✅] System prompt injection with adaptive guidance
+- [ ] Token-aware prompts integrated into conversation flow (needs testing)
 - [ ] Status bar appears when token usage updates (needs integration testing)
 - [ ] Visual indicators match thresholds (needs runtime testing)
 - [ ] Tooltip displays correctly (needs runtime testing)
 - [ ] No console errors or warnings (needs runtime testing)
 - [ ] Command execution works from markdown links (needs runtime testing)
-- [ ] Token-aware prompts enable model self-management (Phase 3)
+- [ ] Model behavior improves with token awareness (Phase 4)
 
 ---
 

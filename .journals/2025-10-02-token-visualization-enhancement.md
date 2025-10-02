@@ -71,11 +71,58 @@ Restored context from `/workspace/docs/token-visualization-enhancement-context.m
 - `/workspace/src/extension/conversation/common/chatResponseTokenUsagePart.ts`
 - `/workspace/package.json`
 
-## Next Steps
-1. Move tokenUsageStatusBar.ts to vscode-node/ folder
-2. Find extension activation code to register status bar
-3. Implement command handlers
-4. Wire up lifecycle management
+**Next Steps:**
+- ✅ ~~Enhance ChatResponseTokenUsagePart with toMarkdownWithActions() method~~ - Complete
+- ✅ ~~Add clickable command links based on thresholds~~ - Complete
+- ✅ ~~Create TokenAwarePromptBuilder~~ - Complete
+- Test token-aware prompts in actual conversation flow
+- Implement agent orchestration
+
+---
+
+## Implementation Progress Log (Continued)
+
+### October 2, 2025 - Act Phase Session 2 (Phase 3)
+
+**Actions Taken:**
+1. **Created TokenAwarePromptBuilder** in `src/extension/prompts/common/tokenAwarePromptBuilder.tsx`
+   - Implements PromptElement pattern with TSX
+   - Generates SystemMessage with token usage context
+   - Provides threshold-based guidance to the AI model:
+     - 🟢 0-60%: Optimal - normal operation
+     - 🟡 60-80%: Caution - be mindful of token usage
+     - ⚠️ 80-95%: Warning - prioritize conciseness
+     - ⛔ 95%+: Critical - be extremely concise, suggest context reduction
+   - Includes helper functions: createTokenAwarePrompt(), shouldEnableTokenAwarePrompting()
+   - Priority system allows control over message placement in prompt hierarchy
+
+**Technical Implementation:**
+- **File:** `.tsx` extension required for JSX/TSX syntax
+- **Architecture:** Platform-agnostic (in `common/` folder)
+- **Pattern:** Extends PromptElement<Props, void> from @vscode/prompt-tsx
+- **Rendering:** Returns SystemMessage with dynamic content based on token usage
+
+**Key Features:**
+- **Self-managing AI:** Model receives its own token usage in system prompt
+- **Adaptive guidance:** Different instructions at each threshold level
+- **Context awareness:** Model knows when to suggest user actions
+- **Configurable:** Can be enabled/disabled and prioritized
+
+**Verification:**
+- ✅ Compilation: Zero errors in watch tasks
+- ✅ TSX syntax: Proper file extension and JSX rendering
+- ✅ Type safety: Correct interfaces and type annotations
+- ✅ Integration ready: Can be used in any prompt renderer
+
+**Next Steps:**
+- Integrate TokenAwarePromptBuilder into conversation flow
+- Test with actual token usage scenarios
+- Implement automatic injection based on configuration
+- Create agent orchestration for subagent delegation
+
+---
+
+```
 
 ## Blockers & Questions
 - None currently
@@ -90,17 +137,17 @@ Restored context from `/workspace/docs/token-visualization-enhancement-context.m
 1. **Moved tokenUsageStatusBar.ts** from `common/` to `vscode-node/` folder
    - Fixed architecture violation (common/ cannot import vscode APIs)
    - Updated imports to use proper VS Code types
-   
-2. **Created TokenUsageStatusBarContribution** 
+
+2. **Created TokenUsageStatusBarContribution**
    - Implements IExtensionContribution pattern
    - Auto-instantiated via dependency injection
    - Registered in vscodeNodeChatContributions array
-   
+
 3. **Implemented TokenManagementCommandsContribution**
    - 5 commands registered: compactContext, delegateToSubagent, simplifyQuery, clearHistory, showDetailedTokenUsage
    - Stub implementations with user-friendly messages
    - Real implementations marked with TODO comments
-   
+
 **Verification:**
 - ✅ Compilation: Zero errors in watch tasks
 - ✅ Architecture: Proper layer separation maintained

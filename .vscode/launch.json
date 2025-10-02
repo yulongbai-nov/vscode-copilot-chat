@@ -59,6 +59,8 @@
 			"attachSimplePort": 5870,
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}",
+				"--disable-extension",
+				"github.copilot-chat",
 			],
 			"smartStep": true,
 			"sourceMaps": true,
@@ -268,7 +270,9 @@
 			"name": "Launch Copilot Extension - TS Server in Debug Mode",
 			"runtimeExecutable": "${execPath}",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}"
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"--disable-extension",
+				"github.copilot-chat"
 			],
 			"smartStep": true,
 			"sourceMaps": true,
