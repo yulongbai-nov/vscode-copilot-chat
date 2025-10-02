@@ -21,6 +21,7 @@ import { LogWorkspaceStateContribution } from '../../conversation/vscode-node/lo
 import { RemoteAgentContribution } from '../../conversation/vscode-node/remoteAgents';
 import { TokenManagementCommandsContribution } from '../../conversation/vscode-node/tokenManagementCommands';
 import { TokenUsageStatusBarContribution } from '../../conversation/vscode-node/tokenUsageStatusBar';
+import { TokenUsageTestCommandsContribution } from '../../conversation/vscode-node/tokenUsageTestCommands';
 import { WalkthroughCommandContribution } from '../../getting-started/vscode-node/commands';
 import * as newWorkspaceContribution from '../../getting-started/vscode-node/newWorkspace.contribution';
 import { IgnoredFileProviderContribution } from '../../ignore/vscode-node/ignoreProvider';
@@ -112,5 +113,6 @@ export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(McpSetupCommands),
 	asContributionFactory(TokenUsageStatusBarContribution),
 	asContributionFactory(TokenManagementCommandsContribution),
+	asContributionFactory(TokenUsageTestCommandsContribution),
 	newWorkspaceContribution,
 ];
