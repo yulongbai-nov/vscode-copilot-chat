@@ -28,14 +28,14 @@ Restored context from `/workspace/docs/token-visualization-enhancement-context.m
 
 ### Phase 1: Core UI Components (Current)
 1. ✅ Create TokenUsageStatusBarItem class with proper structure
-2. ⏳ Move to correct location (vscode-node/)
-3. ⏳ Register in extension activation
+2. ✅ Move to correct location (vscode-node/)
+3. ✅ Register in extension activation
 4. ⏳ Test status bar updates
 
-### Phase 2: Enhanced Actions
-- Update ChatResponseTokenUsagePart with action links
-- Implement token management commands
-- Add command handlers
+### Phase 2: Enhanced Actions (Current)
+- ✅ Implement token management commands (stub implementations)
+- ⏳ Update ChatResponseTokenUsagePart with action links
+- ⏳ Wire up real command implementations
 
 ### Phase 3: Token-Aware Prompts
 - Create TokenAwarePromptBuilder
@@ -79,5 +79,41 @@ Restored context from `/workspace/docs/token-visualization-enhancement-context.m
 
 ## Blockers & Questions
 - None currently
+
+---
+
+## Implementation Progress Log
+
+### October 2, 2025 - Act Phase Session 1
+
+**Actions Taken:**
+1. **Moved tokenUsageStatusBar.ts** from `common/` to `vscode-node/` folder
+   - Fixed architecture violation (common/ cannot import vscode APIs)
+   - Updated imports to use proper VS Code types
+   
+2. **Created TokenUsageStatusBarContribution** 
+   - Implements IExtensionContribution pattern
+   - Auto-instantiated via dependency injection
+   - Registered in vscodeNodeChatContributions array
+   
+3. **Implemented TokenManagementCommandsContribution**
+   - 5 commands registered: compactContext, delegateToSubagent, simplifyQuery, clearHistory, showDetailedTokenUsage
+   - Stub implementations with user-friendly messages
+   - Real implementations marked with TODO comments
+   
+**Verification:**
+- ✅ Compilation: Zero errors in watch tasks
+- ✅ Architecture: Proper layer separation maintained
+- ✅ Registration: Both contributions added to activation array
+
+**Git Commits:**
+- `5b2345c` - chore(planning): restore contexts from token-visualization-enhancement-context.md
+- `c009cd5` - feat(token-usage): add status bar contribution for token monitoring
+- `337d6ba` - feat(token-usage): implement token management command handlers
+
+**Next Steps:**
+- Enhance ChatResponseTokenUsagePart with toMarkdownWithActions() method
+- Add clickable command links based on thresholds
+- Test end-to-end flow
 
 ---

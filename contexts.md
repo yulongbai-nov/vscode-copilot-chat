@@ -1,14 +1,14 @@
 # Project Context - Token Usage Visualization Enhancement
-**Last Updated:** October 2, 2025
-**Current Task:** Implement dedicated UI and token-aware prompts for token usage monitoring
+**Last Updated:** October 2, 2025 (Act Phase Session 1)
+**Current Task:** Enhance ChatResponseTokenUsagePart with action links
 **Branch:** feature/token-usage-visualization
-**Phase:** Plan (Setting up for Phase 1 implementation)
+**Phase:** Act (Phase 1-2 implementation in progress)
 
 ## Active Todo List (Session Recovery)
-1. ⏳ Fix tokenUsageStatusBar.ts location - Move from common/ to vscode-node/
-2. ⏳ Register status bar item in extension activation
-3. ⏳ Implement token management commands
-4. ⏳ Enhance ChatResponseTokenUsagePart with actions
+1. ✅ Fix tokenUsageStatusBar.ts location - Completed
+2. ✅ Register status bar item in extension activation - Completed
+3. ✅ Implement token management commands - Completed (stub implementations)
+4. ⏳ Enhance ChatResponseTokenUsagePart with actions - In Progress
 5. ⏳ Create token-aware prompt builder
 6. ⏳ Implement agent orchestration with token awareness
 7. ⏳ Add package.json contributions
@@ -17,18 +17,19 @@
 ## Ranked Entities
 
 ### Tier 1 (Critical - Active Work)
-- `src/extension/conversation/common/tokenUsageStatusBar.ts` — **NEEDS MOVE** to vscode-node/ folder (currently in wrong location preventing VS Code API imports)
-- `docs/token-visualization-enhancement-context.md` — Master implementation plan and design document
+- `src/extension/conversation/vscode-node/tokenUsageStatusBar.ts` — ✅ Status bar with TokenUsageStatusBarContribution (registered)
+- `src/extension/conversation/vscode-node/tokenManagementCommands.ts` — ✅ Command handlers with TokenManagementCommandsContribution (registered)
+- `src/extension/conversation/common/chatResponseTokenUsagePart.ts` — ⏳ NEXT: Add toMarkdownWithActions() method
+- `src/extension/extension/vscode-node/contributions.ts` — ✅ Both contributions registered in vscodeNodeChatContributions
+- `docs/token-visualization-enhancement-context.md` — Master implementation plan
 - `.journals/2025-10-02-token-visualization-enhancement.md` — Active implementation journal
-- `manage_todo_list` — 8 todos tracking implementation phases
+- `manage_todo_list` — 3/8 todos complete
 
 ### Tier 2 (Implementation Targets)
-- `src/extension/conversation/vscode-node/tokenUsageStatusBar.ts` — Target location for status bar (to be moved)
-- `src/extension/conversation/vscode-node/tokenManagementCommands.ts` — Command handlers (to be created)
-- `src/extension/conversation/vscode-node/tokenAwareAgentOrchestrator.ts` — Agent orchestration (to be created)
+- `src/extension/conversation/common/chatResponseTokenUsagePart.ts` — Add toMarkdownWithActions() method (CURRENT WORK)
 - `src/extension/prompts/common/tokenAwarePromptBuilder.ts` — Token-aware prompt injection (to be created)
-- `src/extension/conversation/common/chatResponseTokenUsagePart.ts` — Add toMarkdownWithActions() method
-- `package.json` — Add command contributions, config settings
+- `src/extension/conversation/vscode-node/tokenAwareAgentOrchestrator.ts` — Agent orchestration (to be created)
+- `package.json` — Add command contributions, config settings (needs update)
 
 ### Tier 3 (Existing Infrastructure)
 - `src/extension/prompts/common/tokenUsageMetadata.ts` — IPromptTokenUsageInfo interface
@@ -55,35 +56,37 @@
 
 ## Current Status
 
-### Completed
-- ✅ TokenUsageStatusBarItem class created with proper structure
+### Completed (Phase 1)
+- ✅ TokenUsageStatusBarItem class with proper structure
 - ✅ Rich tooltip with markdown formatting
-- ✅ Threshold-based visual indicators
-- ✅ Command integration prepared (`github.copilot.chat.showDetailedTokenUsage`)
+- ✅ Threshold-based visual indicators (🟢🟡⚠️⛔)
+- ✅ Moved to vscode-node/ folder
+- ✅ TokenUsageStatusBarContribution registered
+- ✅ TokenManagementCommandsContribution with 5 commands
+- ✅ Commands registered and callable
 
-### In Progress (Phase 1)
-- ⏳ Move file to correct location
-- ⏳ Register in extension activation
-- ⏳ Wire up lifecycle management
-- ⏳ Test status bar updates
+### In Progress (Phase 2)
+- ⏳ Enhance ChatResponseTokenUsagePart with action links
+- ⏳ Add command links based on thresholds (80%+, 95%+)
 
 ### Pending
-- Phase 2-8 implementation (see journal for details)
+- Phase 3-8 implementation (see journal for details)
 
 ## Next Steps
-1. Move tokenUsageStatusBar.ts to vscode-node/ folder
-2. Find and examine extension activation code
-3. Register status bar item with proper lifecycle
-4. Implement command handlers for token management
-5. Test basic status bar functionality
+1. Add toMarkdownWithActions() to ChatResponseTokenUsagePart
+2. Wire action links with threshold conditions
+3. Test command execution from tooltip/markdown
+4. Begin Phase 3: Token-aware prompt builder
+5. Update package.json with command contributions
 
 ## Validation Checklist
-- [ ] Compilation passes in watch tasks
+- [✅] Compilation passes in watch tasks
 - [ ] Status bar appears when token usage updates
 - [ ] Visual indicators match thresholds
 - [ ] Tooltip displays correctly
 - [ ] Commands are registered and executable
 - [ ] No console errors or warnings
+- [ ] Action links work in markdown
 
 ---
 
