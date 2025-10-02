@@ -164,4 +164,81 @@ export class ChatResponseTokenUsagePart {
 		const warning = isNearLimit ? '⚠️ ' : '';
 		return `${warning}${totalTokens.toLocaleString()}/${maxTokens.toLocaleString()} tokens (${usagePercentage.toFixed(1)}%)`;
 	}
+
+	/**
+	 * Creates a formatted markdown representation with actionable command links
+	 * Command links appear based on token usage thresholds to help users manage token consumption
+	 */
+	toMarkdownWithActions(): MarkdownString {
+		const { totalTokens, maxTokens, usagePercentage, sections, model } = this.tokenUsageInfo;
+
+		let markdown = '';
+
+		// Usage overview with visual bar
+		const barLength = 20;
+		const filledLength = Math.round(barLength * usagePercentage / 100);
+		const emptyLength = barLength - filledLength;
+		const usageBar = '█'.repeat(filledLength) + '░'.repeat(emptyLength);
+
+		// Determine status and icon
+		let statusIcon = '🟢';
+		let statusText = 'Optimal';
+		if (usagePercentage >= 95) {
+			statusIcon = '⛔';
+			statusText = 'Critical';
+		} else if (usagePercentage >= 80) {
+			statusIcon = '⚠️';
+			statusText = 'Warning';
+		} else if (usagePercentage >= 60) {
+			statusIcon = '🟡';
+			statusText = 'Caution';
+		}
+
+		markdown += `${statusIcon} **Token Usage: ${statusText}** \`${usageBar}\` ${usagePercentage.toFixed(1)}%\n\n`;
+		markdown += `**${totalTokens.toLocaleString()}** / **${maxTokens.toLocaleString()}** tokens (${model})\n\n`;
+
+		// Show top token consumers
+		const topSections = [...sections]
+			.sort((a: IPromptSectionTokenUsage, b: IPromptSectionTokenUsage) => b.tokenCount - a.tokenCount)
+			.slice(0, 3); // Show top 3 consumers
+
+		if (topSections.length > 0) {
+			markdown += `**Top Token Consumers:**\n`;
+			for (const section of topSections) {
+				const percentage = (section.tokenCount / totalTokens * 100).toFixed(0);
+				const truncatedIndicator = section.wasTruncated ? ' ⚠️' : '';
+				markdown += `• ${section.section}: ${section.tokenCount.toLocaleString()} (${percentage}%)${truncatedIndicator}\n`;
+			}
+			markdown += '\n';
+		}
+
+		// Add actionable command links based on thresholds
+		if (usagePercentage >= 95) {
+			// Critical: Require immediate action
+			markdown += `### ⛔ Critical Token Usage - Immediate Action Required\n\n`;
+			markdown += `Your token usage is at critical levels. Choose an action:\n\n`;
+			markdown += `- [🗜️ Compact Context](command:github.copilot.chat.compactContext) - Summarize conversation history\n`;
+			markdown += `- [🗑️ Clear History](command:github.copilot.chat.clearHistory) - Reset conversation\n`;
+			markdown += `- [📊 View Detailed Usage](command:github.copilot.chat.showDetailedTokenUsage) - Analyze consumption\n`;
+		} else if (usagePercentage >= 80) {
+			// Warning: Recommend actions
+			markdown += `### ⚠️ Approaching Token Limit\n\n`;
+			markdown += `Consider taking action to improve performance:\n\n`;
+			markdown += `- [🗜️ Compact Context](command:github.copilot.chat.compactContext) - Summarize history to reduce tokens\n`;
+			markdown += `- [🤖 Use Subagent](command:github.copilot.chat.delegateToSubagent) - Delegate task to focused agent\n`;
+			markdown += `- [✏️ Simplify Query](command:github.copilot.chat.simplifyQuery) - Get help rephrasing\n`;
+			markdown += `- [📊 View Details](command:github.copilot.chat.showDetailedTokenUsage) - See full breakdown\n`;
+		} else if (usagePercentage >= 60) {
+			// Caution: Monitor usage
+			markdown += `### 🟡 Moderate Token Usage\n\n`;
+			markdown += `Token usage is moderate. Available actions:\n\n`;
+			markdown += `- [📊 View Detailed Usage](command:github.copilot.chat.showDetailedTokenUsage) - Analyze consumption\n`;
+			markdown += `- [✏️ Simplify Query](command:github.copilot.chat.simplifyQuery) - Optimize your queries\n`;
+		} else {
+			// Optimal: Just provide info
+			markdown += `💡 *Tip: You're using tokens efficiently. [View detailed breakdown](command:github.copilot.chat.showDetailedTokenUsage) for insights.*\n`;
+		}
+
+		return new MarkdownString(markdown, true); // supportHtml = true to enable command links
+	}
 }
