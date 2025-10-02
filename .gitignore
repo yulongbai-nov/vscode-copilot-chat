@@ -4,6 +4,9 @@
 node_modules/
 dist/
 
+# VSIX packages (extension builds)
+*.vsix
+
 # created by simulation
 .simulation
 
