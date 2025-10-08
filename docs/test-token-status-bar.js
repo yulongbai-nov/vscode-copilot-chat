@@ -5,7 +5,7 @@
 
 /**
  * Quick test script to trigger token usage status bar visualization
- * 
+ *
  * To use this in the Extension Development Host:
  * 1. Open the Command Palette (Ctrl+Shift+P)
  * 2. Type "Developer: Execute Command in Extension Development Host"

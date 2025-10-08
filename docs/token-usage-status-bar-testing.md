@@ -134,7 +134,7 @@ These commands currently show placeholder messages indicating they're not yet im
 
 **Usage:** 51,200 / 128,000 tokens (40.0%)
 
-`████████░░░░░░░░░░░░` 
+`████████░░░░░░░░░░░░`
 
 🟢 **Optimal:** Good token efficiency
 
