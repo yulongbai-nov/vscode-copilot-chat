@@ -34,7 +34,6 @@ import './scmChangesTool';
 import './searchWorkspaceSymbolsTool';
 import './simpleBrowserTool';
 import './testFailureTool';
-import './thinkTool';
 import './toolReplayTool';
 import './typeHierarchyTool';
 import './usagesTool';
