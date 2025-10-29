@@ -74,34 +74,39 @@ git am --3way .git/patches/type-hierarchy/*.patch
 This makes it obvious which patch fails and keeps history linear.
 
 ## Automated Update Script
-Drop the following helper at `script/update-type-hierarchy.sh` in your fork to codify the flow:
+The automation lives in [../script/update-type-hierarchy.sh#L1-L91](../script/update-type-hierarchy.sh#L1-L91). It now understands optional skip and conflict-strategy controls so the same entry point works for both humans and GitHub Actions; the entry guard is shown in [../script/update-type-hierarchy.sh#L17-L33](../script/update-type-hierarchy.sh#L17-L33):
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
-
-origin_branch="origin/main"
-stack_branch="personal/main"
-feature_branch="feature/type-hierarchy-tool"
-
-gh repo sync yulongbai-nov/vscode-copilot-chat --branch main
-
-git fetch origin
-
-git switch "$stack_branch"
-git rebase "$origin_branch"
-
-git switch "$feature_branch"
-git rebase "$stack_branch"
-
+skip_sync="${SKIP_FORK_SYNC:-0}"
+auto_strategy="${AUTO_RESOLVE_STRATEGY:-}"
+if [[ "$skip_sync" != "1" ]]; then
+  printf '==> Syncing fork %s\n' "$fork_repo"
+  gh repo sync "$fork_repo" --branch main
+else
+  printf '==> Skipping fork sync (SKIP_FORK_SYNC=%s)\n' "$skip_sync"
+fi
+```
+When conflicts appear the helper retries with a strategy hint if `AUTO_RESOLVE_STRATEGY` is present; see [../script/update-type-hierarchy.sh#L65-L83](../script/update-type-hierarchy.sh#L65-L83):
+```bash
+run_rebase() {
+  printf '==> Rebasing %s onto %s\n' "$target" "$base"
+  git switch "$target"
+  if git rebase "$base"; then
+    return
+  fi
+  git rebase --abort >/dev/null 2>&1 || true
+  git rebase --strategy=recursive --strategy-option="$auto_strategy" "$base"
+}
+```
+Every run ends with a fast validation in [../script/update-type-hierarchy.sh#L88-L89](../script/update-type-hierarchy.sh#L88-L89):
+```bash
+printf '==> Running typecheck\n'
 npm run typecheck
-
-echo "✅ type hierarchy stack rebased and validated"```
-Mark it executable (`chmod +x script/update-type-hierarchy.sh`) and run whenever upstream advances.
+```
+Mark it executable (`chmod +x script/update-type-hierarchy.sh`) and run whenever upstream advances. Set `AUTO_RESOLVE_STRATEGY=theirs` to bias toward upstream when you want the automated agent’s behavior locally, or `SKIP_FORK_SYNC=1` when iterating on an already-synced checkout.
+To rehearse failure handling without touching upstream, set `SIMULATE_CONFLICT=1`. The script will emit a conflict-style message and exit non-zero, which the agent interprets as a merge issue; see [../script/update-type-hierarchy.sh#L17-L44](../script/update-type-hierarchy.sh#L17-L44).
 
 ## GitHub Actions Integration
-- The maintenance workflow runs nightly at 02:15 UTC and remains available on demand; see [../.github/workflows/type-hierarchy-maintenance.yml#L1-L33](../.github/workflows/type-hierarchy-maintenance.yml#L1-L33):
+- The maintenance workflow runs nightly at 02:15 UTC and remains available on demand; see [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39):
   ```yaml
   jobs:
     maintenance:
@@ -110,6 +115,16 @@ Mark it executable (`chmod +x script/update-type-hierarchy.sh`) and run whenever
         - name: Checkout repository
           uses: actions/checkout@v4
   ```
+- When that workflow fails due to merge conflicts, the agent in [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200) downloads the failed run logs, replays the updater with `AUTO_RESOLVE_STRATEGY=theirs`, and publishes a report. The remediation step highlights the incident details:
+  ```yaml
+      - name: Attempt automated resolution
+        env:
+          AUTO_RESOLVE_STRATEGY: theirs
+          SKIP_FORK_SYNC: '1'
+        run: ./script/update-type-hierarchy.sh | tee agent-resolution.log
+  ```
+- Incident reports land in `docs/reports/` with direct references back to the failed run and the relevant script snippet, and the agent opens a pull request so reviewers can decide whether to accept or adjust the auto-merge.
+- To simulate a failure via Actions, dispatch the maintenance workflow with the `simulate_conflict` input set to `true`; the step will pass `SIMULATE_CONFLICT=1` through the environment so the script short-circuits and the agent workflow can be exercised intentionally.
 - Trigger fork CI runs after each sync:
   ```bash
   gh workflow run typecheck.yml --repo yulongbai-nov/vscode-copilot-chat

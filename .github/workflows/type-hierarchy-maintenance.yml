@@ -2,6 +2,11 @@ name: Type Hierarchy Maintenance
 
 on:
   workflow_dispatch:
+    inputs:
+      simulate_conflict:
+        description: "Set to 'true' to force a simulated merge conflict"
+        required: false
+        default: 'false'
   schedule:
     - cron: '15 2 * * *'
 
@@ -30,4 +35,5 @@ jobs:
       - name: Rebase and validate type hierarchy stack
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIMULATE_CONFLICT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.simulate_conflict == 'true' && '1' || '0' }}
         run: ./script/update-type-hierarchy.sh

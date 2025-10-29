@@ -40,7 +40,9 @@ Upstream repo (origin/main) --> main-upstream (local tracking)
 3. **Automation Script**
    - Provide a reusable script (`script/update-type-hierarchy.sh`) that runs the sync → rebase → validate pipeline end-to-end.
 4. **GitHub Action Orchestration**
-   - Expose the maintenance flow through [../.github/workflows/type-hierarchy-maintenance.yml#L1-L33](../.github/workflows/type-hierarchy-maintenance.yml#L1-L33) so the update can run in CI each night and on-demand.
+   - Expose the maintenance flow through [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39) so the update can run in CI each night and on-demand.
+   - Add a follow-up agent at [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200) that reacts to failures, reruns the updater with `AUTO_RESOLVE_STRATEGY=theirs`, and files an incident report plus PR for review.
+   - Provide an opt-in `simulate_conflict` dispatch input that forwards `SIMULATE_CONFLICT=1` to the script for testing the remediation path without real merge debt.
     ```yaml
     jobs:
        maintenance:
@@ -54,13 +56,16 @@ Upstream repo (origin/main) --> main-upstream (local tracking)
 - Maintenance playbook published at [../docs/TYPE-HIERARCHY-MAINTENANCE.md](../docs/TYPE-HIERARCHY-MAINTENANCE.md).
 - Spec (this document) and execution plan finalized.
 - Automation script committed and executable (`chmod +x script/update-type-hierarchy.sh`).
-- GitHub Action defined at [../.github/workflows/type-hierarchy-maintenance.yml#L1-L33](../.github/workflows/type-hierarchy-maintenance.yml#L1-L33) invoking the maintenance script on both schedule and manual dispatch.
+- GitHub Action defined at [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39) invoking the maintenance script on both schedule and manual dispatch.
+- Remediation agent defined at [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200) that records failure context and opens a follow-up PR when automation cannot resolve conflicts silently.
+- Manual dispatch supports the `simulate_conflict` toggle so observers can trigger the failure path on demand.
 - Example run documented in plan notes showing successful typecheck.
 
 ## Validation Plan
 - Verify rebase workflow on a dry run against `origin/main`.
 - Confirm `npm run typecheck` passes post-rebase.
 - Capture rerere cache footprint for recurring conflicts and ensure no unintended code changes.
+- Exercise the remediation workflow by simulating a failure (or reviewing the generated incident report/PR when it first triggers) to confirm the escalation path is healthy.
 
 ## References
 - [Git rerere documentation](https://git-scm.com/docs/git-rerere)

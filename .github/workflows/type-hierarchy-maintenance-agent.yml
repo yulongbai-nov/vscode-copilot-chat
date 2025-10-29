@@ -1,0 +1,200 @@
+name: Type Hierarchy Maintenance Agent
+
+on:
+  workflow_run:
+    workflows:
+      - Type Hierarchy Maintenance
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-remediate:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.x'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Download maintenance logs
+        run: gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log > maintenance.log
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+
+      - name: Detect merge conflict indicators
+        id: detect
+        run: |
+          set -e
+          touch failure-summary.raw
+          grep -Ei 'CONFLICT|could not apply|Automatic merge failed|invalid reference' maintenance.log >> failure-summary.raw || true
+          grep -Fi 'Missing remote branch' maintenance.log >> failure-summary.raw || true
+          head -n 10 failure-summary.raw > failure-summary.txt
+          if [[ -s failure-summary.txt ]]; then
+            echo "merge_conflict=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "merge_conflict=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip agent execution for non-merge failures
+        if: steps.detect.outputs.merge_conflict != 'true'
+        run: echo "No merge-conflict indicators detected; skipping remediation."
+
+      - name: Configure git author
+        if: steps.detect.outputs.merge_conflict == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare remediation branch
+        if: steps.detect.outputs.merge_conflict == 'true'
+        id: prep
+        run: |
+          set -euo pipefail
+          ts=$(date -u +"%Y%m%dT%H%M%SZ")
+          branch="maintenance/agent-${ts}"
+          echo "timestamp=${ts}" >> "$GITHUB_OUTPUT"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          git fetch origin
+          git checkout main
+          git pull --ff-only origin main
+          git checkout -b "$branch"
+
+      - name: Attempt automated resolution
+        if: steps.detect.outputs.merge_conflict == 'true'
+        id: attempt
+        env:
+          AUTO_RESOLVE_STRATEGY: theirs
+          SKIP_FORK_SYNC: '1'
+          TS: ${{ steps.prep.outputs.timestamp }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          summary_file="failure-summary.txt"
+          resolution_file="resolution-summary.txt"
+          status_file="resolution-status.txt"
+          report_path="docs/reports/type-hierarchy-maintenance-${TS}.md"
+          mkdir -p docs/reports
+          touch "$summary_file" "$resolution_file" "$status_file"
+          set +e
+          ./script/update-type-hierarchy.sh | tee agent-resolution.log
+          status=${PIPESTATUS[0]}
+          set -euo pipefail
+          if [[ ${status} -eq 0 ]]; then
+            printf 'Automated rebase succeeded using strategy "%s".\n' "${AUTO_RESOLVE_STRATEGY}" > "$status_file"
+            resolution_success=true
+          else
+            printf 'Automated rebase failed even after applying strategy "%s".\n' "${AUTO_RESOLVE_STRATEGY}" > "$status_file"
+            resolution_success=false
+          fi
+          tail -n 40 agent-resolution.log > "$resolution_file" || true
+          if [[ ! -s "$summary_file" ]]; then
+            echo "No conflict excerpts captured." > "$summary_file"
+          fi
+          if [[ ! -s "$resolution_file" ]]; then
+            echo "No automated resolution output captured." > "$resolution_file"
+          fi
+          snippet_start=$(grep -n 'git rebase' script/update-type-hierarchy.sh | head -n1 | cut -d: -f1)
+          if [[ -z "$snippet_start" ]]; then
+            snippet_start=60
+          fi
+          snippet_end=$((snippet_start + 16))
+          snippet=$(sed -n "${snippet_start},${snippet_end}p" script/update-type-hierarchy.sh)
+          typecheck_line=$(grep -n 'npm run typecheck' script/update-type-hierarchy.sh | head -n1 | cut -d: -f1)
+          if [[ -z "$typecheck_line" ]]; then
+            typecheck_line=$((snippet_end + 4))
+          fi
+          typecheck_end=$((typecheck_line + 2))
+          cat <<EOF > "$report_path"
+# Type Hierarchy Maintenance Incident Report (${TS})
+
+## Trigger
+- Workflow run: https://github.com/${REPO}/actions/runs/${RUN_ID}
+- Failure excerpt:
+
+```
+$(cat "$summary_file")
+```
+
+## Automated Resolution
+- Strategy: recursive -X theirs
+- Script: [../script/update-type-hierarchy.sh#L${snippet_start}-L${snippet_end}](../script/update-type-hierarchy.sh#L${snippet_start}-L${snippet_end})
+- Outcome: $(cat "$status_file")
+
+```
+$(cat "$resolution_file")
+```
+
+## Validation
+- `npm run typecheck` executes during the maintenance script to verify the toolchain remains healthy. See [../script/update-type-hierarchy.sh#L${typecheck_line}-L${typecheck_end}](../script/update-type-hierarchy.sh#L${typecheck_line}-L${typecheck_end}).
+
+## Code Reference
+```bash
+${snippet}
+```
+EOF
+          echo "resolution_success=${resolution_success}" >> "$GITHUB_OUTPUT"
+          echo "report_path=${report_path}" >> "$GITHUB_OUTPUT"
+
+      - name: Create remediation commit
+        if: steps.detect.outputs.merge_conflict == 'true'
+        id: commit
+        env:
+          TS: ${{ steps.prep.outputs.timestamp }}
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes staged; skipping commit." && echo "commit_created=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "maintenance: auto-report ${TS}"
+            echo "commit_created=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push remediation branch
+        if: steps.detect.outputs.merge_conflict == 'true' && steps.commit.outputs.commit_created == 'true'
+        env:
+          BRANCH: ${{ steps.prep.outputs.branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push --set-upstream origin "$BRANCH"
+
+      - name: Open pull request for review
+        if: steps.detect.outputs.merge_conflict == 'true' && steps.commit.outputs.commit_created == 'true'
+        env:
+          BRANCH: ${{ steps.prep.outputs.branch }}
+          TS: ${{ steps.prep.outputs.timestamp }}
+          REPORT_PATH: ${{ steps.attempt.outputs.report_path }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RESOLUTION_SUCCESS: ${{ steps.attempt.outputs.resolution_success }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr_body=$(cat <<EOF
+## Summary
+- Automated agent detected a maintenance rebase failure and produced a report.
+- Automated resolution success: ${RESOLUTION_SUCCESS}
+
+## References
+- Report: ${REPORT_PATH}
+- Source run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}
+EOF
+)
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Maintenance auto-report ${TS}" \
+            --body "${pr_body}"
