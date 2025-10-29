@@ -102,7 +102,7 @@ npm run typecheck
 ## GitHub Actions Integration
 - The maintenance workflow runs nightly at 02:15 UTC and supports manual dispatch with the `simulate_conflict` toggle; see [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39).
 - Merge-conflict remediation is handled by the agent workflow at [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200), which reruns the updater with `AUTO_RESOLVE_STRATEGY=theirs`, writes a report under `docs/reports/`, and opens a follow-up PR.
-- When human help is required, trigger the delegate workflow at [../.github/workflows/copilot-maintenance-delegate.yml#L1-L58](../.github/workflows/copilot-maintenance-delegate.yml#L1-L58) to leave an `@copilot` comment (optionally including extra instructions) on the blocking pull request.
+- When human help is required, rely on the delegate workflow at [../.github/workflows/copilot-maintenance-delegate.yml#L1-L223](../.github/workflows/copilot-maintenance-delegate.yml#L1-L223). It now posts an `@copilot` report automatically whenever a PR-linked workflow finishes with a failing conclusion and still supports manual dispatch with optional extra guidance.
 - Trigger fork CI runs after each sync if additional validation is needed:
   ```bash
   gh workflow run typecheck.yml --repo yulongbai-nov/vscode-copilot-chat
