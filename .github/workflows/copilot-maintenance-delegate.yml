@@ -38,10 +38,7 @@ jobs:
             const basePrompt = 'Please investigate the failing GitHub Actions checks for this pull request. Identify the root cause, outline the fix, and push updates or document the next steps.';
             const extra = core.getInput('instructions')?.trim() ?? '';
             const instructions = extra.length > 0
-              ? `${basePrompt}
-
-Additional context:
-${extra}`
+              ? `${basePrompt}\n\nAdditional context:\n${extra}`
               : basePrompt;
 
             const marker = '<!-- copilot-maintenance-delegate:manual -->';
