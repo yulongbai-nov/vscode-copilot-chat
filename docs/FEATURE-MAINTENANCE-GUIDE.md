@@ -38,7 +38,7 @@ npm run typecheck
 ### CI Orchestration
 - Scheduled and on-demand runs live in [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39). Manual dispatch supports a `simulate_conflict` flag that forwards `SIMULATE_CONFLICT=1` to the script.
 - Failure handling is delegated to the agent workflow in [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200). It watches for merge-related failures, reruns the updater with `AUTO_RESOLVE_STRATEGY=theirs`, and writes an incident report to `docs/reports/` before opening a follow-up PR.
-- When a human escalation is needed, run the delegate workflow at [../.github/workflows/copilot-maintenance-delegate.yml#L1-L58](../.github/workflows/copilot-maintenance-delegate.yml#L1-L58) to post an `@copilot` comment on the failing pull request, optionally appending custom instructions.
+- When a human escalation is needed, the delegate workflow at [../.github/workflows/copilot-maintenance-delegate.yml#L1-L223](../.github/workflows/copilot-maintenance-delegate.yml#L1-L223) automatically posts an `@copilot` report when PR checks fail and still allows manual dispatch with optional custom instructions.
 
 ## Plan
 
