@@ -16,6 +16,52 @@ const ACTIONABLE_CONCLUSIONS = new Set([
 
 const MAX_RUN_ENTRIES = 10;
 
+/**
+ * Formats a check run for display in a comment.
+ * @param {object} run - The check run object from GitHub API
+ * @returns {string} Formatted markdown string
+ */
+function formatRun(run) {
+	const conclusionLabel = (run.conclusion ?? 'unknown').toUpperCase();
+	const attempt = typeof run.run_attempt === 'number' ? ` (attempt ${run.run_attempt})` : '';
+	const summaryLine = (run.output?.summary || '')
+		.split('\n')
+		.map(line => line.trim())
+		.filter(Boolean)[0];
+	let line = `- ${conclusionLabel}: [${run.name}](${run.html_url})${attempt}`;
+	if (summaryLine) {
+		line += `\n  - ${summaryLine}`;
+	}
+	return line;
+}
+
+/**
+ * Finds an existing comment with the given marker on a pull request.
+ * @param {object} octokit - GitHub API client
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {number} issueNumber - Issue/PR number
+ * @param {string} marker - HTML comment marker to search for
+ * @returns {Promise<object|undefined>} The existing comment if found
+ */
+async function findExistingComment(octokit, owner, repo, issueNumber, marker) {
+	for await (const response of octokit.paginate.iterator(
+		octokit.rest.issues.listComments,
+		{
+			owner,
+			repo,
+			issue_number: issueNumber,
+			per_page: 100,
+		}
+	)) {
+		const match = response.data.find(comment => typeof comment.body === 'string' && comment.body.includes(marker));
+		if (match) {
+			return match;
+		}
+	}
+	return undefined;
+}
+
 async function run() {
 	const token = process.env.GITHUB_TOKEN;
 	if (!token) {
@@ -68,20 +114,6 @@ async function run() {
 		return;
 	}
 
-	const formatRun = run => {
-		const conclusionLabel = (run.conclusion ?? 'unknown').toUpperCase();
-		const attempt = typeof run.run_attempt === 'number' ? ` (attempt ${run.run_attempt})` : '';
-		const summaryLine = (run.output?.summary || '')
-			.split('\n')
-			.map(line => line.trim())
-			.filter(Boolean)[0];
-		let line = `- ${conclusionLabel}: [${run.name}](${run.html_url})${attempt}`;
-		if (summaryLine) {
-			line += `\n  - ${summaryLine}`;
-		}
-		return line;
-	};
-
 	const formattedRuns = failingRuns
 		.slice(0, MAX_RUN_ENTRIES)
 		.map(formatRun);
@@ -119,26 +151,8 @@ async function run() {
 		metadata.join('\n'),
 	].join('\n');
 
-	const findExistingComment = async issueNumber => {
-		for await (const response of octokit.paginate.iterator(
-			octokit.rest.issues.listComments,
-			{
-				owner,
-				repo,
-				issue_number: issueNumber,
-				per_page: 100,
-			}
-		)) {
-			const match = response.data.find(comment => typeof comment.body === 'string' && comment.body.includes(marker));
-			if (match) {
-				return match;
-			}
-		}
-		return undefined;
-	};
-
 	for (const prNumber of prNumbers) {
-		const existing = await findExistingComment(prNumber);
+		const existing = await findExistingComment(octokit, owner, repo, prNumber, marker);
 		if (existing) {
 			core.info(`A delegation comment already exists on pull request #${prNumber}; skipping.`);
 			continue;
