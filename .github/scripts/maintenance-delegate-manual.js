@@ -14,15 +14,15 @@ async function run() {
 		throw new Error('GITHUB_TOKEN is required to post comments.');
 	}
 
-	const prNumberRaw = core.getInput('pr_number', { required: true });
+	const prNumberRaw = process.env.INPUT_PR_NUMBER;
 	const prNumber = Number(prNumberRaw);
-	if (Number.isNaN(prNumber) || prNumber < 1) {
+	if (!prNumberRaw || Number.isNaN(prNumber) || prNumber < 1) {
 		throw new Error(`Invalid pull request number: ${prNumberRaw}`);
 	}
 
 	const basePrompt = 'Please investigate the failing GitHub Actions checks for this pull request. Identify the root cause, outline the fix, and push updates or document the next steps.';
-	const extra = core.getInput('instructions');
-	const trimmedExtra = extra.trim();
+	const extra = process.env.INPUT_INSTRUCTIONS || '';
+	const trimmedExtra = (extra || '').trim();
 	const instructions = trimmedExtra.length > 0
 		? `${basePrompt}\n\nAdditional context:\n${trimmedExtra}`
 		: basePrompt;
