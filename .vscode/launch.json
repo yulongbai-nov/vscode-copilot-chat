@@ -9,6 +9,7 @@
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
+			"preLaunchTask": "check-vscode-compat",
 			"smartStep": true,
 			"sourceMaps": true,
 			"envFile": "${workspaceFolder}/.env",
@@ -34,7 +35,7 @@
 			],
 			"smartStep": true,
 			"sourceMaps": true,
-			"preLaunchTask": "watch",
+			"preLaunchTask": "watch-with-compat",
 			"env": {
 				"COPILOT_LOG_TELEMETRY": "true",
 				"VSCODE_DEV_DEBUG": "1",
@@ -60,7 +61,7 @@
 			],
 			"smartStep": true,
 			"sourceMaps": true,
-			"preLaunchTask": "watch",
+			"preLaunchTask": "watch-with-compat",
 			"env": {
 				"COPILOT_LOG_TELEMETRY": "true",
 				"VSCODE_DEV_DEBUG": "1",
@@ -88,7 +89,7 @@
 			],
 			"smartStep": true,
 			"sourceMaps": true,
-			"preLaunchTask": "watch",
+			"preLaunchTask": "watch-with-compat",
 			"env": {
 				"COPILOT_LOG_TELEMETRY": "true",
 				"VSCODE_DEV_DEBUG": "1",
@@ -130,6 +131,7 @@
 			"testConfiguration": "${workspaceFolder}/.vscode-test.mjs",
 			"sourceMaps": true,
 			"smartStep": true,
+			"preLaunchTask": "check-vscode-compat",
 			"envFile": "${workspaceFolder}/.env",
 			"internalConsoleOptions": "openOnSessionStart",
 			"outFiles": [
@@ -303,6 +305,7 @@
 				"TSS_REMOTE_DEBUG": "9223",
 				"TSS_DEBUG": "9223",
 			},
+			"preLaunchTask": "check-vscode-compat",
 			"outFiles": [
 				"${workspaceFolder}/dist/**/*.js",
 				"!**/node_modules/**"
@@ -361,6 +364,7 @@
 				"!**/node_modules/**"
 			],
 			"autoAttachChildProcesses": true,
+			"preLaunchTask": "check-vscode-compat",
 			"presentation": {
 				"group": "1_launch"
 			}
