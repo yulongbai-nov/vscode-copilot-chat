@@ -21,8 +21,9 @@ async function run() {
 	}
 
 	const basePrompt = 'Please investigate the failing GitHub Actions checks for this pull request. Identify the root cause, outline the fix, and push updates or document the next steps.';
+	// core.getInput reads from the GitHub Actions-provided INPUT_INSTRUCTIONS environment variable.
 	const extra = core.getInput('instructions');
-	const trimmedExtra = extra.trim();
+	const trimmedExtra = (extra ?? '').trim();
 	const instructions = trimmedExtra.length > 0
 		? `${basePrompt}\n\nAdditional context:\n${trimmedExtra}`
 		: basePrompt;
