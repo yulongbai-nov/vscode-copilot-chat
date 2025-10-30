@@ -68,6 +68,9 @@ async function run() {
 		return;
 	}
 
+	/**
+	 * Produce a bullet point describing a failing check run, including first summary line when available.
+	 */
 	const formatRun = run => {
 		const conclusionLabel = (run.conclusion ?? 'unknown').toUpperCase();
 		const attempt = typeof run.run_attempt === 'number' ? ` (attempt ${run.run_attempt})` : '';
@@ -119,6 +122,9 @@ async function run() {
 		metadata.join('\n'),
 	].join('\n');
 
+	/**
+	 * Scan existing issue comments to see whether we've already posted a delegation marker for this suite.
+	 */
 	const findExistingComment = async issueNumber => {
 		for await (const response of octokit.paginate.iterator(
 			octokit.rest.issues.listComments,
