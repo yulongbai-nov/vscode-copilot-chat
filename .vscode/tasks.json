@@ -20,7 +20,9 @@
 				"options": {
 					"shell": {
 						"executable": "cmd.exe",
-						"args": ["/c"]
+						"args": [
+							"/c"
+						]
 					}
 				}
 			},
@@ -38,6 +40,16 @@
 			"problemMatcher": [],
 			"isBackground": true,
 			"promptOnClose": false
+		},
+		{
+			"label": "check-vscode-compat",
+			"type": "npm",
+			"script": "check:vscode-compat",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			}
 		},
 		{
 			"label": "start-watch-tasks",
@@ -69,6 +81,18 @@
 			},
 			"runOptions": {
 				"runOn": "folderOpen"
+			}
+		},
+		{
+			"label": "watch-with-compat",
+			"dependsOn": [
+				"check-vscode-compat",
+				"watch"
+			],
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "never"
 			}
 		},
 		{
