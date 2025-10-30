@@ -36,3 +36,4 @@ test/aml/out
 src/extension/completions-core
 
 .tmp/
+*.vsix
