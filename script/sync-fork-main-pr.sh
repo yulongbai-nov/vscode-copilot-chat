@@ -85,8 +85,10 @@ if [[ "$rebase_status" -ne 0 ]]; then
 	exit 90
 fi
 
-if git diff --quiet "$fork_remote/$target_branch"...HEAD; then
-	log "No updates required after rebase; branch matches $fork_remote/$target_branch"
+# Check if there are actual commits to merge
+commit_count=$(git rev-list --count "$fork_remote/$target_branch"..HEAD)
+if [[ "$commit_count" -eq 0 ]]; then
+	log "No commits to merge after rebase; $sync_branch is at same commit as $fork_remote/$target_branch"
 	existing_pr="$(gh pr list --head "$sync_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
 	if [[ -n "$existing_pr" ]]; then
 		log "Closing stale PR #$existing_pr"
@@ -99,7 +101,7 @@ if git diff --quiet "$fork_remote/$target_branch"...HEAD; then
 	exit 0
 fi
 
-log "Pushing $sync_branch to $fork_remote"
+log "Pushing $sync_branch to $fork_remote ($commit_count commit(s) ahead)"
 git push "$fork_remote" "$sync_branch" --force-with-lease
 
 pr_number="$(gh pr list --head "$sync_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
