@@ -89,11 +89,11 @@ fi
 if ! commit_count=$(git rev-list --count "$fork_remote/$target_branch"..HEAD 2>/dev/null); then
 	log "Failed to count commits between $fork_remote/$target_branch and HEAD"
 	log "This may indicate an issue with the repository state or branch references"
-	exit 92
+	exit 92  # Exit code 92: commit count check failed
 fi
 
 if [[ "$commit_count" -eq 0 ]]; then
-	log "No commits ahead of $fork_remote/$target_branch after rebase; skipping PR creation"
+	log "No new commits to merge after rebase; $sync_branch matches $fork_remote/$target_branch"
 	existing_pr="$(gh pr list --head "$sync_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
 	if [[ -n "$existing_pr" ]]; then
 		log "Closing stale PR #$existing_pr"
