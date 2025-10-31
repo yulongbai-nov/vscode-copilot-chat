@@ -86,9 +86,18 @@ if [[ "$rebase_status" -ne 0 ]]; then
 fi
 
 # Check if there are actual commits to merge
-commit_count=$(git rev-list --count "$fork_remote/$target_branch"..HEAD)
+set +e
+commit_count=$(git rev-list --count "$fork_remote/$target_branch"..HEAD 2>&1)
+count_status=$?
+set -e
+if [[ "$count_status" -ne 0 ]]; then
+	log "Failed to count commits between $fork_remote/$target_branch and HEAD"
+	printf '%s\n' "$commit_count" >&2
+	exit 92
+fi
+
 if [[ "$commit_count" -eq 0 ]]; then
-	log "No commits to merge after rebase; $sync_branch is at same commit as $fork_remote/$target_branch"
+	log "No commits ahead of $fork_remote/$target_branch after rebase; skipping PR creation"
 	existing_pr="$(gh pr list --head "$sync_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
 	if [[ -n "$existing_pr" ]]; then
 		log "Closing stale PR #$existing_pr"
