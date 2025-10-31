@@ -86,13 +86,9 @@ if [[ "$rebase_status" -ne 0 ]]; then
 fi
 
 # Check if there are actual commits to merge
-set +e
-commit_count=$(git rev-list --count "$fork_remote/$target_branch"..HEAD 2>&1)
-count_status=$?
-set -e
-if [[ "$count_status" -ne 0 ]]; then
+if ! commit_count=$(git rev-list --count "$fork_remote/$target_branch"..HEAD 2>/dev/null); then
 	log "Failed to count commits between $fork_remote/$target_branch and HEAD"
-	printf '%s\n' "$commit_count" >&2
+	log "This may indicate an issue with the repository state or branch references"
 	exit 92
 fi
 
