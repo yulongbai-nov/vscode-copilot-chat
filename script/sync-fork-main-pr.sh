@@ -27,11 +27,9 @@ check_gh_token() {
 		exit 2
 	fi
 
-	if ! grep -qi 'Token scopes:.*\brepo\b' <<<"$auth_output"; then
-		printf '%s\n' "$auth_output" >&2
-		printf 'Authenticated token is missing the `repo` scope required for PR operations. Provide GH_TOKEN with repo access or re-authenticate via `gh auth login --scopes repo`; the Actions-provided GITHUB_TOKEN stays read-only when runs originate from forked contexts.\n' >&2
-		exit 2
-	fi
+	# Note: Token scope information may not be available in all authentication methods
+	# (e.g., when using GH_TOKEN environment variable). If operations fail due to
+	# missing scopes, they will fail with clear error messages at runtime.
 }
 
 check_gh_token
