@@ -17,7 +17,7 @@ require_cmd gh
 
 check_gh_token() {
 	set +e
-	auth_output="$(gh auth status --show-token-scopes 2>&1)"
+	auth_output="$(gh auth status 2>&1)"
 	status=$?
 	set -e
 
