@@ -34,7 +34,7 @@ jobs:
 
       - name: Sync fork main via PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           WATCH_PR_CHECKS: ${{ inputs.watchChecks == 'false' && '0' || '1' }}
           ENABLE_AUTO_MERGE: ${{ inputs.enableAutoMerge == 'false' && '0' || '1' }}
         run: ./script/sync-fork-main-pr.sh

@@ -15,6 +15,27 @@ require_cmd() {
 require_cmd git
 require_cmd gh
 
+check_gh_token() {
+	set +e
+	auth_output="$(gh auth status --show-token-scopes 2>&1)"
+	status=$?
+	set -e
+
+	if [[ "$status" -ne 0 ]]; then
+		printf '%s\n' "$auth_output" >&2
+		printf 'GitHub CLI is not authenticated. Run `gh auth login --scopes repo` or export GH_TOKEN with a repo-scoped PAT (the default GITHUB_TOKEN from forked workflows is read-only).\n' >&2
+		exit 2
+	fi
+
+	if ! grep -qi 'Token scopes:.*\brepo\b' <<<"$auth_output"; then
+		printf '%s\n' "$auth_output" >&2
+		printf 'Authenticated token is missing the `repo` scope required for PR operations. Provide GH_TOKEN with repo access or re-authenticate via `gh auth login --scopes repo`; the Actions-provided GITHUB_TOKEN stays read-only when runs originate from forked contexts.\n' >&2
+		exit 2
+	fi
+}
+
+check_gh_token
+
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
