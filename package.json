@@ -2356,6 +2356,9 @@
 				"command": "github.copilot.chat.completions.toggle",
 				"title": "Toggle (Enable/Disable) Completions",
 				"enablement": "github.copilot.extensionUnification.activated && github.copilot.activated",
+				"command": "github.copilot.client.generate",
+				"title": "Open Completions Panel",
+				"enablement": "!isWeb",
 				"category": "GitHub Copilot"
 			}
 		],
