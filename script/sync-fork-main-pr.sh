@@ -69,6 +69,15 @@ git fetch "$upstream_remote" "$upstream_branch"
 log "Fetching $fork_remote/$target_branch"
 git fetch "$fork_remote" "$target_branch"
 
+# Extract fork repository owner from remote URL for PR head reference
+fork_url="$(git remote get-url "$fork_remote")"
+fork_owner="$(echo "$fork_url" | sed -E 's#^(https://github\.com/|git@github\.com:)([^/]+)/.*#\2#')"
+if [[ -z "$fork_owner" ]]; then
+	log "Failed to extract fork owner from remote URL: $fork_url"
+	exit 93  # Exit code 93: failed to extract fork owner
+fi
+log "Detected fork owner: $fork_owner"
+
 log "Preparing branch $sync_branch from $fork_remote/$target_branch"
 git switch -C "$sync_branch" "$fork_remote/$target_branch"
 
@@ -115,8 +124,8 @@ if [[ -n "$pr_number" ]]; then
 	log "Updating existing PR #$pr_number"
 	gh pr edit "$pr_number" --title "$pr_title" --body "$pr_body" >/dev/null
 else
-	log "Creating PR from $sync_branch to $target_branch"
-	gh pr create --base "$target_branch" --head "$sync_branch" --title "$pr_title" --body "$pr_body" >/dev/null
+	log "Creating PR from $fork_owner:$sync_branch to $target_branch"
+	gh pr create --base "$target_branch" --head "$fork_owner:$sync_branch" --title "$pr_title" --body "$pr_body" >/dev/null
 	pr_number="$(gh pr view "$sync_branch" --json number --jq '.number')"
 fi
 
