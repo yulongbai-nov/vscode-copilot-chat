@@ -1,0 +1,53 @@
+name: Fork Nightly Merge
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 2 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    environment: develop
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Nightly upstream merge
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: ./script/sync-fork-main-merge.sh
+
+      - name: Upload merge log
+        if: failure() && env.MERGE_LOG_PATH != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-log
+          path: ${{ env.MERGE_LOG_PATH }}
+          if-no-files-found: ignore
+
+      - name: Append job summary
+        if: always()
+        run: |
+          {
+            echo "### Fork Nightly Merge"
+            echo ""
+            echo "* Outcome: ${SYNC_OUTCOME:-unknown}"
+            if [[ -n "${PR_URL:-}" ]]; then
+              echo "* PR: ${PR_URL}"
+            fi
+            if [[ -n "${MERGE_LOG_PATH:-}" ]]; then
+              echo "* Merge log: ${MERGE_LOG_PATH}"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
