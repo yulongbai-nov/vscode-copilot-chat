@@ -87,7 +87,7 @@ if [[ "$merge_status" -ne 0 ]]; then
 	log "Creating conflict branch: $conflict_branch"
 	
 	# Get list of conflicted files before staging
-	conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/^/- /' || echo '(error: could not detect conflicted files)')"
+	conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/^/- /' || echo '- (error: could not detect conflicted files)')"
 	
 	# Add all files (including conflicted ones) to stage the conflict markers
 	git add -A
@@ -183,8 +183,15 @@ See the workflow artifacts for the full merge log."
 	if [[ -n "$pr_number" ]]; then
 		log "Requesting review from repository owner and $pr_reviewer"
 		repo_owner="$(gh repo view --json owner --jq '.owner.login')"
-		gh pr review-request "$pr_number" --add "$repo_owner" >/dev/null 2>&1 || true
-		if [[ -n "$pr_reviewer" ]]; then
+		current_user="$(gh api user --jq '.login' 2>/dev/null || echo '')"
+		
+		# Request review from owner only if they're not the current user
+		if [[ -n "$repo_owner" && "$repo_owner" != "$current_user" ]]; then
+			gh pr review-request "$pr_number" --add "$repo_owner" >/dev/null 2>&1 || true
+		fi
+		
+		# Request review from configured reviewer (e.g., github-copilot)
+		if [[ -n "$pr_reviewer" && "$pr_reviewer" != "$current_user" ]]; then
 			gh pr review-request "$pr_number" --add "$pr_reviewer" >/dev/null 2>&1 || true
 		fi
 	fi
