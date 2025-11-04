@@ -22,19 +22,13 @@ fi
 
 check_gh_token() {
 	set +e
-	auth_output="$(gh auth status --show-token-scopes 2>&1)"
+	auth_output="$(gh auth status 2>&1)"
 	status=$?
 	set -e
 
 	if [[ "$status" -ne 0 ]]; then
 		printf '%s\n' "$auth_output" >&2
 		printf 'GitHub CLI is not authenticated. Run `gh auth login --scopes repo` locally or supply GH_TOKEN with repo scope in the workflow.\n' >&2
-		exit 2
-	fi
-
-	if ! grep -qi 'Token scopes:.*\brepo\b' <<<"$auth_output"; then
-		printf '%s\n' "$auth_output" >&2
-		printf 'Authenticated token is missing the `repo` scope required for PR operations. Provide GH_TOKEN with repo access or re-authenticate via `gh auth login --scopes repo`.\n' >&2
 		exit 2
 	fi
 }
