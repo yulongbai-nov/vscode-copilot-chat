@@ -47,6 +47,7 @@ export enum ToolName {
 	ReadCellOutput = 'read_notebook_cell_output',
 	InstallExtension = 'install_extension',
 	FetchWebPage = 'fetch_webpage',
+	Memory = 'memory',
 	FindTestFiles = 'test_search',
 	GetProjectSetupInfo = 'get_project_setup_info',
 	SearchViewResults = 'get_search_view_results',
@@ -102,6 +103,7 @@ export enum ContributedToolName {
 	ReadCellOutput = 'copilot_readNotebookCellOutput',
 	InstallExtension = 'copilot_installExtension',
 	FetchWebPage = 'copilot_fetchWebPage',
+	Memory = 'copilot_memory',
 	FindTestFiles = 'copilot_findTestFiles',
 	GetProjectSetupInfo = 'copilot_getProjectSetupInfo',
 	SearchViewResults = 'copilot_getSearchResults',
@@ -174,6 +176,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.CreateDirectory]: ToolCategory.Core,
 	[ToolName.ReadProjectStructure]: ToolCategory.Core,
 	[ToolName.RunSubagent]: ToolCategory.Core,
+	[ToolName.Memory]: ToolCategory.Core,
 
 	// already enabled only when tasks are enabled
 	[ToolName.CoreRunTask]: ToolCategory.Core,

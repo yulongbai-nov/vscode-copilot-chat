@@ -8,7 +8,7 @@ import { ILogService } from '../../log/common/logService';
 import { IFetcherService } from '../../networking/common/fetcherService';
 import { ITelemetryService } from '../../telemetry/common/telemetry';
 import { PullRequestComment, PullRequestSearchItem, SessionInfo } from './githubAPI';
-import { BaseOctoKitService, CustomAgentDetails, CustomAgentListItem, IOctoKitService, IOctoKitUser, JobInfo, PullRequestFile, RemoteAgentJobPayload, RemoteAgentJobResponse } from './githubService';
+import { BaseOctoKitService, CustomAgentDetails, CustomAgentListItem, ErrorResponseWithStatusCode, IOctoKitService, IOctoKitUser, JobInfo, PullRequestFile, RemoteAgentJobPayload, RemoteAgentJobResponse } from './githubService';
 
 export class OctoKitService extends BaseOctoKitService implements IOctoKitService {
 	declare readonly _serviceBrand: undefined;
@@ -95,7 +95,7 @@ export class OctoKitService extends BaseOctoKitService implements IOctoKitServic
 		return response;
 	}
 
-	async postCopilotAgentJob(owner: string, name: string, apiVersion: string, payload: RemoteAgentJobPayload): Promise<RemoteAgentJobResponse> {
+	async postCopilotAgentJob(owner: string, name: string, apiVersion: string, payload: RemoteAgentJobPayload): Promise<RemoteAgentJobResponse | ErrorResponseWithStatusCode> {
 		const authToken = (await this._authService.getAnyGitHubSession())?.accessToken;
 		if (!authToken) {
 			throw new Error('No authentication token available');
@@ -177,5 +177,13 @@ export class OctoKitService extends BaseOctoKitService implements IOctoKitServic
 			return false;
 		}
 		return this.closePullRequestWithToken(owner, repo, pullNumber, authToken);
+	}
+
+	async getFileContent(owner: string, repo: string, ref: string, path: string): Promise<string> {
+		const authToken = (await this._authService.getAnyGitHubSession())?.accessToken;
+		if (!authToken) {
+			throw new Error('No GitHub authentication available');
+		}
+		return this.getFileContentWithToken(owner, repo, ref, path, authToken);
 	}
 }
