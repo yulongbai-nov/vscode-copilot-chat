@@ -14,6 +14,7 @@ require_cmd() {
 
 require_cmd git
 require_cmd gh
+require_cmd git-lfs
 
 if [[ -z "${GH_TOKEN:-}" ]]; then
 	printf 'GH_TOKEN is not set; provide a token with `repo` scope.\n' >&2
@@ -55,6 +56,42 @@ cleanup_branch="${CLEANUP_BRANCH_ON_MERGE:-1}"
 cleanup_on_no_changes="${CLEANUP_BRANCH_ON_NO_CHANGES:-1}"
 log_dir="${SYNC_LOG_DIR:-$repo_root/.github/tmp}"
 
+ensure_lfs_objects_for_push() {
+	if ! git lfs env >/dev/null 2>&1; then
+		log "Git LFS is not available; skipping LFS fetch"
+		return
+	fi
+
+	log "Ensuring Git LFS hooks are installed"
+	git lfs install --local >/dev/null 2>&1 || true
+
+	remotes=()
+	remotes+=("$fork_remote")
+	remotes+=("$upstream_remote")
+
+	for remote in "${remotes[@]}"; do
+		if [[ -z "$remote" ]]; then
+			continue
+		fi
+		log "Fetching Git LFS objects from $remote (current branch refs)"
+		if ! git lfs fetch "$remote"; then
+			log "Warning: git lfs fetch from $remote failed"
+		fi
+
+		log "Fetching all Git LFS objects from $remote"
+		if ! git lfs fetch --all "$remote"; then
+			log "Warning: git lfs fetch --all from $remote failed"
+		fi
+	done
+
+	log "Validating Git LFS objects required for push"
+	if ! git lfs push --dry-run "$fork_remote" HEAD; then
+		log "Failed to ensure Git LFS objects are available for push"
+		echo "SYNC_OUTCOME=git_lfs_missing_objects" >>"$GITHUB_ENV"
+		exit 93
+	fi
+}
+
 mkdir -p "$log_dir"
 merge_log="$log_dir/merge-${sync_branch//\//-}-$(date +%s).log"
 
@@ -83,19 +120,19 @@ set -e
 
 if [[ "$merge_status" -ne 0 ]]; then
 	log "Merge has conflicts; will push conflicted branch for review"
-	
+
 	# Get the upstream commit hash for branch naming
 	upstream_hash="$(git rev-parse --short "$upstream_remote/$upstream_branch")"
 	conflict_branch="automation/nightly-sync-conflict-${upstream_hash}"
-	
+
 	log "Creating conflict branch: $conflict_branch"
-	
+
 	# Get list of conflicted files before staging
 	conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/^/- /' || echo '- error: could not detect conflicted files')"
-	
+
 	# Add all files (including conflicted ones) to stage the conflict markers
 	git add -A
-	
+
 	# Commit the conflicted state
 	conflict_msg="Merge conflicts from upstream ${upstream_hash}
 
@@ -107,13 +144,15 @@ ${conflicted_files}
 
 Source: ${upstream_remote}/${upstream_branch} (${upstream_hash})
 Target: ${fork_remote}/${target_branch}"
-	
+
 	if ! git commit -m "$conflict_msg" --no-edit; then
 		log "Failed to commit conflicted state; repository may be in inconsistent state"
 		echo "SYNC_OUTCOME=merge_conflict_commit_failed" >>"$GITHUB_ENV"
 		exit 91
 	fi
-	
+
+	ensure_lfs_objects_for_push
+
 	log "Pushing conflict branch $conflict_branch to $fork_remote"
 	if ! git push "$fork_remote" "HEAD:$conflict_branch" --force-with-lease; then
 		log "Failed to push conflict branch with force-with-lease; trying with --force"
@@ -123,7 +162,7 @@ Target: ${fork_remote}/${target_branch}"
 			exit 92
 		fi
 	fi
-	
+
 	# Prepare PR body with conflict information
 	conflict_pr_title="[CONFLICT] ${pr_title} (${upstream_hash})"
 	conflict_pr_body="⚠️ **This PR contains merge conflicts that need manual resolution.**
@@ -151,10 +190,10 @@ ${conflicted_files}
 ### Merge Log
 
 See the workflow artifacts for the full merge log."
-	
+
 	# Check if a PR already exists for this conflict branch
 	pr_number="$(gh pr list --head "$conflict_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
-	
+
 	if [[ -n "$pr_number" ]]; then
 		log "Updating existing conflict PR #$pr_number"
 		gh pr edit "$pr_number" --title "$conflict_pr_title" --body "$conflict_pr_body" >/dev/null
@@ -167,7 +206,7 @@ See the workflow artifacts for the full merge log."
 			log "Warning: Could not retrieve PR number immediately after creation"
 		fi
 	fi
-	
+
 	# Get PR URL and export environment variables
 	if [[ -n "$pr_number" ]]; then
 		pr_url="$(gh pr view "$pr_number" --json url --jq '.url' 2>/dev/null || echo '')"
@@ -182,27 +221,27 @@ See the workflow artifacts for the full merge log."
 			echo "PR_URL=$pr_url" >>"$GITHUB_ENV"
 		fi
 	fi
-	
+
 	# Request review from owner and copilot
 	if [[ -n "$pr_number" ]]; then
 		log "Requesting review from repository owner and $pr_reviewer"
 		repo_owner="$(gh repo view --json owner --jq '.owner.login' 2>/dev/null || echo '')"
 		current_user="$(gh api user --jq '.login' 2>/dev/null || echo '')"
-		
+
 		# Request review from owner only if they're not the current user
 		if [[ -n "$repo_owner" && -n "$current_user" && "$repo_owner" != "$current_user" ]]; then
 			gh pr review-request "$pr_number" --add "$repo_owner" >/dev/null 2>&1 || true
 		fi
-		
+
 		# Request review from configured reviewer (e.g., github-copilot)
 		if [[ -n "$pr_reviewer" && "$pr_reviewer" != "$current_user" ]]; then
 			gh pr review-request "$pr_number" --add "$pr_reviewer" >/dev/null 2>&1 || true
 		fi
 	fi
-	
+
 	echo "MERGE_LOG_PATH=$merge_log" >>"$GITHUB_ENV"
 	echo "SYNC_OUTCOME=merge_conflict_pr_created" >>"$GITHUB_ENV"
-	
+
 	if [[ -n "$pr_url" ]]; then
 		log "Conflict PR created: $pr_url"
 	else
@@ -227,6 +266,7 @@ if git diff --quiet "$fork_remote/$target_branch"...HEAD; then
 	exit 0
 fi
 
+ensure_lfs_objects_for_push
 log "Pushing $sync_branch to $fork_remote"
 git push "$fork_remote" "$sync_branch" --force-with-lease
 
