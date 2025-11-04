@@ -30,7 +30,7 @@ jobs:
         run: ./script/sync-fork-main-merge.sh
 
       - name: Upload merge log
-        if: failure() && env.MERGE_LOG_PATH != ''
+        if: always() && env.MERGE_LOG_PATH != ''
         uses: actions/upload-artifact@v4
         with:
           name: merge-log

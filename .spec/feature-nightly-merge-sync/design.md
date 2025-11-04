@@ -28,7 +28,7 @@ We will introduce a new workflow named `fork-nightly-merge.yml` that schedules a
   - Body includes timestamp + summary of upstream commits (`git log --oneline`).
   - Request review from AI agent via `gh pr review-request --add github-copilot` (configurable `PR_REVIEWER`).
 - Export key outputs through `$GITHUB_ENV` (e.g., `SYNC_OUTCOME`, `PR_URL`, `MERGE_LOG`) for the workflow summary step.
-- On merge conflicts, abort merge, archive log path, set `SYNC_OUTCOME=merge_conflict`, exit with non-zero to surface failure.
+- On merge conflicts, capture conflict details, commit the conflicted state to a new branch `automation/nightly-sync-conflict-{upstream-hash}`, create a PR with conflict information, request review from repository owner and AI agent, set `SYNC_OUTCOME=merge_conflict_pr_created`, exit successfully.
 
 ## Secret & Auth Handling
 - Document that `GH_TOKEN` must be a classic PAT (or a GitHub App token) with `repo` scope and stored as an Actions secret.
@@ -46,5 +46,5 @@ We will introduce a new workflow named `fork-nightly-merge.yml` that schedules a
 
 ## Risks & Mitigations
 - **Token misconfiguration**: early `gh auth status` check yields clear failure.
-- **Merge conflicts**: script aborts merge and uploads log via workflow artifact for debugging.
-- **Branch churn**: using single predictable branch prevents branch proliferation; branch deleted when PR merged (script handles via `gh pr view` check).
+- **Merge conflicts**: script commits conflicted state to a dedicated conflict branch, creates a PR with conflict details and instructions for manual resolution, and requests review from repository owner and AI agent.
+- **Branch churn**: using single predictable branch prevents branch proliferation for successful merges; conflict branches include upstream hash to track specific conflict scenarios; branch deleted when PR merged (script handles via `gh pr view` check).
