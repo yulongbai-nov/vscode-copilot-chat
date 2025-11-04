@@ -63,7 +63,7 @@ else
 fi
 
 log "Fetching $upstream_remote/$upstream_branch"
-git fetch "$upstream_remote" "$upstream_branch"
+GIT_LFS_SKIP_SMUDGE=1 git fetch "$upstream_remote" "$upstream_branch"
 
 log "Fetching $fork_remote/$target_branch"
 git fetch "$fork_remote" "$target_branch"
@@ -73,7 +73,7 @@ git switch -C "$sync_branch" "$fork_remote/$target_branch"
 
 log "Merging $upstream_remote/$upstream_branch into $sync_branch"
 set +e
-git merge --no-ff --no-edit "$upstream_remote/$upstream_branch" 2>&1 | tee "$merge_log"
+GIT_LFS_SKIP_SMUDGE=1 git merge --no-ff --no-edit "$upstream_remote/$upstream_branch" 2>&1 | tee "$merge_log"
 merge_status=${PIPESTATUS[0]}
 set -e
 
