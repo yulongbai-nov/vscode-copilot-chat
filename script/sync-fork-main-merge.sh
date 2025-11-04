@@ -38,6 +38,10 @@ check_gh_token
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+# Configure git to allow incomplete LFS pushes to avoid upload failures
+# when LFS objects are not available locally after GIT_LFS_SKIP_SMUDGE fetch
+git config lfs.allowincompletepush true
+
 sync_branch="${SYNC_BRANCH:-automation/nightly-upstream-merge}"
 target_branch="${TARGET_BRANCH:-main}"
 fork_remote="${FORK_REMOTE:-origin}"
