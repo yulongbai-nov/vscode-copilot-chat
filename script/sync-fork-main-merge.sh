@@ -87,7 +87,7 @@ if [[ "$merge_status" -ne 0 ]]; then
 	log "Creating conflict branch: $conflict_branch"
 	
 	# Get list of conflicted files before staging
-	conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/^/- /' || echo '(none listed)')"
+	conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/^/- /' || echo '(error: could not detect conflicted files)')"
 	
 	# Add all files (including conflicted ones) to stage the conflict markers
 	git add -A
@@ -104,10 +104,17 @@ ${conflicted_files}
 Source: ${upstream_remote}/${upstream_branch} (${upstream_hash})
 Target: ${fork_remote}/${target_branch}"
 	
-	git commit -m "$conflict_msg" --no-edit || true
+	if ! git commit -m "$conflict_msg" --no-edit; then
+		log "Failed to commit conflicted state; repository may be in inconsistent state"
+		echo "SYNC_OUTCOME=merge_conflict_commit_failed" >>"$GITHUB_ENV"
+		exit 91
+	fi
 	
 	log "Pushing conflict branch $conflict_branch to $fork_remote"
-	git push "$fork_remote" "HEAD:$conflict_branch" --force-with-lease
+	if ! git push "$fork_remote" "HEAD:$conflict_branch" --force-with-lease; then
+		log "Failed to push conflict branch; trying without force-with-lease"
+		git push "$fork_remote" "HEAD:$conflict_branch" --force
+	fi
 	
 	# Prepare PR body with conflict information
 	conflict_pr_title="[CONFLICT] ${pr_title} (${upstream_hash})"
