@@ -112,8 +112,12 @@ Target: ${fork_remote}/${target_branch}"
 	
 	log "Pushing conflict branch $conflict_branch to $fork_remote"
 	if ! git push "$fork_remote" "HEAD:$conflict_branch" --force-with-lease; then
-		log "Failed to push conflict branch; trying without force-with-lease"
-		git push "$fork_remote" "HEAD:$conflict_branch" --force
+		log "Failed to push conflict branch with force-with-lease; trying with --force"
+		if ! git push "$fork_remote" "HEAD:$conflict_branch" --force; then
+			log "Failed to push conflict branch; cannot create PR without remote branch"
+			echo "SYNC_OUTCOME=merge_conflict_push_failed" >>"$GITHUB_ENV"
+			exit 92
+		fi
 	fi
 	
 	# Prepare PR body with conflict information
@@ -153,25 +157,46 @@ See the workflow artifacts for the full merge log."
 	else
 		log "Creating conflict PR from $conflict_branch to $target_branch"
 		gh pr create --base "$target_branch" --head "$conflict_branch" --title "$conflict_pr_title" --body "$conflict_pr_body" >/dev/null
-		pr_number="$(gh pr view "$conflict_branch" --json number --jq '.number')"
+		# Try multiple methods to get the PR number
+		pr_number="$(gh pr view "$conflict_branch" --json number --jq '.number' 2>/dev/null || gh pr list --head "$conflict_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
+		if [[ -z "$pr_number" ]]; then
+			log "Warning: Could not retrieve PR number immediately after creation"
+		fi
 	fi
 	
-	pr_url="$(gh pr view "$pr_number" --json url --jq '.url')"
-	echo "PR_NUMBER=$pr_number" >>"$GITHUB_ENV"
-	echo "PR_URL=$pr_url" >>"$GITHUB_ENV"
+	# Get PR URL and export environment variables
+	if [[ -n "$pr_number" ]]; then
+		pr_url="$(gh pr view "$pr_number" --json url --jq '.url' 2>/dev/null || echo '')"
+		echo "PR_NUMBER=$pr_number" >>"$GITHUB_ENV"
+		if [[ -n "$pr_url" ]]; then
+			echo "PR_URL=$pr_url" >>"$GITHUB_ENV"
+		fi
+	else
+		# Fallback: try to get URL by branch name
+		pr_url="$(gh pr view "$conflict_branch" --json url --jq '.url' 2>/dev/null || echo '')"
+		if [[ -n "$pr_url" ]]; then
+			echo "PR_URL=$pr_url" >>"$GITHUB_ENV"
+		fi
+	fi
 	
 	# Request review from owner and copilot
-	log "Requesting review from repository owner and $pr_reviewer"
-	repo_owner="$(gh repo view --json owner --jq '.owner.login')"
-	gh pr review-request "$pr_number" --add "$repo_owner" >/dev/null 2>&1 || true
-	if [[ -n "$pr_reviewer" ]]; then
-		gh pr review-request "$pr_number" --add "$pr_reviewer" >/dev/null 2>&1 || true
+	if [[ -n "$pr_number" ]]; then
+		log "Requesting review from repository owner and $pr_reviewer"
+		repo_owner="$(gh repo view --json owner --jq '.owner.login')"
+		gh pr review-request "$pr_number" --add "$repo_owner" >/dev/null 2>&1 || true
+		if [[ -n "$pr_reviewer" ]]; then
+			gh pr review-request "$pr_number" --add "$pr_reviewer" >/dev/null 2>&1 || true
+		fi
 	fi
 	
 	echo "MERGE_LOG_PATH=$merge_log" >>"$GITHUB_ENV"
 	echo "SYNC_OUTCOME=merge_conflict_pr_created" >>"$GITHUB_ENV"
 	
-	log "Conflict PR created: $pr_url"
+	if [[ -n "$pr_url" ]]; then
+		log "Conflict PR created: $pr_url"
+	else
+		log "Conflict PR created for branch $conflict_branch"
+	fi
 	exit 0
 fi
 
