@@ -2,6 +2,8 @@
 
 This note documents how to keep the customized type hierarchy tooling in sync with upstream without hand-merging every upgrade. It assumes the TypeScript-first flow implemented in [../src/platform/languages/vscode/languageFeaturesServicesImpl.ts#L78-L137](../src/platform/languages/vscode/languageFeaturesServicesImpl.ts#L78-L137) and [../src/platform/languages/typescript/vscode/typescriptTypeHierarchyProvider.ts#L32-L140](../src/platform/languages/typescript/vscode/typescriptTypeHierarchyProvider.ts#L32-L140).
 
+Note: The scheduled workflow and helper script referenced below were retired in favor of the nightly upstream merge automation (`.github/workflows/fork-nightly-merge.yml`). This document remains for historical context.
+
 For a feature-agnostic overview of the maintenance system, see [./FEATURE-MAINTENANCE-GUIDE.md](./FEATURE-MAINTENANCE-GUIDE.md).
 
 ```typescript
@@ -76,7 +78,7 @@ git am --3way .git/patches/type-hierarchy/*.patch
 This makes it obvious which patch fails and keeps history linear.
 
 ## Automated Update Script
-The helper lives in [../script/update-type-hierarchy.sh#L1-L91](../script/update-type-hierarchy.sh#L1-L91). It accepts a few environment toggles so CI, Copilot, and maintainers can share the same entry point:
+The historical helper lived in `../script/update-type-hierarchy.sh`. It accepted a few environment toggles so CI, Copilot, and maintainers could share the same entry point:
 ```bash
 skip_sync="${SKIP_FORK_SYNC:-0}"
 auto_strategy="${AUTO_RESOLVE_STRATEGY:-}"
@@ -90,18 +92,18 @@ else
 fi
 ```
 - `SKIP_FORK_SYNC=1` keeps the rebase flow local when you have already synchronized the fork.
-- `AUTO_RESOLVE_STRATEGY=theirs` (or another `--strategy-option`) retries the rebase with a conflict bias; see [../script/update-type-hierarchy.sh#L65-L83](../script/update-type-hierarchy.sh#L65-L83).
-- `SIMULATE_CONFLICT=1` stops early with a conflict-style failure so the remediation tooling can be rehearsed without touching upstream history; see [../script/update-type-hierarchy.sh#L39-L44](../script/update-type-hierarchy.sh#L39-L44).
+- `AUTO_RESOLVE_STRATEGY=theirs` (or another `--strategy-option`) retried the rebase with a conflict bias in the retired script.
+- `SIMULATE_CONFLICT=1` stopped early with a conflict-style failure so the remediation tooling could be rehearsed without touching upstream history; this toggle lived in the retired script.
 
-Every run ends with a typecheck to catch API drift (see [../script/update-type-hierarchy.sh#L88-L89](../script/update-type-hierarchy.sh#L88-L89)):
+Every run ended with a typecheck to catch API drift:
 ```bash
 printf '==> Running typecheck\n'
 npm run typecheck
 ```
 
 ## GitHub Actions Integration
-- The maintenance workflow runs nightly at 02:15 UTC and supports manual dispatch with the `simulate_conflict` toggle; see [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39).
-- Merge-conflict remediation is handled by the agent workflow at [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200), which reruns the updater with `AUTO_RESOLVE_STRATEGY=theirs`, writes a report under `docs/reports/`, and opens a follow-up PR.
+- The maintenance workflow previously ran nightly at 02:15 UTC and supported manual dispatch with the `simulate_conflict` toggle (`.github/workflows/type-hierarchy-maintenance.yml`, now retired).
+- Merge-conflict remediation was handled by a companion agent workflow (`.github/workflows/type-hierarchy-maintenance-agent.yml`, retired alongside the main job), which reran the updater with `AUTO_RESOLVE_STRATEGY=theirs`, wrote a report under `docs/reports/`, and opened a follow-up PR.
 - When human help is required, rely on the delegate workflow at [../.github/workflows/copilot-maintenance-delegate.yml#L1-L223](../.github/workflows/copilot-maintenance-delegate.yml#L1-L223). It now posts an `@copilot` report automatically whenever a PR-linked workflow finishes with a failing conclusion and still supports manual dispatch with optional extra guidance.
 - Trigger fork CI runs after each sync if additional validation is needed:
   ```bash
