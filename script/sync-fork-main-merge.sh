@@ -78,11 +78,133 @@ merge_status=${PIPESTATUS[0]}
 set -e
 
 if [[ "$merge_status" -ne 0 ]]; then
-	log "Merge failed; aborting and preserving log at $merge_log"
-	git merge --abort >/dev/null 2>&1 || true
+	log "Merge has conflicts; will push conflicted branch for review"
+	
+	# Get the upstream commit hash for branch naming
+	upstream_hash="$(git rev-parse --short "$upstream_remote/$upstream_branch")"
+	conflict_branch="automation/nightly-sync-conflict-${upstream_hash}"
+	
+	log "Creating conflict branch: $conflict_branch"
+	
+	# Get list of conflicted files before staging
+	conflicted_files="$(git diff --name-only --diff-filter=U | sed 's/^/- /' || echo '- error: could not detect conflicted files')"
+	
+	# Add all files (including conflicted ones) to stage the conflict markers
+	git add -A
+	
+	# Commit the conflicted state
+	conflict_msg="Merge conflicts from upstream ${upstream_hash}
+
+This is an automated merge that encountered conflicts.
+Please review and resolve the conflicts manually.
+
+Conflicted files:
+${conflicted_files}
+
+Source: ${upstream_remote}/${upstream_branch} (${upstream_hash})
+Target: ${fork_remote}/${target_branch}"
+	
+	if ! git commit -m "$conflict_msg" --no-edit; then
+		log "Failed to commit conflicted state; repository may be in inconsistent state"
+		echo "SYNC_OUTCOME=merge_conflict_commit_failed" >>"$GITHUB_ENV"
+		exit 91
+	fi
+	
+	log "Pushing conflict branch $conflict_branch to $fork_remote"
+	if ! git push "$fork_remote" "HEAD:$conflict_branch" --force-with-lease; then
+		log "Failed to push conflict branch with force-with-lease; trying with --force"
+		if ! git push "$fork_remote" "HEAD:$conflict_branch" --force; then
+			log "Failed to push conflict branch; cannot create PR without remote branch"
+			echo "SYNC_OUTCOME=merge_conflict_push_failed" >>"$GITHUB_ENV"
+			exit 92
+		fi
+	fi
+	
+	# Prepare PR body with conflict information
+	conflict_pr_title="[CONFLICT] ${pr_title} (${upstream_hash})"
+	conflict_pr_body="⚠️ **This PR contains merge conflicts that need manual resolution.**
+
+${pr_body_header}
+
+## Conflict Details
+
+**Upstream commit**: \`${upstream_hash}\`
+**Source**: \`${upstream_remote}/${upstream_branch}\`
+**Target**: \`${fork_remote}/${target_branch}\`
+
+### Conflicted Files
+
+${conflicted_files}
+
+### Next Steps
+
+1. Check out this branch locally
+2. Resolve the merge conflicts in the listed files
+3. Test the changes
+4. Commit and push the resolution
+5. Merge this PR once conflicts are resolved
+
+### Merge Log
+
+See the workflow artifacts for the full merge log."
+	
+	# Check if a PR already exists for this conflict branch
+	pr_number="$(gh pr list --head "$conflict_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
+	
+	if [[ -n "$pr_number" ]]; then
+		log "Updating existing conflict PR #$pr_number"
+		gh pr edit "$pr_number" --title "$conflict_pr_title" --body "$conflict_pr_body" >/dev/null
+	else
+		log "Creating conflict PR from $conflict_branch to $target_branch"
+		gh pr create --base "$target_branch" --head "$conflict_branch" --title "$conflict_pr_title" --body "$conflict_pr_body" >/dev/null
+		# Try multiple methods to get the PR number
+		pr_number="$(gh pr view "$conflict_branch" --json number --jq '.number' 2>/dev/null || gh pr list --head "$conflict_branch" --base "$target_branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
+		if [[ -z "$pr_number" ]]; then
+			log "Warning: Could not retrieve PR number immediately after creation"
+		fi
+	fi
+	
+	# Get PR URL and export environment variables
+	if [[ -n "$pr_number" ]]; then
+		pr_url="$(gh pr view "$pr_number" --json url --jq '.url' 2>/dev/null || echo '')"
+		echo "PR_NUMBER=$pr_number" >>"$GITHUB_ENV"
+		if [[ -n "$pr_url" ]]; then
+			echo "PR_URL=$pr_url" >>"$GITHUB_ENV"
+		fi
+	else
+		# Fallback: try to get URL by branch name
+		pr_url="$(gh pr view "$conflict_branch" --json url --jq '.url' 2>/dev/null || echo '')"
+		if [[ -n "$pr_url" ]]; then
+			echo "PR_URL=$pr_url" >>"$GITHUB_ENV"
+		fi
+	fi
+	
+	# Request review from owner and copilot
+	if [[ -n "$pr_number" ]]; then
+		log "Requesting review from repository owner and $pr_reviewer"
+		repo_owner="$(gh repo view --json owner --jq '.owner.login' 2>/dev/null || echo '')"
+		current_user="$(gh api user --jq '.login' 2>/dev/null || echo '')"
+		
+		# Request review from owner only if they're not the current user
+		if [[ -n "$repo_owner" && -n "$current_user" && "$repo_owner" != "$current_user" ]]; then
+			gh pr review-request "$pr_number" --add "$repo_owner" >/dev/null 2>&1 || true
+		fi
+		
+		# Request review from configured reviewer (e.g., github-copilot)
+		if [[ -n "$pr_reviewer" && "$pr_reviewer" != "$current_user" ]]; then
+			gh pr review-request "$pr_number" --add "$pr_reviewer" >/dev/null 2>&1 || true
+		fi
+	fi
+	
 	echo "MERGE_LOG_PATH=$merge_log" >>"$GITHUB_ENV"
-	echo "SYNC_OUTCOME=merge_conflict" >>"$GITHUB_ENV"
-	exit 90
+	echo "SYNC_OUTCOME=merge_conflict_pr_created" >>"$GITHUB_ENV"
+	
+	if [[ -n "$pr_url" ]]; then
+		log "Conflict PR created: $pr_url"
+	else
+		log "Conflict PR created for branch $conflict_branch"
+	fi
+	exit 0
 fi
 
 if git diff --quiet "$fork_remote/$target_branch"...HEAD; then
