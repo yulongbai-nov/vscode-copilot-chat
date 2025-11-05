@@ -1999,6 +1999,20 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.promptSectionVisualizer.toggle",
+				"title": "Toggle Prompt Section Visualizer",
+				"icon": "$(list-tree)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.promptSectionVisualizer.refresh",
+				"title": "Refresh Prompt Section Visualizer",
+				"icon": "$(refresh)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.debug.workbenchState",
 				"title": "%github.copilot.command.logWorkbenchState%",
 				"category": "Developer"
@@ -2344,6 +2358,11 @@
 						"default": false,
 						"markdownDescription": "%github.copilot.config.scopeSelection%"
 					},
+					"github.copilot.chat.promptSectionVisualizer.enabled": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Enable the Prompt Section Visualizer to view and edit XML-tagged prompt sections with token usage information."
+					},
 					"github.copilot.chat.useProjectTemplates": {
 						"type": "boolean",
 						"default": true,
@@ -2396,6 +2415,22 @@
 						"type": "boolean",
 						"default": true,
 						"description": "%github.copilot.config.agent.currentEditorContext.enabled%"
+					},
+					"github.copilot.chat.promptSectionVisualizer.persistCollapseState": {
+						"type": "boolean",
+						"default": true,
+						"markdownDescription": "Persist the collapse/expand state of prompt sections across VS Code sessions."
+					},
+					"github.copilot.chat.promptSectionVisualizer.autoCollapseLargeSections": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Automatically collapse sections that exceed a certain token count threshold."
+					},
+					"github.copilot.chat.promptSectionVisualizer.largeSectionTokenThreshold": {
+						"type": "number",
+						"default": 500,
+						"minimum": 100,
+						"markdownDescription": "Token count threshold for automatically collapsing large sections (when autoCollapseLargeSections is enabled)."
 					}
 				}
 			},
@@ -3956,6 +3991,13 @@
 					"name": "Chat Debug",
 					"icon": "assets/debug-icon.svg",
 					"when": "github.copilot.chat.showLogView"
+				},
+				{
+					"id": "github.copilot.promptSectionVisualizer",
+					"name": "Prompt Section Visualizer",
+					"type": "webview",
+					"icon": "$(list-tree)",
+					"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled"
 				}
 			],
 			"context-inspector": [
@@ -4006,6 +4048,12 @@
 				"key": "ctrl+alt+.",
 				"mac": "cmd+alt+.",
 				"when": "github.copilot-chat.activated && terminalShellIntegrationEnabled && terminalFocus && !terminalAltBufferActive"
+			},
+			{
+				"command": "github.copilot.promptSectionVisualizer.toggle",
+				"key": "ctrl+alt+p",
+				"mac": "cmd+alt+p",
+				"when": "github.copilot-chat.activated"
 			}
 		],
 		"walkthroughs": [

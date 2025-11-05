@@ -63,8 +63,8 @@ import { IWorkspaceMutationManager } from '../../../platform/testing/common/work
 import { ISetupTestsDetector, SetupTestsDetector } from '../../../platform/testing/node/setupTestDetector';
 import { ITestDepsResolver, TestDepsResolver } from '../../../platform/testing/node/testDepsResolver';
 import { ITokenizerProvider, TokenizerProvider } from '../../../platform/tokenizer/node/tokenizer';
-import { IRerankerService, RerankerService } from '../../../platform/workspaceChunkSearch/common/rerankerService';
 import { GithubAvailableEmbeddingTypesService, IGithubAvailableEmbeddingTypesService } from '../../../platform/workspaceChunkSearch/common/githubAvailableEmbeddingTypes';
+import { IRerankerService, RerankerService } from '../../../platform/workspaceChunkSearch/common/rerankerService';
 import { IWorkspaceChunkSearchService, WorkspaceChunkSearchService } from '../../../platform/workspaceChunkSearch/node/workspaceChunkSearchService';
 import { IWorkspaceFileIndex, WorkspaceFileIndex } from '../../../platform/workspaceChunkSearch/node/workspaceFileIndex';
 import { IInstantiationServiceBuilder } from '../../../util/common/services';
@@ -99,6 +99,7 @@ import { ScenarioAutomationEndpointProviderImpl } from '../../prompt/vscode-node
 import { SettingsEditorSearchServiceImpl } from '../../prompt/vscode-node/settingsEditorSearchServiceImpl';
 import { CodeMapperService, ICodeMapperService } from '../../prompts/node/codeMapper/codeMapperService';
 import { FixCookbookService, IFixCookbookService } from '../../prompts/node/inline/fixCookbookService';
+import { registerPromptSectionVisualizerServices } from '../../promptSectionVisualizer/vscode-node/services';
 import { WorkspaceMutationManager } from '../../testing/node/setupTestsFileManager';
 import { IToolsService } from '../../tools/common/toolsService';
 import { ToolsService } from '../../tools/vscode-node/toolsService';
@@ -202,6 +203,9 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(ITodoListContextProvider, new SyncDescriptor(TodoListContextProvider));
 	builder.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(GithubAvailableEmbeddingTypesService));
 	builder.define(IRerankerService, new SyncDescriptor(RerankerService));
+
+	// Prompt Section Visualizer services
+	registerPromptSectionVisualizerServices(builder);
 }
 
 function setupMSFTExperimentationService(builder: IInstantiationServiceBuilder, extensionContext: ExtensionContext) {
