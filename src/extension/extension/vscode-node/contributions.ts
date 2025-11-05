@@ -38,6 +38,7 @@ import { OnboardTerminalTestsContribution } from '../../onboardDebug/vscode-node
 import { DebugCommandsContribution } from '../../prompt/vscode-node/debugCommands';
 import { RenameSuggestionsContrib } from '../../prompt/vscode-node/renameSuggestions';
 import { PromptFileContextContribution } from '../../promptFileContext/vscode-node/promptFileContextService';
+import { PromptSectionVisualizerContribution } from '../../promptSectionVisualizer/vscode-node/promptSectionVisualizerContribution';
 import { RelatedFilesProviderContribution } from '../../relatedFiles/vscode-node/relatedFiles.contribution';
 import { ChatReplayContribution } from '../../replay/vscode-node/chatReplayContrib';
 import { SearchPanelCommands } from '../../search/vscode-node/commands';
@@ -114,5 +115,6 @@ export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(BYOKContrib),
 	asContributionFactory(McpSetupCommands),
 	asContributionFactory(LanguageModelProxyContrib),
+	asContributionFactory(PromptSectionVisualizerContribution),
 	newWorkspaceContribution,
 ];
