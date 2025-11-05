@@ -108,8 +108,54 @@ export class PromptSectionVisualizerContribution implements IExtensionContributi
 			}
 		);
 
+		// Register test command (config-gated for development/testing)
+		const loadTestPromptCommand = vscode.commands.registerCommand(
+			'github.copilot.promptSectionVisualizer.loadTestPrompt',
+			async () => {
+				try {
+					if (!this._provider) {
+						vscode.window.showErrorMessage('Prompt Section Visualizer is not initialized');
+						return;
+					}
+
+					// Show input box for test prompt
+					const prompt = await vscode.window.showInputBox({
+						prompt: 'Paste your test prompt with XML tags (e.g., <context>...</context><instructions>...</instructions>)',
+						placeHolder: '<context>Your context here</context><instructions>Your instructions here</instructions>',
+						ignoreFocusOut: true,
+						validateInput: (value) => {
+							if (!value || value.trim().length === 0) {
+								return 'Prompt cannot be empty';
+							}
+							// Basic validation for XML-like tags
+							if (!value.includes('<') || !value.includes('>')) {
+								return 'Prompt should contain XML-like tags (e.g., <context>...</context>)';
+							}
+							return null;
+						}
+					});
+
+					if (prompt) {
+						// Show the visualizer view first
+						await vscode.commands.executeCommand(
+							'github.copilot.promptSectionVisualizer.focus'
+						);
+
+						// Load the prompt into the visualizer
+						this._provider.updatePrompt(prompt);
+						this._logService.info('Test prompt loaded into visualizer');
+						vscode.window.showInformationMessage('Test prompt loaded successfully!');
+					}
+				} catch (error) {
+					this._logService.error('Failed to load test prompt', error);
+					vscode.window.showErrorMessage('Failed to load test prompt. See logs for details.');
+				}
+			}
+		);
+
 		this._disposables.add(toggleCommand);
 		this._disposables.add(refreshCommand);
+		this._disposables.add(loadTestPromptCommand);
 
 		this._logService.info('Prompt Section Visualizer commands registered');
 	}
@@ -133,18 +179,78 @@ export class PromptSectionVisualizerContribution implements IExtensionContributi
 			// Listen for changes from the visualizer to update chat input
 			this._disposables.add(
 				this._chatIntegrationService.onDidChangeChatInput((prompt: string) => {
-					// This will be used to update the chat input when the visualizer changes
-					// For now, we log it. The actual chat input update will be implemented
-					// when we have access to the chat input API
-					this._logService.trace(`Visualizer prompt changed: ${prompt.substring(0, 100)}...`);
+					// Update chat input when visualizer changes
+					this._updateChatInput(prompt);
 				})
 			);
 
-			// Note: Chat input monitoring will be implemented in the next phase
-			// when we have access to the chat input change events
+			// Monitor chat input changes
+			this._monitorChatInput();
+
 			this._logService.info('Chat integration service initialized');
 		} catch (error) {
 			this._logService.error('Failed to setup chat integration', error);
+		}
+	}
+
+	/**
+	 * Monitor chat input for changes and sync to visualizer
+	 *
+	 * Note: This implementation uses VS Code's proposed/internal chat APIs.
+	 * The actual API access may vary depending on VS Code version and API availability.
+	 */
+	private _monitorChatInput(): void {
+		try {
+			// TODO: Implement chat input monitoring when APIs are available
+			//
+			// Expected implementation:
+			// 1. Access the chat widget service (IChatWidgetService or similar)
+			// 2. Get the active chat widget
+			// 3. Listen to input changes on the chat widget
+			// 4. Call this._chatIntegrationService.updateFromChatInput(content)
+			//
+			// Example (pseudo-code):
+			// const chatWidgetService = this._instantiationService.get(IChatWidgetService);
+			// const activeWidget = chatWidgetService.getActiveWidget();
+			// if (activeWidget) {
+			//   this._disposables.add(
+			//     activeWidget.input.onDidChange((content) => {
+			//       this._chatIntegrationService.updateFromChatInput(content);
+			//     })
+			//   );
+			// }
+
+			this._logService.info('Chat input monitoring setup (placeholder - requires chat API access)');
+		} catch (error) {
+			this._logService.warn(`Chat input monitoring not available: ${error}`);
+		}
+	}
+
+	/**
+	 * Update chat input with content from visualizer
+	 *
+	 * Note: This implementation uses VS Code's proposed/internal chat APIs.
+	 * The actual API access may vary depending on VS Code version and API availability.
+	 */
+	private _updateChatInput(prompt: string): void {
+		try {
+			// TODO: Implement chat input update when APIs are available
+			//
+			// Expected implementation:
+			// 1. Access the chat widget service
+			// 2. Get the active chat widget
+			// 3. Update the input field with the new prompt
+			//
+			// Example (pseudo-code):
+			// const chatWidgetService = this._instantiationService.get(IChatWidgetService);
+			// const activeWidget = chatWidgetService.getActiveWidget();
+			// if (activeWidget) {
+			//   activeWidget.input.setValue(prompt);
+			// }
+
+			this._logService.trace(`Visualizer prompt changed (update pending): ${prompt.substring(0, 100)}...`);
+		} catch (error) {
+			this._logService.warn(`Chat input update not available: ${error}`);
 		}
 	}
 }

@@ -2013,6 +2013,13 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.promptSectionVisualizer.loadTestPrompt",
+				"title": "Load Test Prompt into Visualizer",
+				"icon": "$(beaker)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enableTestCommand",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.debug.workbenchState",
 				"title": "%github.copilot.command.logWorkbenchState%",
 				"category": "Developer"
@@ -2362,6 +2369,11 @@
 						"type": "boolean",
 						"default": false,
 						"markdownDescription": "Enable the Prompt Section Visualizer to view and edit XML-tagged prompt sections with token usage information."
+					},
+					"github.copilot.chat.promptSectionVisualizer.enableTestCommand": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Enable the 'Load Test Prompt' command for manual testing of the Prompt Section Visualizer. This is intended for development and testing purposes."
 					},
 					"github.copilot.chat.useProjectTemplates": {
 						"type": "boolean",
