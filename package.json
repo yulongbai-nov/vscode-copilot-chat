@@ -2505,6 +2505,22 @@
 							"type": "boolean"
 						},
 						"markdownDescription": "Enable or disable auto triggering of Copilot completions for specified [languages](https://code.visualstudio.com/docs/languages/identifiers). You can still trigger suggestions manually using `Alt + \\`"
+					},
+					"github.copilot.chat.promptSectionVisualizer.persistCollapseState": {
+						"type": "boolean",
+						"default": true,
+						"markdownDescription": "Persist the collapse/expand state of prompt sections across VS Code sessions."
+					},
+					"github.copilot.chat.promptSectionVisualizer.autoCollapseLargeSections": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Automatically collapse sections that exceed a certain token count threshold."
+					},
+					"github.copilot.chat.promptSectionVisualizer.largeSectionTokenThreshold": {
+						"type": "number",
+						"default": 500,
+						"minimum": 100,
+						"markdownDescription": "Token count threshold for automatically collapsing large sections (when autoCollapseLargeSections is enabled)."
 					}
 				}
 			},
