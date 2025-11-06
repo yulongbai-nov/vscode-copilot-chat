@@ -104,14 +104,14 @@
     - Test extension activation and visualizer registration
     - _Requirements: 4.1, 4.3, 4.4_
 
-  - [ ] 6.2 Implement chat input synchronization
+  - [x] 6.2 Implement chat input synchronization
     - Hook into existing chat input field changes using VS Code chat APIs
     - Sync visualizer state with chat prompt updates in real-time
     - Handle bidirectional content synchronization (chat → visualizer → chat)
     - Add debouncing to prevent excessive updates
     - _Requirements: 4.2, 2.3_
 
-  - [ ] 6.3 Add visualizer toggle to chat interface
+  - [x] 6.3 Add visualizer toggle to chat interface
     - Add toggle button to chat input toolbar using VS Code contribution points
     - Implement proper show/hide functionality with state tracking
     - Wire up keyboard shortcut (Ctrl+Alt+P) to toggle command
