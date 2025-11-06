@@ -205,7 +205,7 @@ export class AnthropicLMProvider implements BYOKModelProvider<LanguageModelChatI
 				return {
 					name: 'memory',
 					type: 'memory_20250818'
-				} as Anthropic.Beta.BetaMemoryTool20250818;
+				} as unknown as Anthropic.Beta.BetaToolUnion;
 			}
 
 			if (!tool.inputSchema) {
