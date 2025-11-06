@@ -304,7 +304,7 @@ function ensureContentArray(content: string | OpenAI.Responses.ResponseInputMess
 	return content;
 }
 
-function responseContentToRawContent(part: OpenAI.Responses.ResponseInputContent | OpenAI.Responses.ResponseFunctionCallOutputItem): Raw.ChatCompletionContentPart | undefined {
+function responseContentToRawContent(part: OpenAI.Responses.ResponseInputContent): Raw.ChatCompletionContentPart | undefined {
 	switch (part.type) {
 		case 'input_text':
 			return { type: Raw.ChatCompletionContentPartKind.Text, text: part.text };
@@ -336,7 +336,7 @@ function responseOutputToRawContent(part: OpenAI.Responses.ResponseOutputText | 
 	}
 }
 
-function responseFunctionOutputToRawContents(output: string | OpenAI.Responses.ResponseFunctionCallOutputItemList): Raw.ChatCompletionContentPart[] {
+function responseFunctionOutputToRawContents(output: string | ReadonlyArray<OpenAI.Responses.ResponseInputContent>): Raw.ChatCompletionContentPart[] {
 	if (typeof output === 'string') {
 		return [{ type: Raw.ChatCompletionContentPartKind.Text, text: output }];
 	}
