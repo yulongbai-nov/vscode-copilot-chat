@@ -19,7 +19,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
+
+      - name: Hydrate simulation cache
+        run: |
+          git remote add upstream https://github.com/microsoft/vscode-copilot-chat.git 2>/dev/null || echo "upstream remote already present"
+          git lfs fetch upstream main --include="test/simulation/cache/*" --exclude=""
+          git lfs checkout test/simulation/cache
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
