@@ -5,14 +5,32 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ILogService } from '../../../../platform/log/common/logService';
-import { IPromptStateManager } from '../../common/services';
+import { IFeatureFlagService, IPromptStateManager } from '../../common/services';
 import { PromptSection, VisualizerState } from '../../common/types';
 import { ChatIntegrationService } from '../../vscode-node/chatIntegrationService';
+
+// Mock vscode module
+vi.mock('vscode', () => ({
+	workspace: {
+		onDidChangeTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
+		onDidOpenTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
+		textDocuments: [],
+		applyEdit: vi.fn()
+	},
+	WorkspaceEdit: vi.fn(() => ({
+		replace: vi.fn()
+	})),
+	Range: vi.fn((start, end) => ({ start, end })),
+	Uri: {
+		parse: vi.fn()
+	}
+}));
 
 describe('ChatIntegrationService - Chat Integration', () => {
 	let service: ChatIntegrationService;
 	let mockLogService: ILogService;
 	let mockStateManager: IPromptStateManager;
+	let mockFeatureFlagService: IFeatureFlagService;
 	let stateChangeListeners: Array<(state: VisualizerState) => void>;
 
 	const createMockSection = (id: string, content: string, tagName: string = 'context'): PromptSection => ({
@@ -64,8 +82,17 @@ describe('ChatIntegrationService - Chat Integration', () => {
 			dispose: vi.fn()
 		} as any;
 
+		// Create mock feature flag service
+		mockFeatureFlagService = {
+			isNativeRenderingEnabled: vi.fn().mockReturnValue(true),
+			getRenderMode: vi.fn().mockReturnValue('standalone'),
+			isVisualizerEnabled: vi.fn().mockReturnValue(true),
+			getEffectiveRenderMode: vi.fn().mockReturnValue('standalone'),
+			onConfigurationChanged: vi.fn(() => ({ dispose: vi.fn() }))
+		} as any;
+
 		// Create service
-		service = new ChatIntegrationService(mockLogService, mockStateManager);
+		service = new ChatIntegrationService(mockLogService, mockStateManager, mockFeatureFlagService);
 	});
 
 	describe('chat input synchronization', () => {
@@ -359,6 +386,26 @@ describe('ChatIntegrationService - Chat Integration', () => {
 			});
 
 			expect(() => service.getVisualizerPrompt()).toThrow();
+		});
+	});
+
+	describe('chat input monitoring', () => {
+		it('should log chat input monitoring setup', () => {
+			// Verify that the service logged the setup completion
+			expect(mockLogService.info).toHaveBeenCalledWith(
+				expect.stringContaining('Chat input monitoring setup complete')
+			);
+		});
+
+		it('should handle chat input changes with debouncing', async () => {
+			// This test verifies the core functionality works
+			// The actual vscode event registration is tested through integration tests
+			const chatInput = '<context>Test from chat</context>';
+
+			service.updateFromChatInput(chatInput);
+			await new Promise(resolve => setTimeout(resolve, 350));
+
+			expect(mockStateManager.updatePrompt).toHaveBeenCalledWith(chatInput);
 		});
 	});
 });
