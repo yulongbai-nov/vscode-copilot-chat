@@ -54,11 +54,18 @@ To drop historical cache layers from the fork entirely:
    cd cleaned-fork
    git filter-repo --path test/simulation/cache/layers --invert-paths --force
    ```
-   Or run the bundled helper:
+   Or run the bundled helper (use `--` twice so the flag reaches the script):
    ```pwsh
    npm install
-   npm run prune:simulation-cache -- --yes
+   npm run prune:simulation-cache -- -- --yes
    ```
+   If your shell still drops the flag, invoke `tsx` directly (this avoids npm
+   mutating `package-lock.json`):
+   ```pwsh
+   node ./node_modules/tsx/dist/cli.js script/tools/pruneSimulationCache.ts --yes
+   ```
+   If a previous attempt added `"peer": true` entries to `package-lock.json`,
+   reset it with `git checkout -- package-lock.json` before rerunning.
 3. Force-push the rewritten history:
    ```pwsh
    git push --force-with-lease origin main
