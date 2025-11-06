@@ -1,0 +1,120 @@
+# Fork Nightly Merge Workflow
+#
+# This workflow automatically merges changes from the upstream repository into this fork.
+# It can be triggered in two ways:
+#
+# 1. **Scheduled**: Runs automatically every night at 2:15 AM UTC
+# 2. **Manual**: Can be triggered manually from any branch using GitHub Actions UI or CLI
+#
+# Manual Trigger Usage:
+#   gh workflow run fork-nightly-merge.yml \
+#     --ref <branch-name> \
+#     -f target_branch=main \
+#     -f sync_branch=automation/nightly-upstream-merge \
+#     -f upstream_repo=microsoft/vscode-copilot-chat \
+#     -f upstream_branch=main \
+#     -f dry_run=false
+#
+# Required Secret:
+#   GH_TOKEN - GitHub token with 'repo' scope, configured in the 'develop' environment
+#
+# Features:
+#   - Handles merge conflicts by creating a special conflict PR for manual resolution
+#   - Uses Git LFS skip-smudge to avoid downloading large files during merge
+#   - Configures Git to allow incomplete LFS pushes to avoid upload failures
+#   - Supports custom target branches, sync branches, and upstream repositories
+#   - Can be triggered from non-default branches for testing purposes
+
+name: Fork Nightly Merge
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Target branch to merge into (default: main)'
+        required: false
+        default: 'main'
+      sync_branch:
+        description: 'Sync branch name (default: automation/nightly-upstream-merge)'
+        required: false
+        default: 'automation/nightly-upstream-merge'
+      upstream_repo:
+        description: 'Upstream repository (default: microsoft/vscode-copilot-chat)'
+        required: false
+        default: 'microsoft/vscode-copilot-chat'
+      upstream_branch:
+        description: 'Upstream branch to merge from (default: main)'
+        required: false
+        default: 'main'
+      dry_run:
+        description: 'Dry run mode - stop before creating PR'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '15 2 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    environment: develop
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # For manual triggers, checkout the ref that triggered the workflow
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.ref }}
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Nightly upstream merge
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target_branch || 'main' }}
+          SYNC_BRANCH: ${{ inputs.sync_branch || 'automation/nightly-upstream-merge' }}
+          UPSTREAM_REPO: ${{ inputs.upstream_repo || 'microsoft/vscode-copilot-chat' }}
+          UPSTREAM_BRANCH: ${{ inputs.upstream_branch || 'main' }}
+        run: ./script/sync-fork-main-merge.sh
+
+      - name: Upload merge log
+        if: always() && env.MERGE_LOG_PATH != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-log
+          path: ${{ env.MERGE_LOG_PATH }}
+          if-no-files-found: ignore
+
+      - name: Append job summary
+        if: always()
+        run: |
+          {
+            echo "### Fork Nightly Merge"
+            echo ""
+            if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+              echo "⚠️ **Dry run mode**: This was a test run, no PR was created."
+              echo ""
+            fi
+            echo "**Configuration:**"
+            echo "* Target branch: ${{ inputs.target_branch || 'main' }}"
+            echo "* Sync branch: ${{ inputs.sync_branch || 'automation/nightly-upstream-merge' }}"
+            echo "* Upstream repo: ${{ inputs.upstream_repo || 'microsoft/vscode-copilot-chat' }}"
+            echo "* Upstream branch: ${{ inputs.upstream_branch || 'main' }}"
+            echo "* Triggered from: ${{ github.ref }}"
+            echo ""
+            echo "**Result:**"
+            echo "* Outcome: ${SYNC_OUTCOME:-unknown}"
+            if [[ -n "${PR_URL:-}" ]]; then
+              echo "* PR: ${PR_URL}"
+            fi
+            if [[ -n "${MERGE_LOG_PATH:-}" ]]; then
+              echo "* Merge log: ${MERGE_LOG_PATH}"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"

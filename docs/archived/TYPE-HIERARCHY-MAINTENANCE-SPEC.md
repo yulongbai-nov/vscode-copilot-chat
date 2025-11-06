@@ -1,5 +1,7 @@
 # Type Hierarchy Maintenance Spec
 
+Note: The automation script and workflow described here were retired in favor of the nightly upstream merge job (`.github/workflows/fork-nightly-merge.yml`). This spec remains archived for historical reference.
+
 ## Overview
 This document formalizes the maintenance workflow for the customized type hierarchy tooling. The goal is to keep the fork synchronized with `microsoft/vscode-copilot-chat` while preserving local enhancements implemented in:
 - [../src/platform/languages/vscode/languageFeaturesServicesImpl.ts#L78-L137](../src/platform/languages/vscode/languageFeaturesServicesImpl.ts#L78-L137)
@@ -38,9 +40,9 @@ Upstream repo (origin/main) --> main-upstream (local tracking)
    - Reapply patches using `git am --3way` to isolate problematic hunks.
 
 3. **Automation Script**
-   - Provide a reusable script (`script/update-type-hierarchy.sh`) that runs the sync → rebase → validate pipeline end-to-end and exposes environment switches (`SKIP_FORK_SYNC`, `AUTO_RESOLVE_STRATEGY`, `SIMULATE_CONFLICT`).
+   - Provided a reusable script (`script/update-type-hierarchy.sh`, now retired) that ran the sync → rebase → validate pipeline end-to-end and exposed environment switches (`SKIP_FORK_SYNC`, `AUTO_RESOLVE_STRATEGY`, `SIMULATE_CONFLICT`).
 4. **GitHub Action Orchestration**
-   - Expose the maintenance flow through [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39) so the update can run in CI each night and on-demand.
+   - Exposed the maintenance flow through `.github/workflows/type-hierarchy-maintenance.yml` (retired) so the update could run in CI each night and on-demand.
    - Rely on the agent workflow at [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200) to attempt automated conflict resolution and generate reports.
    - Provide a manual Copilot escalation path via [../.github/workflows/copilot-maintenance-delegate.yml#L1-L58](../.github/workflows/copilot-maintenance-delegate.yml#L1-L58), which posts an `@copilot` comment on the specified pull request.
 
@@ -48,8 +50,8 @@ Upstream repo (origin/main) --> main-upstream (local tracking)
 - Maintenance playbook published at [../docs/TYPE-HIERARCHY-MAINTENANCE.md](../docs/TYPE-HIERARCHY-MAINTENANCE.md).
 - Generalized maintenance guidance published at [../docs/FEATURE-MAINTENANCE-GUIDE.md](../docs/FEATURE-MAINTENANCE-GUIDE.md) so future features can reuse the automation strategy.
 - Spec (this document) and execution plan finalized.
-- Automation script committed and executable (`chmod +x script/update-type-hierarchy.sh`).
-- GitHub Action defined at [../.github/workflows/type-hierarchy-maintenance.yml#L1-L39](../.github/workflows/type-hierarchy-maintenance.yml#L1-L39) invoking the maintenance script on both schedule and manual dispatch.
+- Automation script committed and executable (`chmod +x script/update-type-hierarchy.sh`). (Historical; script retired.)
+- GitHub Action defined at `.github/workflows/type-hierarchy-maintenance.yml` invoking the maintenance script on both schedule and manual dispatch. (Historical; workflow retired.)
 - Remediation agent defined at [../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200](../.github/workflows/type-hierarchy-maintenance-agent.yml#L16-L200) that records failure context and opens a follow-up PR when automation cannot resolve conflicts silently.
 - Copilot delegate workflow available at [../.github/workflows/copilot-maintenance-delegate.yml#L1-L58](../.github/workflows/copilot-maintenance-delegate.yml#L1-L58) for human supervised escalations.
 - Example run documented in plan notes showing successful typecheck.

@@ -5,6 +5,7 @@
 
 import type { Endpoints } from "@octokit/types";
 import { createServiceIdentifier } from '../../../util/common/services';
+import { decodeBase64 } from '../../../util/vs/base/common/buffer';
 import { ICAPIClientService } from '../../endpoint/common/capiClient';
 import { ILogService } from '../../log/common/logService';
 import { IFetcherService } from '../../networking/common/fetcherService';
@@ -99,6 +100,10 @@ export interface RemoteAgentJobResponse {
 	};
 	created_at: string;
 	updated_at: string;
+}
+
+export interface ErrorResponseWithStatusCode {
+	status: number;
 }
 
 export interface RemoteAgentJobPayload {
@@ -198,7 +203,7 @@ export interface IOctoKitService {
 		name: string,
 		apiVersion: string,
 		payload: RemoteAgentJobPayload,
-	): Promise<RemoteAgentJobResponse>;
+	): Promise<RemoteAgentJobResponse | ErrorResponseWithStatusCode>;
 
 	/**
 	 * Gets a job by its job ID.
@@ -261,6 +266,16 @@ export interface IOctoKitService {
 	 * @returns A promise that resolves to true if the PR was successfully closed
 	 */
 	closePullRequest(owner: string, repo: string, pullNumber: number): Promise<boolean>;
+
+	/**
+	 * Get file content from a specific commit.
+	 * @param owner The repository owner
+	 * @param repo The repository name
+	 * @param ref The commit SHA, branch name, or tag
+	 * @param path The file path within the repository
+	 * @returns The file content as a string
+	 */
+	getFileContent(owner: string, repo: string, ref: string, path: string): Promise<string>;
 }
 
 /**
@@ -306,8 +321,8 @@ export class BaseOctoKitService {
 		return makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, 'https://api.githubcopilot.com', `agents/sessions/${sessionId}`, 'GET', token, undefined, undefined, 'text');
 	}
 
-	protected async postCopilotAgentJobWithToken(owner: string, name: string, apiVersion: string, userAgent: string, payload: RemoteAgentJobPayload, token: string): Promise<RemoteAgentJobResponse> {
-		return makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, 'https://api.githubcopilot.com', `agents/swe/${apiVersion}/jobs/${owner}/${name}`, 'POST', token, payload, undefined, undefined, userAgent);
+	protected async postCopilotAgentJobWithToken(owner: string, name: string, apiVersion: string, userAgent: string, payload: RemoteAgentJobPayload, token: string) {
+		return makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, 'https://api.githubcopilot.com', `agents/swe/${apiVersion}/jobs/${owner}/${name}`, 'POST', token, payload, undefined, undefined, userAgent, true);
 	}
 
 	protected async getJobByJobIdWithToken(owner: string, repo: string, jobId: string, userAgent: string, token: string): Promise<JobInfo> {
@@ -347,5 +362,15 @@ export class BaseOctoKitService {
 
 	protected async closePullRequestWithToken(owner: string, repo: string, pullNumber: number, token: string): Promise<boolean> {
 		return closePullRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, owner, repo, pullNumber);
+	}
+
+	protected async getFileContentWithToken(owner: string, repo: string, ref: string, path: string, token: string): Promise<string> {
+		const response = await makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, `repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`, 'GET', token, undefined);
+
+		if (response?.content && response.encoding === 'base64') {
+			return decodeBase64(response.content.replace(/\n/g, '')).toString();
+		} else {
+			return '';
+		}
 	}
 }

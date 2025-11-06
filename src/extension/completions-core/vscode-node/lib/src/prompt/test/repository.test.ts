@@ -14,6 +14,18 @@ import { ComputationStatus, extractRepoInfo, extractRepoInfoInBackground } from 
 
 suite('Extract repo info tests', function () {
 	const baseFolder = { uri: makeFsUri(path.resolve(__dirname, '../../../../../../../../')) };
+	const defaultOrg = 'microsoft';
+	const defaultRepo = 'vscode-copilot-chat';
+	const envRepo = process.env.GITHUB_REPOSITORY?.split('/') ?? [];
+	const expectedOrg = (envRepo[0] ?? defaultOrg).toLowerCase();
+	const expectedRepo = (envRepo[1] ?? defaultRepo).toLowerCase();
+	const expectedRemoteUrls = [
+		`git@github.com:${expectedOrg}/${expectedRepo}`,
+		`https://github.com/${expectedOrg}/${expectedRepo}`,
+		`https://github.com/${expectedOrg}/${expectedRepo}.git`,
+	];
+	const expectedRemoteUrlsNormalized = expectedRemoteUrls.map(url => url.toLowerCase());
+	const expectedPathPrefix = `/${expectedOrg}/${expectedRepo}`;
 
 	class Nested {
 		nested: Nested | undefined;
@@ -47,18 +59,14 @@ suite('Extract repo info tests', function () {
 		});
 		assert.ok(repoId);
 		assert.deepStrictEqual(
-			{ org: repoId.org, repo: repoId.repo, type: repoId.type },
-			{ org: 'microsoft', repo: 'vscode-copilot-chat', type: 'github' }
+			{ org: repoId.org.toLowerCase(), repo: repoId.repo.toLowerCase(), type: repoId.type },
+			{ org: expectedOrg, repo: expectedRepo, type: 'github' }
 		);
+		assert.ok(expectedRemoteUrlsNormalized.includes(url.toLowerCase()), `url is ${url}`);
 		assert.ok(
-			[
-				'git@github.com:microsoft/vscode-copilot-chat',
-				'https://github.com/microsoft/vscode-copilot-chat',
-				'https://github.com/microsoft/vscode-copilot-chat.git',
-			].includes(url),
-			`url is ${url}`
+			pathname.toLowerCase().startsWith(expectedPathPrefix) || pathname.toLowerCase().startsWith(`/github/${expectedRepo}`),
+			`pathname is ${pathname}`
 		);
-		assert.ok(pathname.startsWith('/github/vscode-copilot-chat') || pathname.startsWith('/microsoft/vscode-copilot-chat'));
 
 		assert.deepStrictEqual(await extractRepoInfo(accessor, 'file:///tmp/does/not/exist/.git/config'), undefined);
 	});
@@ -80,18 +88,14 @@ suite('Extract repo info tests', function () {
 		});
 		assert.ok(repoId);
 		assert.deepStrictEqual(
-			{ org: repoId.org, repo: repoId.repo, type: repoId.type },
-			{ org: 'microsoft', repo: 'vscode-copilot-chat', type: 'github' }
+			{ org: repoId.org.toLowerCase(), repo: repoId.repo.toLowerCase(), type: repoId.type },
+			{ org: expectedOrg, repo: expectedRepo, type: 'github' }
 		);
+		assert.ok(expectedRemoteUrlsNormalized.includes(url.toLowerCase()), `url is ${url}`);
 		assert.ok(
-			[
-				'git@github.com:microsoft/vscode-copilot-chat',
-				'https://github.com/microsoft/vscode-copilot-chat',
-				'https://github.com/microsoft/vscode-copilot-chat.git',
-			].includes(url),
-			`url is ${url}`
+			pathname.toLowerCase().startsWith(expectedPathPrefix) || pathname.toLowerCase().startsWith(`/github/${expectedRepo}`),
+			`pathname is ${pathname}`
 		);
-		assert.ok(pathname.startsWith('/github/vscode-copilot-chat') || pathname.startsWith('/microsoft/vscode-copilot-chat'));
 
 		assert.deepStrictEqual(await extractRepoInfo(ctx, 'file:///tmp/does/not/exist/.git/config'), undefined);
 	});
