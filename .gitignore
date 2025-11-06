@@ -19,7 +19,7 @@ __pycache__/
 # Secret token files
 /.env
 *.token
-
+*.node
 # Test infra
 test/simulation/language/harness/
 
@@ -40,3 +40,4 @@ src/extension/completions-core
 
 .tmp/
 *.vsix
+.github/workflows/pr.yml
