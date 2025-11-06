@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import KeyvSqlite from '@keyv/sqlite';
 import { exec } from 'child_process';
 import fs from 'fs';
 import Keyv from 'keyv';
@@ -59,7 +58,7 @@ export class Cache extends EventEmitter {
 		}
 
 		fs.mkdirSync(this.layersPath, { recursive: true });
-		this.base = new Keyv(new KeyvSqlite(path.join(this.cachePath, 'base.sqlite')));
+		this.base = new Keyv('sqlite://' + path.join(this.cachePath, 'base.sqlite'));
 
 		this.layers = new Map();
 		let layerFiles = fs.readdirSync(this.layersPath)
@@ -75,7 +74,7 @@ export class Cache extends EventEmitter {
 
 		for (const layerFile of layerFiles) {
 			const name = path.basename(layerFile, path.extname(layerFile));
-			this.layers.set(name, new Keyv(new KeyvSqlite(layerFile)));
+			this.layers.set(name, new Keyv('sqlite://' + layerFile));
 		}
 	}
 
@@ -190,7 +189,7 @@ export class Cache extends EventEmitter {
 		}
 
 		this.gcBaseKeys = new Set<string>();
-		this.gcBase = new Keyv(new KeyvSqlite(path.join(this.cachePath, '_base.sqlite')));
+		this.gcBase = new Keyv('sqlite://' + path.join(this.cachePath, '_base.sqlite'));
 	}
 
 	async gcEnd(): Promise<void> {
@@ -261,7 +260,7 @@ export class Cache extends EventEmitter {
 
 				// Create a new layer database
 				const uuid = generateUuid();
-				const activeLayer = new Keyv(new KeyvSqlite(path.join(activeLayerPath, `${uuid}.sqlite`)));
+				const activeLayer = new Keyv('sqlite://' + path.join(activeLayerPath, `${uuid}.sqlite`));
 				this.layers.set(uuid, activeLayer);
 				return activeLayer;
 			})();
