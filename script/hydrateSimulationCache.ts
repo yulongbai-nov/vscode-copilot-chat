@@ -165,11 +165,17 @@ export async function ensureSimulationCache(options: EnsureSimulationCacheOption
 	const checkoutPath = resolveStringOption(options.checkoutPath, process.env.SIM_CACHE_CHECKOUT_PATH, CACHE_DIR);
 	const baseCacheFile = path.join(cwd, checkoutPath, 'base.sqlite');
 
+	// Check if file exists and is not just an LFS pointer (should be > 1KB)
 	if (fs.existsSync(baseCacheFile)) {
-		if (options.verbose) {
-			console.log(`[hydrateSimulationCache] Cache already present at ${baseCacheFile}`);
+		const stats = fs.statSync(baseCacheFile);
+		if (stats.size > 1024) {
+			if (options.verbose) {
+				console.log(`[hydrateSimulationCache] Cache already present at ${baseCacheFile} (${stats.size} bytes)`);
+			}
+			return;
+		} else {
+			console.warn(`[hydrateSimulationCache] Found LFS pointer file (${stats.size} bytes), will hydrate actual content.`);
 		}
-		return;
 	}
 
 	console.warn(`[hydrateSimulationCache] Cache missing at ${baseCacheFile}. Hydrating from ${remote}/${branch}.`);
