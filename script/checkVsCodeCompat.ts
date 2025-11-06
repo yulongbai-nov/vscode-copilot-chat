@@ -14,6 +14,11 @@ interface IPackageJson {
 	};
 }
 
+interface IProductJson {
+	readonly version?: string;
+	readonly date?: string;
+}
+
 const workspaceRoot = path.resolve(__dirname, '..');
 const packageJsonPath = path.join(workspaceRoot, 'package.json');
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as IPackageJson;
@@ -24,6 +29,23 @@ if (!requiredRange) {
 	process.exit(0);
 }
 
+const windowsCandidates = process.platform === 'win32'
+	? [
+		process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code Insiders', 'bin', 'code-insiders.cmd') : '',
+		process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd') : '',
+		process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code Insiders', 'bin', 'code-insiders.cmd') : '',
+		process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'bin', 'code.cmd') : '',
+		process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code Insiders', 'bin', 'code-insiders.cmd') : '',
+		process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code', 'bin', 'code.cmd') : '',
+		process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code Insiders', 'Code - Insiders.exe') : '',
+		process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe') : '',
+		process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code Insiders', 'Code - Insiders.exe') : '',
+		process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'Code.exe') : '',
+		process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code Insiders', 'Code - Insiders.exe') : '',
+		process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code', 'Code.exe') : ''
+	]
+	: [];
+
 const candidates = dedupe([
 	process.env.VSCODE_CLI ?? '',
 	process.env.CODE_EXEC_PATH ?? '',
@@ -32,11 +54,17 @@ const candidates = dedupe([
 	'code-insiders',
 	'code',
 	path.join(workspaceRoot, '..', 'vscode', 'scripts', 'code.sh'),
-	path.join(workspaceRoot, '..', 'vscode', 'scripts', 'code.bat')
+	path.join(workspaceRoot, '..', 'vscode', 'scripts', 'code.bat'),
+	...windowsCandidates
 ]);
 
 try {
-	const { version: vscodeVersion, command } = resolveVsCodeInfo(candidates);
+	const {
+		version: vscodeVersion,
+		command,
+		canRunStatusCommand,
+		buildTimestamp: resolvedTimestamp
+	} = resolveVsCodeInfo(candidates);
 
 	if (!valid(vscodeVersion)) {
 		process.exit(1);
@@ -52,11 +80,14 @@ try {
 
 	const minimumVersion = minVersion(requiredRange);
 	const requiredBuildDate = extractDateFromSemVer(minimumVersion);
-	const buildTimestamp = readVsCodeBuildTimestamp(command);
+	const buildTimestamp = resolvedTimestamp ?? (canRunStatusCommand ? readVsCodeBuildTimestamp(command) : undefined);
 
 	if (requiredBuildDate) {
 		if (!buildTimestamp) {
 			console.error(`[compat] Could not determine VS Code build timestamp to validate required date ${formatDate(requiredBuildDate)}.`);
+			if (!canRunStatusCommand) {
+				console.error('[compat] Install the VS Code CLI (code.cmd) or set VSCODE_CLI to a compatible binary to enable build verification.');
+			}
 			process.exit(1);
 		}
 
@@ -83,6 +114,8 @@ try {
 interface IResolvedVsCodeInfo {
 	readonly version: string;
 	readonly command: string;
+	readonly canRunStatusCommand: boolean;
+	readonly buildTimestamp?: Date;
 }
 
 function resolveVsCodeInfo(commands: readonly string[]): IResolvedVsCodeInfo {
@@ -93,8 +126,30 @@ function resolveVsCodeInfo(commands: readonly string[]): IResolvedVsCodeInfo {
 			continue;
 		}
 
+		if (command.includes(path.sep) && !fs.existsSync(command)) {
+			continue;
+		}
+
 		attempted.push(command);
-		const result = spawnSync(command, ['--version'], { encoding: 'utf8' });
+
+		if (command.toLowerCase().endsWith('.exe')) {
+			// Query installed binaries directly to avoid launching the desktop application.
+			const resolved = resolveFromProductJson(command);
+			if (resolved) {
+				return {
+					version: resolved.version,
+					command,
+					canRunStatusCommand: false,
+					buildTimestamp: resolved.buildTimestamp
+				};
+			}
+			continue;
+		}
+
+		const result = spawnSync(command, ['--version'], {
+			encoding: 'utf8',
+			shell: process.platform === 'win32' && /\.((cmd)|(bat))$/i.test(command)
+		});
 
 		if (result.error) {
 			continue;
@@ -108,15 +163,51 @@ function resolveVsCodeInfo(commands: readonly string[]): IResolvedVsCodeInfo {
 		const version = stdout.trim().split(/\r?\n/)[0];
 
 		if (version) {
-			return { version, command };
+			return {
+				version,
+				command,
+				canRunStatusCommand: true
+			};
 		}
 	}
 
 	throw new Error(`Could not determine VS Code version. Tried: ${attempted.join(', ') || 'no commands'}.`);
 }
 
+function resolveFromProductJson(command: string): { readonly version: string; readonly buildTimestamp?: Date } | undefined {
+	const installRoot = path.dirname(command);
+	const productJsonPath = path.join(installRoot, 'resources', 'app', 'product.json');
+
+	if (!fs.existsSync(productJsonPath)) {
+		return undefined;
+	}
+
+	try {
+		const productContents = fs.readFileSync(productJsonPath, 'utf8');
+		const productJson = JSON.parse(productContents) as IProductJson;
+		const version = typeof productJson.version === 'string' ? productJson.version.trim() : '';
+		const dateValue = typeof productJson.date === 'string' ? productJson.date.trim() : '';
+		const parsedDate = dateValue ? new Date(dateValue) : undefined;
+		const buildTimestamp = parsedDate && Number.isNaN(parsedDate.getTime()) ? undefined : parsedDate;
+
+		if (!version) {
+			return undefined;
+		}
+
+		return {
+			version,
+			buildTimestamp
+		};
+	} catch (error) {
+		return undefined;
+	}
+}
+
 function readVsCodeBuildTimestamp(command: string): Date | undefined {
-	const result = spawnSync(command, ['--status'], { encoding: 'utf8' });
+	const result = spawnSync(command, ['--status'], {
+		encoding: 'utf8',
+		shell: process.platform === 'win32' && /\.((cmd)|(bat))$/i.test(command)
+	});
 
 	if (result.error || (typeof result.status === 'number' && result.status !== 0)) {
 		return undefined;

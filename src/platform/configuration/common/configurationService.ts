@@ -815,6 +815,14 @@ export namespace ConfigKey {
 	export const TerminalToDebuggerEnabled = defineSetting('chat.copilotDebugCommand.enabled', true);
 	export const CodeSearchAgentEnabled = defineSetting<boolean>('chat.codesearch.enabled', false);
 	export const InlineEditsEnabled = defineExpSetting<boolean>('nextEditSuggestions.enabled', { defaultValue: false, teamDefaultValue: true });
+
+	/** Prompt Section Visualizer settings */
+	export const PromptSectionVisualizerEnabled = defineSetting('chat.promptSectionVisualizer.enabled', false);
+	export const PromptSectionVisualizerRenderMode = defineSetting<'inline' | 'standalone' | 'auto'>('chat.promptSectionVisualizer.renderMode', 'auto');
+	export const PromptSectionVisualizerUseNativeRendering = defineSetting('chat.promptSectionVisualizer.useNativeRendering', false);
+	export const PromptSectionVisualizerPersistCollapseState = defineSetting('chat.promptSectionVisualizer.persistCollapseState', true);
+	export const PromptSectionVisualizerAutoCollapseLargeSections = defineSetting('chat.promptSectionVisualizer.autoCollapseLargeSections', false);
+	export const PromptSectionVisualizerLargeSectionTokenThreshold = defineSetting('chat.promptSectionVisualizer.largeSectionTokenThreshold', 500);
 	export const InlineEditsEnableDiagnosticsProvider = defineExpSetting<boolean>('nextEditSuggestions.fixes', { defaultValue: true, teamDefaultValue: true });
 	export const InlineEditsAllowWhitespaceOnlyChanges = defineExpSetting<boolean>('nextEditSuggestions.allowWhitespaceOnlyChanges', true);
 	export const NewWorkspaceCreationAgentEnabled = defineSetting<boolean>('chat.newWorkspaceCreation.enabled', true);
