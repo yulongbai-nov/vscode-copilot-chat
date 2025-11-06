@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { compressTikToken } from './build/compressTikToken';
 import { copyStaticAssets } from './build/copyStaticAssets';
+import { ensureSimulationCache } from './hydrateSimulationCache';
 
 export interface ITreeSitterGrammar {
 	name: string;
@@ -62,11 +63,6 @@ const treeSitterGrammars: ITreeSitterGrammar[] = [
 ];
 
 const REPO_ROOT = path.join(__dirname, '..');
-const SIMULATION_CACHE_DIR = 'test/simulation/cache';
-const SIMULATION_CACHE_INCLUDE = `${SIMULATION_CACHE_DIR}/*`;
-const BASE_CACHE_FILE = path.join(REPO_ROOT, SIMULATION_CACHE_DIR, 'base.sqlite');
-const UPSTREAM_REMOTE = 'upstream';
-const UPSTREAM_URL = 'https://github.com/microsoft/vscode-copilot-chat.git';
 
 async function runCommand(command: string, args: readonly string[], cwd: string): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -82,38 +78,6 @@ async function runCommand(command: string, args: readonly string[], cwd: string)
 			resolve();
 		});
 	});
-}
-
-async function ensureRemoteExists(remote: string, url: string): Promise<void> {
-	const exists = await new Promise<boolean>((resolve) => {
-		const child = spawn('git', ['remote', 'get-url', remote], { cwd: REPO_ROOT, stdio: 'ignore' });
-		child.on('error', () => resolve(false));
-		child.on('close', code => resolve(code === 0));
-	});
-
-	if (!exists) {
-		await runCommand('git', ['remote', 'add', remote, url], REPO_ROOT);
-	}
-}
-
-async function ensureSimulationCache(): Promise<void> {
-	if (fs.existsSync(BASE_CACHE_FILE)) {
-		return;
-	}
-
-	console.warn(`Base simulation cache absent at ${BASE_CACHE_FILE}. Attempting to fetch from ${UPSTREAM_REMOTE}.`);
-
-	try {
-		await ensureRemoteExists(UPSTREAM_REMOTE, UPSTREAM_URL);
-		await runCommand('git', ['lfs', 'fetch', UPSTREAM_REMOTE, 'main', `--include=${SIMULATION_CACHE_INCLUDE}`, '--exclude='], REPO_ROOT);
-		await runCommand('git', ['lfs', 'checkout', SIMULATION_CACHE_DIR], REPO_ROOT);
-	} catch (error) {
-		throw new Error(`Unable to populate simulation cache automatically. Fetch from upstream manually by running:\n  git remote add ${UPSTREAM_REMOTE} ${UPSTREAM_URL}\n  git lfs fetch ${UPSTREAM_REMOTE} main --include="${SIMULATION_CACHE_INCLUDE}" --exclude=""\n  git lfs checkout ${SIMULATION_CACHE_DIR}\n${error instanceof Error ? `Inner error: ${error.message}` : ''}`);
-	}
-
-	if (!fs.existsSync(BASE_CACHE_FILE)) {
-		throw new Error(`Base cache file is still missing after fetch. Run the manual commands listed above and rerun npm install.`);
-	}
 }
 
 /**
@@ -242,7 +206,7 @@ async function main() {
 
 	await createCopilotCliSharpShim();
 
-	await ensureSimulationCache();
+	await ensureSimulationCache({ cwd: REPO_ROOT });
 
 	await copyStaticAssets([
 		`node_modules/@anthropic-ai/claude-code/cli.js`,
