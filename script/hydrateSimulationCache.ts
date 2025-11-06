@@ -24,19 +24,36 @@ const REPO_ROOT = path.join(__dirname, '..');
 const DEFAULT_REMOTE = 'upstream';
 const DEFAULT_BRANCH = 'main';
 const DEFAULT_REMOTE_URL = 'https://github.com/microsoft/vscode-copilot-chat.git';
-const CACHE_DIR = path.posix.join('test', 'simulation', 'cache');
+const CACHE_DIR = 'test/simulation/cache'; // Use forward slashes for git commands
 const CACHE_INCLUDE = `${CACHE_DIR}/*`;
-const BASE_CACHE_FILE = path.join(CACHE_DIR, 'base.sqlite');
 
 function createManualInstructions(remote: string, branch: string, includePattern: string, checkoutPath: string, remoteUrl: string): string {
 	return [
 		'Unable to populate the simulation cache automatically. Run the following commands manually and re-run the script:',
 		`  git remote add ${remote} ${remoteUrl}  # if the remote is missing`,
-		`  git fetch ${remote} ${branch}`,
+		`  git fetch ${remote} ${branch}  # creates ${remote}/${branch}`,
 		`  MERGE_BASE=$(git merge-base HEAD ${remote}/${branch})`,
 		`  git lfs fetch ${remote} "$MERGE_BASE" --include="${includePattern}" --exclude=""`,
 		`  git lfs checkout ${checkoutPath}`
 	].join('\n');
+}
+
+function resolveStringOption(optionValue: string | undefined, envValue: string | undefined, defaultValue: string): string {
+	if (optionValue !== undefined) {
+		const trimmedOption = optionValue.trim();
+		if (trimmedOption !== '') {
+			return trimmedOption;
+		}
+	}
+
+	if (envValue !== undefined) {
+		const trimmedEnv = envValue.trim();
+		if (trimmedEnv !== '') {
+			return trimmedEnv;
+		}
+	}
+
+	return defaultValue;
 }
 
 function runCommand(command: string, args: readonly string[], options: RunCommandOptions = {}): Promise<RunCommandResult> {
@@ -124,11 +141,11 @@ export interface EnsureSimulationCacheOptions {
 
 export async function ensureSimulationCache(options: EnsureSimulationCacheOptions = {}): Promise<void> {
 	const cwd = options.cwd ?? REPO_ROOT;
-	const remote = options.remote ?? process.env.SIM_CACHE_REMOTE ?? DEFAULT_REMOTE;
-	const branch = options.branch ?? process.env.SIM_CACHE_BRANCH ?? DEFAULT_BRANCH;
-	const remoteUrl = options.remoteUrl ?? process.env.SIM_CACHE_REMOTE_URL ?? DEFAULT_REMOTE_URL;
-	const includePattern = options.includePattern ?? process.env.SIM_CACHE_INCLUDE ?? CACHE_INCLUDE;
-	const checkoutPath = options.checkoutPath ?? process.env.SIM_CACHE_CHECKOUT_PATH ?? CACHE_DIR;
+	const remote = resolveStringOption(options.remote, process.env.SIM_CACHE_REMOTE, DEFAULT_REMOTE);
+	const branch = resolveStringOption(options.branch, process.env.SIM_CACHE_BRANCH, DEFAULT_BRANCH);
+	const remoteUrl = resolveStringOption(options.remoteUrl, process.env.SIM_CACHE_REMOTE_URL, DEFAULT_REMOTE_URL);
+	const includePattern = resolveStringOption(options.includePattern, process.env.SIM_CACHE_INCLUDE, CACHE_INCLUDE);
+	const checkoutPath = resolveStringOption(options.checkoutPath, process.env.SIM_CACHE_CHECKOUT_PATH, CACHE_DIR);
 	const baseCacheFile = path.join(cwd, checkoutPath, 'base.sqlite');
 
 	if (fs.existsSync(baseCacheFile)) {
