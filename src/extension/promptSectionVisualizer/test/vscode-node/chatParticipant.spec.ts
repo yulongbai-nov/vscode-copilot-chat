@@ -27,11 +27,12 @@ class MockChatResponseStream {
 		this.warningParts.push(typeof value === 'string' ? value : value.value);
 	}
 
-	button(button: vscode.ChatResponseCommandButtonPart): this {
+	button(part: vscode.ChatResponseCommandButtonPart | vscode.Command): this {
+		const command = (part as vscode.ChatResponseCommandButtonPart).value ?? part as vscode.Command;
 		this.buttonParts.push({
-			title: button.value.title,
-			command: button.value.command,
-			arguments: button.value.arguments
+			title: command.title ?? '',
+			command: command.command,
+			arguments: command.arguments
 		});
 		return this;
 	}
