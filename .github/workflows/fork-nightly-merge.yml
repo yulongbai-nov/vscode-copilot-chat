@@ -62,6 +62,10 @@ jobs:
   merge:
     runs-on: ubuntu-latest
     environment: develop
+    env:
+      MERGE_LOG_PATH: ''
+      PR_URL: ''
+      SYNC_OUTCOME: ''
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -94,27 +98,35 @@ jobs:
 
       - name: Append job summary
         if: always()
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          TARGET_BRANCH: ${{ inputs.target_branch || 'main' }}
+          SYNC_BRANCH: ${{ inputs.sync_branch || 'automation/nightly-upstream-merge' }}
+          UPSTREAM_REPO: ${{ inputs.upstream_repo || 'microsoft/vscode-copilot-chat' }}
+          UPSTREAM_BRANCH: ${{ inputs.upstream_branch || 'main' }}
+          TRIGGER_REF: ${{ github.ref }}
         run: |
           {
             echo "### Fork Nightly Merge"
             echo ""
-            if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            if [ "${DRY_RUN}" = "true" ]; then
               echo "⚠️ **Dry run mode**: This was a test run, no PR was created."
               echo ""
             fi
             echo "**Configuration:**"
-            echo "* Target branch: ${{ inputs.target_branch || 'main' }}"
-            echo "* Sync branch: ${{ inputs.sync_branch || 'automation/nightly-upstream-merge' }}"
-            echo "* Upstream repo: ${{ inputs.upstream_repo || 'microsoft/vscode-copilot-chat' }}"
-            echo "* Upstream branch: ${{ inputs.upstream_branch || 'main' }}"
-            echo "* Triggered from: ${{ github.ref }}"
+            echo "* Target branch: ${TARGET_BRANCH}"
+            echo "* Sync branch: ${SYNC_BRANCH}"
+            echo "* Upstream repo: ${UPSTREAM_REPO}"
+            echo "* Upstream branch: ${UPSTREAM_BRANCH}"
+            echo "* Triggered from: ${TRIGGER_REF}"
             echo ""
             echo "**Result:**"
             echo "* Outcome: ${SYNC_OUTCOME:-unknown}"
-            if [[ -n "${PR_URL:-}" ]]; then
+            if [ -n "${PR_URL:-}" ]; then
               echo "* PR: ${PR_URL}"
             fi
-            if [[ -n "${MERGE_LOG_PATH:-}" ]]; then
+            if [ -n "${MERGE_LOG_PATH:-}" ]; then
               echo "* Merge log: ${MERGE_LOG_PATH}"
             fi
           } >>"$GITHUB_STEP_SUMMARY"

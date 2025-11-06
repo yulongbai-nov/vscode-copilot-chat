@@ -14,10 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Block cache layer changes
+        shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == 'workflow_dispatch' ]]; then
-            echo "Manual run: no cache layer changes to block."
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run for validation only. No cache layer changes to block."
             exit 0
           fi
+
           echo "Simulation cache layers must not be pushed. Fetch the cache from upstream instead."
           exit 1
