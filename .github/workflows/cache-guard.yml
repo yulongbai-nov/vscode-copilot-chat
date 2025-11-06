@@ -1,0 +1,18 @@
+name: Prevent Simulation Cache Layer Commits
+
+on:
+  push:
+    paths:
+      - 'test/simulation/cache/layers/**'
+  pull_request:
+    paths:
+      - 'test/simulation/cache/layers/**'
+
+jobs:
+  block:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Block cache layer changes
+        run: |
+          echo "Simulation cache layers must not be pushed. Fetch the cache from upstream instead."
+          exit 1
