@@ -127,6 +127,23 @@ async function fetchSimulationCache(remote: string, mergeBase: string, includePa
 	console.log(`[hydrateSimulationCache] Downloading LFS objects for ${includePattern} from ${remote}@${mergeBase}.`);
 	await runCommand('git', ['lfs', 'fetch', remote, mergeBase, `--include=${includePattern}`, '--exclude='], { cwd, stdio: 'inherit' });
 	await runCommand('git', ['lfs', 'checkout', checkoutPath], { cwd, stdio: 'inherit' });
+
+	// Debug: Show what was downloaded
+	console.log(`[hydrateSimulationCache] Merge base commit: ${mergeBase}`);
+	const baseSqlitePath = path.join(cwd, checkoutPath, 'base.sqlite');
+	if (fs.existsSync(baseSqlitePath)) {
+		const stats = fs.statSync(baseSqlitePath);
+		console.log(`[hydrateSimulationCache] base.sqlite size: ${stats.size} bytes`);
+		console.log(`[hydrateSimulationCache] base.sqlite mtime: ${stats.mtime.toISOString()}`);
+		// Calculate SHA256 hash
+		const crypto = require('crypto');
+		const hash = crypto.createHash('sha256');
+		const fileBuffer = fs.readFileSync(baseSqlitePath);
+		hash.update(fileBuffer);
+		console.log(`[hydrateSimulationCache] base.sqlite SHA256: ${hash.digest('hex')}`);
+	} else {
+		console.warn(`[hydrateSimulationCache] base.sqlite not found after checkout!`);
+	}
 }
 
 export interface EnsureSimulationCacheOptions {

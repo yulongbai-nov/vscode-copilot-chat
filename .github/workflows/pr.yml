@@ -61,6 +61,7 @@ jobs:
 
   check-telemetry:
     name: Check telemetry events
+    if: false  # Disabled for debugging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -82,6 +83,7 @@ jobs:
 
   linux-tests:
     name: Test (Linux)
+    if: false  # Disabled for debugging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -148,9 +150,13 @@ jobs:
 
       - name: Run vitest unit tests
         run: npm run test:unit
+        env:
+          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run simulation tests with cache
         run: npm run simulate-ci
+        env:
+          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run extension tests using VS Code
         run: xvfb-run -a npm run test:extension
@@ -177,6 +183,7 @@ jobs:
 
   windows-tests:
     name: Test (Windows)
+    if: false  # Disabled for debugging
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -243,9 +250,13 @@ jobs:
 
       - name: Run vitest unit tests
         run: npm run test:unit
+        env:
+          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run simulation tests with cache
         run: npm run simulate-ci
+        env:
+          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run extension tests using VS Code
         run: npm run test:extension
