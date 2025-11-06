@@ -32,6 +32,9 @@ coverage/
 # Base cache database (GC mode)
 test/simulation/cache/_base.sqlite
 
+# Simulation cache layers are hydrated from upstream as needed
+test/simulation/cache/layers/
+
 test/aml/out
 src/extension/completions-core
 
