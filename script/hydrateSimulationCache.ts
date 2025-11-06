@@ -87,7 +87,12 @@ function runCommand(command: string, args: readonly string[], options: RunComman
 		child.on('close', code => {
 			const exitCode = code ?? 0;
 			if (exitCode !== 0 && !options.allowNonZero) {
-				reject(new Error(`${command} ${args.join(' ')} exited with code ${exitCode}${stderr ? `\n${stderr.trim()}` : ''}`));
+				const errorMsg = [
+					`${command} ${args.join(' ')} exited with code ${exitCode}`,
+					stderr ? `stderr: ${stderr.trim()}` : '',
+					stdout ? `stdout: ${stdout.trim()}` : ''
+				].filter(Boolean).join('\n');
+				reject(new Error(errorMsg));
 				return;
 			}
 
@@ -107,26 +112,70 @@ async function ensureRemoteExists(remote: string, remoteUrl: string, cwd: string
 	}
 
 	console.log(`[hydrateSimulationCache] Adding remote "${remote}" -> ${remoteUrl}`);
-	await runCommand('git', ['remote', 'add', remote, remoteUrl], { cwd });
+	try {
+		await runCommand('git', ['remote', 'add', remote, remoteUrl], { cwd });
+		console.log(`[hydrateSimulationCache] Successfully added remote "${remote}"`);
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		console.error(`[hydrateSimulationCache] Failed to add remote: ${msg}`);
+		throw error;
+	}
 }
 
 async function resolveMergeBase(remote: string, branch: string, cwd: string): Promise<string> {
 	const fetchEnv = { ...process.env, GIT_LFS_SKIP_SMUDGE: '1' };
 	console.log(`[hydrateSimulationCache] Fetching ${remote}/${branch} to determine merge base.`);
-	await runCommand('git', ['fetch', remote, branch], { cwd, env: fetchEnv, stdio: 'inherit' });
-	const fetchRef = `${remote}/${branch}`;
-	const mergeBaseResult = await runCommand('git', ['merge-base', 'HEAD', fetchRef], { cwd, stdio: 'pipe' });
-	const mergeBase = mergeBaseResult.stdout.trim();
-	if (!mergeBase) {
-		throw new Error(`git merge-base did not return a commit for HEAD and ${fetchRef}.`);
+	try {
+		await runCommand('git', ['fetch', remote, branch], { cwd, env: fetchEnv, stdio: 'inherit' });
+		console.log(`[hydrateSimulationCache] Fetch completed successfully`);
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		console.error(`[hydrateSimulationCache] Fetch failed: ${msg}`);
+		throw error;
 	}
-	return mergeBase;
+
+	const fetchRef = `${remote}/${branch}`;
+	console.log(`[hydrateSimulationCache] Computing merge-base between HEAD and ${fetchRef}`);
+	try {
+		const mergeBaseResult = await runCommand('git', ['merge-base', 'HEAD', fetchRef], { cwd, stdio: 'pipe' });
+		const mergeBase = mergeBaseResult.stdout.trim();
+		if (!mergeBase) {
+			throw new Error(`git merge-base did not return a commit for HEAD and ${fetchRef}.`);
+		}
+		console.log(`[hydrateSimulationCache] Merge base found: ${mergeBase}`);
+		return mergeBase;
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		console.error(`[hydrateSimulationCache] merge-base failed: ${msg}`);
+		// Show HEAD commit for debugging
+		try {
+			const headResult = await runCommand('git', ['rev-parse', 'HEAD'], { cwd, stdio: 'pipe' });
+			console.log(`[hydrateSimulationCache] Current HEAD: ${headResult.stdout.trim()}`);
+		} catch { /* ignore */ }
+		throw error;
+	}
 }
 
 async function fetchSimulationCache(remote: string, mergeBase: string, includePattern: string, checkoutPath: string, cwd: string): Promise<void> {
 	console.log(`[hydrateSimulationCache] Downloading LFS objects for ${includePattern} from ${remote}@${mergeBase}.`);
-	await runCommand('git', ['lfs', 'fetch', remote, mergeBase, `--include=${includePattern}`, '--exclude='], { cwd, stdio: 'inherit' });
-	await runCommand('git', ['lfs', 'checkout', checkoutPath], { cwd, stdio: 'inherit' });
+	try {
+		await runCommand('git', ['lfs', 'fetch', remote, mergeBase, `--include=${includePattern}`, '--exclude='], { cwd, stdio: 'inherit' });
+		console.log(`[hydrateSimulationCache] LFS fetch completed`);
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		console.error(`[hydrateSimulationCache] LFS fetch failed: ${msg}`);
+		throw error;
+	}
+
+	console.log(`[hydrateSimulationCache] Checking out LFS files in ${checkoutPath}`);
+	try {
+		await runCommand('git', ['lfs', 'checkout', checkoutPath], { cwd, stdio: 'inherit' });
+		console.log(`[hydrateSimulationCache] LFS checkout completed`);
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		console.error(`[hydrateSimulationCache] LFS checkout failed: ${msg}`);
+		throw error;
+	}
 
 	// Debug: Show what was downloaded
 	console.log(`[hydrateSimulationCache] Merge base commit: ${mergeBase}`);
