@@ -579,6 +579,19 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 			return await this.handleConfirmationData(request, stream, token);
 		}
 
+		/* __GDPR__
+			"copilotcloud.chat.invoke" : {
+				"owner": "joshspicer",
+				"comment": "Event sent when a Copilot Cloud chat request is made.",
+				"hasChatSessionItem": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "Invoked with a chat session item." },
+				"isUntitled": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "Indicates if the chat session is untitled." }
+			}
+		*/
+		this.telemetry.sendMSFTTelemetryEvent('copilotcloud.chat.invoke', {
+			hasChatSessionItem: String(!!context.chatSessionContext?.chatSessionItem),
+			isUntitled: String(context.chatSessionContext?.isUntitled)
+		});
+
 		if (context.chatSessionContext?.isUntitled) {
 			/* Generate new cloud agent session from an 'untitled' session */
 
@@ -841,6 +854,9 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 								if (toolPart) {
 									stream.push(toolPart);
 									hasStreamedContent = true;
+									if (toolPart instanceof vscode.ChatResponseThinkingProgressPart) {
+										stream.push(new vscode.ChatResponseThinkingProgressPart('', '', { vscodeReasoningDone: true }));
+									}
 								}
 							} else {
 								// Running setup step - just track progress
@@ -861,6 +877,9 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 									if (toolPart) {
 										stream.push(toolPart);
 										hasStreamedContent = true;
+										if (toolPart instanceof vscode.ChatResponseThinkingProgressPart) {
+											stream.push(new vscode.ChatResponseThinkingProgressPart('', '', { vscodeReasoningDone: true }));
+										}
 									}
 								}
 							}

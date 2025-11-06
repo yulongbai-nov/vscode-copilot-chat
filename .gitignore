@@ -36,7 +36,7 @@ test/simulation/cache/_base.sqlite
 test/simulation/cache/layers/
 
 test/aml/out
-src/extension/completions-core
+# src/extension/completions-core
 
 .tmp/
 *.vsix

@@ -373,6 +373,9 @@ export class AnthropicLMProvider implements BYOKModelProvider<LanguageModelChatI
 			thinking?: string;
 			signature?: string;
 		} | undefined;
+		let pendingRedactedThinking: {
+			data: string;
+		} | undefined;
 		let pendingServerToolCall: {
 			toolId?: string;
 			name?: string;
@@ -413,6 +416,11 @@ export class AnthropicLMProvider implements BYOKModelProvider<LanguageModelChatI
 					pendingThinking = {
 						thinking: '',
 						signature: ''
+					};
+				} else if ('content_block' in chunk && chunk.content_block.type === 'redacted_thinking') {
+					const redactedBlock = chunk.content_block as Anthropic.Messages.RedactedThinkingBlock;
+					pendingRedactedThinking = {
+						data: redactedBlock.data
 					};
 				} else if ('content_block' in chunk && chunk.content_block.type === 'web_search_tool_result') {
 					if (!pendingServerToolCall || !pendingServerToolCall.toolId) {
@@ -487,6 +495,7 @@ export class AnthropicLMProvider implements BYOKModelProvider<LanguageModelChatI
 				} else if (chunk.delta.type === 'thinking_delta') {
 					if (pendingThinking) {
 						pendingThinking.thinking = (pendingThinking.thinking || '') + (chunk.delta.thinking || '');
+						progress.report(new LanguageModelThinkingPart(chunk.delta.thinking || ''));
 					}
 				} else if (chunk.delta.type === 'signature_delta') {
 					// Accumulate signature
@@ -530,14 +539,17 @@ export class AnthropicLMProvider implements BYOKModelProvider<LanguageModelChatI
 					}
 					pendingToolCall = undefined;
 				} else if (pendingThinking) {
-					progress.report(
-						new LanguageModelThinkingPart(
-							pendingThinking.thinking || '',
-							undefined, // id
-							{ signature: pendingThinking.signature || '' }
-						)
-					);
+					if (pendingThinking.signature) {
+						const finalThinkingPart = new LanguageModelThinkingPart('');
+						finalThinkingPart.metadata = {
+							signature: pendingThinking.signature,
+							_completeThinking: pendingThinking.thinking
+						};
+						progress.report(finalThinkingPart);
+					}
 					pendingThinking = undefined;
+				} else if (pendingRedactedThinking) {
+					pendingRedactedThinking = undefined;
 				}
 			}
 
