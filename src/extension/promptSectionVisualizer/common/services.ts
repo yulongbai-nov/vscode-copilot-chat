@@ -3,13 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-
+import type * as vscode from 'vscode';
 import { CodeBlock } from '../../prompt/common/conversation';
 import { createServiceIdentifier } from '../../../util/common/services';
 import { Event } from '../../../util/vs/base/common/event';
 import { IDisposable } from '../../../util/vs/base/common/lifecycle';
 import {
 	ContentDetectionResult,
+	RenderOptions,
 	ParseResult,
 	PromptSection,
 	RenderableElement,
@@ -17,6 +18,9 @@ import {
 	ValidationResult,
 	VisualizerState
 } from './types';
+
+export type SectionEditorOptions = Readonly<Record<string, unknown>>;
+export type SectionEditorState = Readonly<Record<string, unknown>>;
 
 /**
  * Service for parsing XML-like tags in prompts
@@ -209,4 +213,180 @@ export interface IPromptStateManager extends IDisposable {
 	 * Get visualizer enabled state
 	 */
 	isEnabled(): boolean;
+}
+
+/**
+ * Service for managing feature flags
+ */
+export const IFeatureFlagService = createServiceIdentifier<IFeatureFlagService>('IFeatureFlagService');
+export interface IFeatureFlagService {
+	readonly _serviceBrand: undefined;
+
+	/**
+	 * Check if native rendering is enabled
+	 */
+	isNativeRenderingEnabled(): boolean;
+
+	/**
+	 * Get the current render mode
+	 */
+	getRenderMode(): 'inline' | 'standalone' | 'auto';
+
+	/**
+	 * Check if the visualizer is enabled
+	 */
+	isVisualizerEnabled(): boolean;
+
+	/**
+	 * Determine the effective render mode based on configuration and context
+	 */
+	getEffectiveRenderMode(context?: 'chat' | 'standalone'): 'inline' | 'standalone';
+
+	/**
+	 * Listen for configuration changes
+	 */
+	onConfigurationChanged(
+		callback: (useNativeRendering: boolean, renderMode: 'inline' | 'standalone' | 'auto') => void
+	): vscode.Disposable;
+}
+
+/**
+ * Service for rendering sections using native chat APIs
+ */
+export const INativeChatRenderer = createServiceIdentifier<INativeChatRenderer>('INativeChatRenderer');
+export interface INativeChatRenderer {
+	readonly _serviceBrand: undefined;
+
+	/**
+	 * Render sections to a chat response stream
+	 */
+	renderSections(
+		sections: PromptSection[],
+		stream: vscode.ChatResponseStream,
+		options: RenderOptions
+	): Promise<void>;
+}
+
+/**
+ * Chat participant for prompt visualization
+ */
+export const IPromptVisualizerChatParticipant = createServiceIdentifier<IPromptVisualizerChatParticipant>('IPromptVisualizerChatParticipant');
+export interface IPromptVisualizerChatParticipant extends IDisposable {
+	readonly _serviceBrand: undefined;
+}
+
+/**
+ * Service for editing prompt sections
+ */
+export const ISectionEditorService = createServiceIdentifier<ISectionEditorService>('ISectionEditorService');
+export interface ISectionEditorService extends IDisposable {
+	readonly _serviceBrand: undefined;
+
+	/**
+	 * Edit a section using the configured editor mode
+	 */
+	editSection(section: PromptSection, options?: SectionEditorOptions): Promise<string | undefined>;
+
+	/**
+	 * Edit section in a temporary document
+	 */
+	editSectionInDocument(section: PromptSection, options: SectionEditorOptions): Promise<string | undefined>;
+
+	/**
+	 * Edit section inline using quick input
+	 */
+	editSectionInline(section: PromptSection, options: SectionEditorOptions): Promise<string | undefined>;
+
+	/**
+	 * Save editor state for a section
+	 */
+	saveEditorState(sectionId: string, editor: vscode.TextEditor): void;
+
+	/**
+	 * Restore editor state for a section
+	 */
+	restoreEditorState(sectionId: string, editor: vscode.TextEditor): void;
+
+	/**
+	 * Get editor state for a section
+	 */
+	getEditorState(sectionId: string): SectionEditorState | undefined;
+
+	/**
+	 * Clear editor state for a section
+	 */
+	clearEditorState(sectionId: string): void;
+
+	/**
+	 * Undo last edit for a section
+	 */
+	undoEdit(sectionId: string): Promise<boolean>;
+
+	/**
+	 * Redo last undone edit for a section
+	 */
+	redoEdit(sectionId: string): Promise<boolean>;
+
+	/**
+	 * Check if undo is available for a section
+	 */
+	canUndo(sectionId: string): boolean;
+
+	/**
+	 * Check if redo is available for a section
+	 */
+	canRedo(sectionId: string): boolean;
+}
+
+/**
+ * Controller for managing hybrid mode support (inline vs standalone)
+ */
+export const IPromptVisualizerController = createServiceIdentifier<IPromptVisualizerController>('IPromptVisualizerController');
+export interface IPromptVisualizerController extends IDisposable {
+	readonly _serviceBrand: undefined;
+
+	/**
+	 * Get the current render mode
+	 */
+	getCurrentMode(): 'inline' | 'standalone';
+
+	/**
+	 * Switch between inline and standalone modes
+	 */
+	switchMode(mode: 'inline' | 'standalone', persist?: boolean): Promise<void>;
+
+	/**
+	 * Set the provider instance for standalone mode
+	 */
+	setProvider(provider: unknown): void;
+
+	/**
+	 * Render in standalone webview panel mode
+	 */
+	renderStandalone(): Promise<void>;
+
+	/**
+	 * Render inline in chat mode
+	 */
+	renderInline(stream: vscode.ChatResponseStream, options?: RenderOptions): Promise<void>;
+
+	/**
+	 * Render using the current mode
+	 */
+	render(stream?: vscode.ChatResponseStream, options?: RenderOptions): Promise<void>;
+
+	/**
+	 * Handle chat context and follow-up interactions
+	 */
+	handleChatContext(context: vscode.ChatContext, request: vscode.ChatRequest): Promise<void>;
+
+	/**
+	 * Sync section edit back to chat for inline mode
+	 */
+	syncSectionEditToChat(sectionId: string, newContent: string): void;
+
+	/**
+	 * Handle chat input changes for inline mode
+	 */
+	handleChatInputChange(content: string): void;
 }
