@@ -94,6 +94,11 @@ export interface VisualizerState {
 	};
 	isEnabled: boolean;
 	currentLanguageModel: string;
+	/**
+	 * @deprecated Custom theming is replaced by VS Code's automatic theme support.
+	 * The native Chat API automatically applies the current VS Code theme.
+	 * This property is maintained for backward compatibility but is no longer used.
+	 */
 	uiTheme: 'light' | 'dark' | 'high-contrast';
 }
 
@@ -175,4 +180,24 @@ export interface ValidationResult {
 	isValid: boolean;
 	errors: string[];
 	warnings: string[];
+}
+
+/**
+ * Render options for native chat rendering
+ */
+export interface RenderOptions {
+	/** Show action buttons for each section */
+	showActions: boolean;
+
+	/** Enable collapse/expand functionality */
+	enableCollapse: boolean;
+
+	/** Show token breakdown details */
+	showTokenBreakdown: boolean;
+
+	/** Render mode */
+	mode: 'standalone' | 'inline';
+
+	/** Maximum sections to render before pagination */
+	maxSections?: number;
 }
