@@ -63,21 +63,25 @@ The simulator relies on large SQLite cache files stored in Git LFS under `test/s
 
 ## Cache Hydration Workflow
 
-1. Ensure the upstream remote exists:
-   ```pwsh
-   git remote add upstream https://github.com/microsoft/vscode-copilot-chat.git
-   ```
-   Skip this command if the remote already exists.
-2. Fetch the cache blobs from upstream:
-   ```pwsh
-   git lfs fetch upstream main --include="test/simulation/cache/*" --exclude=""
-   ```
-3. Check out the cache pointers into the working tree:
-   ```pwsh
-   git lfs checkout test/simulation/cache
-   ```
+Run the helper script to hydrate the cache for the current branch:
 
-The `script/postinstall.ts` task now performs these steps automatically when `base.sqlite` is missing. Run the commands manually if the automated fetch fails (for instance, if network access to GitHub is blocked). Re-run `npm install` afterwards.
+```pwsh
+npx --yes tsx script/hydrateSimulationCache.ts
+```
+
+The script ensures the `upstream` remote exists (adding it when missing), fetches the latest `upstream/main`, computes the merge base with your branch, and pulls only the LFS objects reachable from that commit. `script/postinstall.ts` invokes the same helper automatically during `npm install` when `base.sqlite` is missing.
+
+If the helper fails (for example, due to restricted network access), perform the steps manually:
+
+```pwsh
+git remote add upstream https://github.com/microsoft/vscode-copilot-chat.git  # if needed
+git fetch upstream main
+$mergeBase = git merge-base HEAD upstream/main
+git lfs fetch upstream $mergeBase --include="test/simulation/cache/*" --exclude=""
+git lfs checkout test/simulation/cache
+```
+
+Re-run `npm install` afterwards so the postinstall checks succeed.
 
 ### Continuous Integration
 
@@ -85,10 +89,7 @@ Add the following steps to CI pipelines before any build or test phases:
 
 ```yaml
 - name: Hydrate simulation cache
-  run: |
-    git remote add upstream https://github.com/microsoft/vscode-copilot-chat.git || echo "upstream remote already present"
-    git lfs fetch upstream main --include="test/simulation/cache/*" --exclude=""
-    git lfs checkout test/simulation/cache
+   run: npx --yes tsx script/hydrateSimulationCache.ts
 - name: Cache simulation artifacts
   uses: actions/cache@v4
   with:
