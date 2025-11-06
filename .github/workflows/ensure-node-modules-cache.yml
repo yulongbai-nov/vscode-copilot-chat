@@ -1,6 +1,7 @@
 name: Ensure node modules cache
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
