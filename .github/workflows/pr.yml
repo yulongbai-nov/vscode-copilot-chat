@@ -68,6 +68,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: false
+          fetch-depth: 0  # Need full history for merge-base with upstream
 
       - name: Hydrate simulation cache
         run: npx --yes tsx script/hydrateSimulationCache.ts
@@ -89,6 +90,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: false
+          fetch-depth: 0  # Need full history for merge-base with upstream
 
       - name: Hydrate simulation cache
         run: npx --yes tsx script/hydrateSimulationCache.ts
@@ -188,6 +190,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: false
+          fetch-depth: 0  # Need full history for merge-base with upstream
 
       - name: Hydrate simulation cache
         shell: pwsh
