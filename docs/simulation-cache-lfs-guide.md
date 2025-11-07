@@ -86,6 +86,17 @@ The repo includes a `.lfsconfig` that sets:
 
 Clones therefore skip all LFS hydration during `git pull`, `fetch`, or `checkout`. You must run `script/hydrateSimulationCache.ts` (or an equivalent manual `git lfs fetch --include="test/simulation/cache/*" --exclude=""`) any time you actually need the SQLite blobs. This keeps routine source control operations within the LFS quota while still allowing explicit cache downloads for tests.
 
+## Pointer-only fork syncs
+
+Nightly automation (`script/sync-fork-main-merge.sh`) configures Git LFS with `git lfs install --local --skip-smudge`, forces every fetch/checkout to run with `GIT_LFS_SKIP_SMUDGE=1`, and enables `lfs.allowincompletepush`. The fork therefore keeps only LFS pointer files while continuing to mirror upstream commits. Pushing from automation (or a local clone that inherits the same settings) never uploads payload blobs to the fork's LFS storage.
+
+Implications for maintainers:
+- Cloning or switching branches pulls text pointers only. Run `git lfs fetch upstream --all --include="test/simulation/cache/*" --exclude=""` followed by `git lfs checkout test/simulation/cache` whenever you need real cache files.
+- Local commits that modify cache pointers are valid, but avoid running `git lfs fetch origin` because the fork does not host complete blobs.
+- CI pipelines must hydrate from `upstream` (see next section) before running simulations; otherwise tests will fail with missing LFS objects.
+
+Document this pointer-only workflow in any PRs that touch simulation cache logic so future maintainers see that the behavior is intentional and driven by LFS quota constraints on the fork.
+
 ## Cache hydration workflow
 
 Run the helper script to hydrate the cache for the current branch:
