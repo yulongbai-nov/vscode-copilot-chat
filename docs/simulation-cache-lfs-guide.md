@@ -61,6 +61,17 @@ This document captures the current state of the simulation cache (`test/simulati
 Keeping the cache lean and coordinating refreshes are the easiest ways to avoid LFS quota surprises.
 The simulator relies on large SQLite cache files stored in Git LFS under `test/simulation/cache`. Only the upstream repository (`microsoft/vscode-copilot-chat`) should host the full cache history. This guide explains how to hydrate the cache locally or in CI without consuming your fork's LFS quota, and how to keep new cache layers out of the fork entirely.
 
+## Pointer-only fork syncs
+
+Nightly automation (`script/sync-fork-main-merge.sh`) configures Git LFS with `git lfs install --local --skip-smudge`, forces every fetch/checkout to run with `GIT_LFS_SKIP_SMUDGE=1`, and enables `lfs.allowincompletepush`. The fork therefore keeps only LFS pointer files while continuing to mirror upstream commits. Pushing from automation (or a local clone that inherits the same settings) never uploads payload blobs to the fork's LFS storage.
+
+Implications for maintainers:
+- Cloning or switching branches pulls text pointers only. Run `git lfs fetch upstream --all --include="test/simulation/cache/*" --exclude=""` followed by `git lfs checkout test/simulation/cache` whenever you need real cache files.
+- Local commits that modify cache pointers are valid, but avoid running `git lfs fetch origin` because the fork does not host complete blobs.
+- CI pipelines must hydrate from `upstream` (see next section) before running simulations; otherwise tests will fail with missing LFS objects.
+
+Document this pointer-only workflow in any PRs that touch simulation cache logic so future maintainers see that the behavior is intentional and driven by LFS quota constraints on the fork.
+
 ## Cache Hydration Workflow
 
 Run the helper script to hydrate the cache for the current branch:

@@ -56,6 +56,9 @@ cleanup_branch="${CLEANUP_BRANCH_ON_MERGE:-1}"
 cleanup_on_no_changes="${CLEANUP_BRANCH_ON_NO_CHANGES:-1}"
 log_dir="${SYNC_LOG_DIR:-$repo_root/.github/tmp}"
 
+log "Configuring Git LFS for pointer-only workflow"
+git lfs install --local --skip-smudge >/dev/null 2>&1 || true
+
 mkdir -p "$log_dir"
 merge_log="$log_dir/merge-${sync_branch//\//-}-$(date +%s).log"
 
@@ -74,7 +77,7 @@ log "Fetching $fork_remote/$target_branch"
 GIT_LFS_SKIP_SMUDGE=1 git fetch "$fork_remote" "$target_branch"
 
 log "Preparing branch $sync_branch from $fork_remote/$target_branch"
-git switch -C "$sync_branch" "$fork_remote/$target_branch"
+GIT_LFS_SKIP_SMUDGE=1 git switch -C "$sync_branch" "$fork_remote/$target_branch"
 
 log "Merging $upstream_remote/$upstream_branch into $sync_branch"
 set +e
