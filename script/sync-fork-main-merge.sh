@@ -21,6 +21,12 @@ if [[ -z "${GH_TOKEN:-}" ]]; then
 	exit 2
 fi
 
+if [[ -z "${GITHUB_ENV:-}" ]]; then
+	export GITHUB_ENV="${repo_root:-$(pwd)}/.github/tmp/github-env-$(date +%s)"
+	mkdir -p "$(dirname "$GITHUB_ENV")"
+	log "Using local GITHUB_ENV at $GITHUB_ENV"
+fi
+
 check_gh_token() {
 	set +e
 	auth_output="$(gh auth status 2>&1)"
@@ -56,8 +62,33 @@ cleanup_branch="${CLEANUP_BRANCH_ON_MERGE:-1}"
 cleanup_on_no_changes="${CLEANUP_BRANCH_ON_NO_CHANGES:-1}"
 log_dir="${SYNC_LOG_DIR:-$repo_root/.github/tmp}"
 
+if [[ -z "${GITHUB_ENV:-}" ]]; then
+	GITHUB_ENV="$log_dir/github-env-$(date +%s).log"
+	mkdir -p "$(dirname "$GITHUB_ENV")"
+	log "Using local GITHUB_ENV at $GITHUB_ENV"
+fi
+
 log "Configuring Git LFS for pointer-only workflow"
 git lfs install --local --skip-smudge >/dev/null 2>&1 || true
+
+strip_simulation_cache_payloads() {
+	local removed=0
+	while IFS= read -r -d '' path; do
+		if [[ -n "$path" ]]; then
+			log "Removing simulation cache LFS artifact $path"
+			git rm -f -- "$path" >/dev/null
+			removed=1
+		fi
+	done < <(git ls-files -z -- 'test/simulation/cache/*.sqlite' 'test/simulation/cache/layers/*.sqlite')
+
+	if [[ "$removed" -eq 1 ]]; then
+		mkdir -p test/simulation/cache/layers
+		log "Amending merge commit to drop simulation cache LFS artifacts"
+		git commit --amend --no-edit >/dev/null
+	else
+		log "No simulation cache LFS artifacts detected"
+	fi
+}
 
 mkdir -p "$log_dir"
 merge_log="$log_dir/merge-${sync_branch//\//-}-$(date +%s).log"
@@ -117,6 +148,8 @@ Target: ${fork_remote}/${target_branch}"
 		echo "SYNC_OUTCOME=merge_conflict_commit_failed" >>"$GITHUB_ENV"
 		exit 91
 	fi
+
+	strip_simulation_cache_payloads
 
 	log "Pushing conflict branch $conflict_branch to $fork_remote (LFS pointers only)"
 	if ! git push "$fork_remote" "HEAD:$conflict_branch" --force-with-lease; then
@@ -214,6 +247,8 @@ See the workflow artifacts for the full merge log."
 	fi
 	exit 0
 fi
+
+strip_simulation_cache_payloads
 
 if git diff --quiet "$fork_remote/$target_branch"...HEAD; then
 	log "No updates required after merge; branch matches $fork_remote/$target_branch"
