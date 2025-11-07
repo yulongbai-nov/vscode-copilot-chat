@@ -33,6 +33,8 @@ function createManualInstructions(remote: string, branch: string, includePattern
 		`  git remote add ${remote} ${remoteUrl}  # if the remote is missing`,
 		`  git fetch ${remote} ${branch}  # creates ${remote}/${branch}`,
 		`  MERGE_BASE=$(git merge-base HEAD ${remote}/${branch})`,
+		`  git checkout ${remote}/${branch} -- ${checkoutPath}`,
+		`  git reset HEAD -- ${checkoutPath}  # keep pointers in the working tree only`,
 		`  git lfs fetch ${remote} "$MERGE_BASE" --include="${includePattern}" --exclude=""`,
 		`  git lfs checkout ${checkoutPath}`
 	].join('\n');
@@ -166,32 +168,57 @@ async function fetchSimulationCache(remote: string, mergeBase: string, includePa
 		console.error(`[hydrateSimulationCache] LFS fetch failed: ${msg}`);
 		throw error;
 	}
+}
 
-	console.log(`[hydrateSimulationCache] Checking out LFS files in ${checkoutPath}`);
+async function listRemoteCacheEntries(remote: string, branch: string, checkoutPath: string, cwd: string): Promise<string[]> {
+	const remoteRef = `${remote}/${branch}`;
 	try {
-		await runCommand('git', ['lfs', 'checkout', checkoutPath], { cwd, stdio: 'inherit' });
-		console.log(`[hydrateSimulationCache] LFS checkout completed`);
+		const result = await runCommand('git', ['ls-tree', '-r', '--name-only', remoteRef, checkoutPath], { cwd, stdio: 'pipe' });
+		return result.stdout.split('\n').map(line => line.trim()).filter(line => line !== '');
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
-		console.error(`[hydrateSimulationCache] LFS checkout failed: ${msg}`);
-		throw error;
+		throw new Error(`[hydrateSimulationCache] Failed to enumerate cache entries from ${remoteRef}: ${msg}`);
+	}
+}
+
+async function materializeCachePointers(remote: string, branch: string, checkoutPath: string, cwd: string): Promise<void> {
+	const entries = await listRemoteCacheEntries(remote, branch, checkoutPath, cwd);
+	if (entries.length === 0) {
+		console.warn(`[hydrateSimulationCache] No cache entries found at ${remote}/${branch}:${checkoutPath}`);
+		return;
 	}
 
-	// Debug: Show what was downloaded
+	const remoteRef = `${remote}/${branch}`;
+	for (const entry of entries) {
+		try {
+			const pointerResult = await runCommand('git', ['show', `${remoteRef}:${entry}`], { cwd, stdio: 'pipe' });
+			const targetPath = path.join(cwd, entry);
+			await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+			await fs.promises.writeFile(targetPath, pointerResult.stdout, 'utf-8');
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error);
+			throw new Error(`[hydrateSimulationCache] Failed to materialize pointer for ${entry} from ${remoteRef}: ${msg}`);
+		}
+	}
+}
+
+async function checkoutMaterializedCache(checkoutPath: string, cwd: string): Promise<void> {
+	console.log(`[hydrateSimulationCache] Checking out LFS payloads in ${checkoutPath}`);
+	await runCommand('git', ['lfs', 'checkout', checkoutPath], { cwd, stdio: 'inherit' });
+}
+
+function logCacheStats(baseSqlitePath: string, mergeBase: string): void {
 	console.log(`[hydrateSimulationCache] Merge base commit: ${mergeBase}`);
-	const baseSqlitePath = path.join(cwd, checkoutPath, 'base.sqlite');
 	if (fs.existsSync(baseSqlitePath)) {
 		const stats = fs.statSync(baseSqlitePath);
 		console.log(`[hydrateSimulationCache] base.sqlite size: ${stats.size} bytes`);
 		console.log(`[hydrateSimulationCache] base.sqlite mtime: ${stats.mtime.toISOString()}`);
-		// Calculate SHA256 hash
 		const crypto = require('crypto');
 		const hash = crypto.createHash('sha256');
-		const fileBuffer = fs.readFileSync(baseSqlitePath);
-		hash.update(fileBuffer);
+		hash.update(fs.readFileSync(baseSqlitePath));
 		console.log(`[hydrateSimulationCache] base.sqlite SHA256: ${hash.digest('hex')}`);
 	} else {
-		console.warn(`[hydrateSimulationCache] base.sqlite not found after checkout!`);
+		console.warn(`[hydrateSimulationCache] base.sqlite not found after hydration!`);
 	}
 }
 
@@ -234,6 +261,10 @@ export async function ensureSimulationCache(options: EnsureSimulationCacheOption
 		const mergeBase = await resolveMergeBase(remote, branch, cwd);
 		console.log(`[hydrateSimulationCache] Using merge base commit ${mergeBase}.`);
 		await fetchSimulationCache(remote, mergeBase, includePattern, checkoutPath, cwd);
+		console.log(`[hydrateSimulationCache] Materializing cache pointers from ${remote}/${branch}.`);
+		await materializeCachePointers(remote, branch, checkoutPath, cwd);
+		await checkoutMaterializedCache(checkoutPath, cwd);
+		logCacheStats(baseCacheFile, mergeBase);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		const manual = createManualInstructions(remote, branch, includePattern, checkoutPath, remoteUrl);
