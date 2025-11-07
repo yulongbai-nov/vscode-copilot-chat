@@ -12,6 +12,14 @@ require_cmd() {
 	fi
 }
 
+extract_github_slug() {
+	local url="${1:-}"
+	url="${url%.git}"
+	if [[ "$url" =~ github\.com[:/]+([^/]+/[^/]+)$ ]]; then
+		echo "${BASH_REMATCH[1]}"
+	fi
+}
+
 require_cmd git
 require_cmd gh
 require_cmd git-lfs
@@ -55,6 +63,7 @@ fork_remote="${FORK_REMOTE:-origin}"
 upstream_remote="${UPSTREAM_REMOTE:-upstream}"
 upstream_repo="${UPSTREAM_REPO:-microsoft/vscode-copilot-chat}"
 upstream_branch="${UPSTREAM_BRANCH:-main}"
+fork_repo_slug="${FORK_REPO_SLUG:-}"
 pr_title="${PR_TITLE:-Nightly upstream merge}"
 pr_body_header="${PR_BODY:-Automated nightly merge of upstream main into fork main.}"
 pr_reviewer="${PR_REVIEWER:-github-copilot}"
@@ -71,6 +80,18 @@ fi
 
 log "Configuring Git LFS for pointer-only workflow"
 git lfs install --local --skip-smudge >/dev/null 2>&1 || true
+
+if [[ -z "$fork_repo_slug" ]]; then
+	fork_remote_url="$(git remote get-url "$fork_remote" 2>/dev/null || true)"
+	if [[ -n "$fork_remote_url" ]]; then
+		fork_repo_slug="$(extract_github_slug "$fork_remote_url")"
+	fi
+fi
+
+if [[ -n "$fork_repo_slug" && -z "${GH_REPO:-}" ]]; then
+	export GH_REPO="$fork_repo_slug"
+	log "Using GH_REPO=$GH_REPO for GitHub CLI operations"
+fi
 
 strip_simulation_cache_payloads() {
 	local commit_mode="${1:-amend}"
