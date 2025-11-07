@@ -61,16 +61,26 @@ This document captures the current state of the simulation cache (`test/simulati
 Keeping the cache lean and coordinating refreshes are the easiest ways to avoid LFS quota surprises.
 The simulator relies on large SQLite cache files stored in Git LFS under `test/simulation/cache`. Only the upstream repository (`microsoft/vscode-copilot-chat`) should host the full cache history. This guide explains how to hydrate the cache locally or in CI without consuming your fork's LFS quota, and how to keep new cache layers out of the fork entirely.
 
-## Pointer-only fork syncs
+## Fork without cache blobs
 
-Nightly automation (`script/sync-fork-main-merge.sh`) configures Git LFS with `git lfs install --local --skip-smudge`, forces every fetch/checkout to run with `GIT_LFS_SKIP_SMUDGE=1`, and enables `lfs.allowincompletepush`. The fork therefore keeps only LFS pointer files while continuing to mirror upstream commits. Pushing from automation (or a local clone that inherits the same settings) never uploads payload blobs to the fork's LFS storage.
+The fork intentionally drops every `*.sqlite` file before automation pushes a
+sync branch. `script/sync-fork-main-merge.sh` strips the cache directory from
+the merge commit, so the fork never references new Git LFS objects. Developers
+hydrate the cache on demand with `script/hydrateSimulationCache.ts`, which pulls
+both the pointer files and the payloads directly from `upstream/main` without
+touching fork storage.
 
 Implications for maintainers:
-- Cloning or switching branches pulls text pointers only. Run `git lfs fetch upstream --all --include="test/simulation/cache/*" --exclude=""` followed by `git lfs checkout test/simulation/cache` whenever you need real cache files.
-- Local commits that modify cache pointers are valid, but avoid running `git lfs fetch origin` because the fork does not host complete blobs.
-- CI pipelines must hydrate from `upstream` (see next section) before running simulations; otherwise tests will fail with missing LFS objects.
+- Cloning the fork yields an empty `test/simulation/cache/` (aside from the
+   README). Run `npx --yes tsx script/hydrateSimulationCache.ts` before executing
+   simulations or `npm install`.
+- The hydrated SQLite files remain untracked thanks to `.gitignore`; use
+   `git clean -xfd test/simulation/cache` to reclaim space when you are done.
+- CI pipelines must run the hydration helper as part of their setup phase so
+   the cache exists before tests.
 
-Document this pointer-only workflow in any PRs that touch simulation cache logic so future maintainers see that the behavior is intentional and driven by LFS quota constraints on the fork.
+Keep this policy in mind when reviewing sync PRs: a diff that reintroduces
+`*.sqlite` payloads indicates the strip step failed and should be investigated.
 
 ## Cache Hydration Workflow
 
