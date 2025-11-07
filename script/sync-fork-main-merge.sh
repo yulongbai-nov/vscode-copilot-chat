@@ -56,42 +56,6 @@ cleanup_branch="${CLEANUP_BRANCH_ON_MERGE:-1}"
 cleanup_on_no_changes="${CLEANUP_BRANCH_ON_NO_CHANGES:-1}"
 log_dir="${SYNC_LOG_DIR:-$repo_root/.github/tmp}"
 
-ensure_lfs_objects_for_push() {
-	if ! git lfs env >/dev/null 2>&1; then
-		log "Git LFS is not available; skipping LFS fetch"
-		return
-	fi
-
-	log "Ensuring Git LFS hooks are installed"
-	git lfs install --local >/dev/null 2>&1 || true
-
-	remotes=()
-	remotes+=("$fork_remote")
-	remotes+=("$upstream_remote")
-
-	for remote in "${remotes[@]}"; do
-		if [[ -z "$remote" ]]; then
-			continue
-		fi
-		log "Fetching Git LFS objects from $remote (current branch refs)"
-		if ! git lfs fetch "$remote"; then
-			log "Warning: git lfs fetch from $remote failed"
-		fi
-
-		log "Fetching all Git LFS objects from $remote"
-		if ! git lfs fetch --all "$remote"; then
-			log "Warning: git lfs fetch --all from $remote failed"
-		fi
-	done
-
-	log "Validating Git LFS objects required for push"
-	if ! git lfs push --dry-run "$fork_remote" HEAD; then
-		log "Failed to ensure Git LFS objects are available for push"
-		echo "SYNC_OUTCOME=git_lfs_missing_objects" >>"$GITHUB_ENV"
-		exit 93
-	fi
-}
-
 mkdir -p "$log_dir"
 merge_log="$log_dir/merge-${sync_branch//\//-}-$(date +%s).log"
 
@@ -107,7 +71,7 @@ log "Fetching $upstream_remote/$upstream_branch"
 GIT_LFS_SKIP_SMUDGE=1 git fetch "$upstream_remote" "$upstream_branch"
 
 log "Fetching $fork_remote/$target_branch"
-git fetch "$fork_remote" "$target_branch"
+GIT_LFS_SKIP_SMUDGE=1 git fetch "$fork_remote" "$target_branch"
 
 log "Preparing branch $sync_branch from $fork_remote/$target_branch"
 git switch -C "$sync_branch" "$fork_remote/$target_branch"
@@ -151,9 +115,7 @@ Target: ${fork_remote}/${target_branch}"
 		exit 91
 	fi
 
-	ensure_lfs_objects_for_push
-
-	log "Pushing conflict branch $conflict_branch to $fork_remote"
+	log "Pushing conflict branch $conflict_branch to $fork_remote (LFS pointers only)"
 	if ! git push "$fork_remote" "HEAD:$conflict_branch" --force-with-lease; then
 		log "Failed to push conflict branch with force-with-lease; trying with --force"
 		if ! git push "$fork_remote" "HEAD:$conflict_branch" --force; then
@@ -266,8 +228,7 @@ if git diff --quiet "$fork_remote/$target_branch"...HEAD; then
 	exit 0
 fi
 
-ensure_lfs_objects_for_push
-log "Pushing $sync_branch to $fork_remote"
+log "Pushing $sync_branch to $fork_remote (LFS pointers only)"
 git push "$fork_remote" "$sync_branch" --force-with-lease
 
 changes="$(git log --oneline "$fork_remote/$target_branch"..HEAD | sed 's/^/- /')"
