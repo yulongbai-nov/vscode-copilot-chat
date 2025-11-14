@@ -9,7 +9,6 @@
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
-			"preLaunchTask": "check-vscode-compat",
 			"smartStep": true,
 			"sourceMaps": true,
 			"envFile": "${workspaceFolder}/.env",
@@ -35,7 +34,7 @@
 			],
 			"smartStep": true,
 			"sourceMaps": true,
-			"preLaunchTask": "watch-with-compat",
+			"preLaunchTask": "watch",
 			"env": {
 				"COPILOT_LOG_TELEMETRY": "true",
 				"VSCODE_DEV_DEBUG": "1",
@@ -49,33 +48,6 @@
 			}
 		},
 		{
-			"type": "extensionHost",
-			"request": "launch",
-			"name": "Launch Type Hierarchy Tool - Isolated Testing",
-			"runtimeExecutable": "${execPath}",
-			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}",
-				"--disable-extension=github.copilot-chat",
-				"--disable-extension=github.copilot",
-				"--new-window"
-			],
-			"smartStep": true,
-			"sourceMaps": true,
-			"preLaunchTask": "watch-with-compat",
-			"env": {
-				"COPILOT_LOG_TELEMETRY": "true",
-				"VSCODE_DEV_DEBUG": "1",
-				"COPILOT_EXTENSION_DEV_MODE": "true"
-			},
-			"outFiles": [
-				"${workspaceFolder}/dist/**/*.js",
-				"!**/node_modules/**"
-			],
-			"presentation": {
-				"group": "0_launch"
-			}
-		},
-		{
 			"type": "node",
 			"request": "launch",
 			"name": "Launch Copilot Extension - Watch Mode - Code OSS",
@@ -83,13 +55,14 @@
 			"windows": {
 				"runtimeExecutable": "${workspaceFolder}/../vscode/scripts/code.bat",
 			},
+
 			"attachSimplePort": 5870,
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}",
 			],
 			"smartStep": true,
 			"sourceMaps": true,
-			"preLaunchTask": "watch-with-compat",
+			"preLaunchTask": "watch",
 			"env": {
 				"COPILOT_LOG_TELEMETRY": "true",
 				"VSCODE_DEV_DEBUG": "1",
@@ -131,7 +104,6 @@
 			"testConfiguration": "${workspaceFolder}/.vscode-test.mjs",
 			"sourceMaps": true,
 			"smartStep": true,
-			"preLaunchTask": "check-vscode-compat",
 			"envFile": "${workspaceFolder}/.env",
 			"internalConsoleOptions": "openOnSessionStart",
 			"outFiles": [
@@ -174,6 +146,7 @@
 				"--scenario-test=toolcall.stest",
 				"--external-scenarios=${workspaceFolder}/test/toolcalls",
 				"--output=${workspaceFolder}/test/out/"
+
 			],
 			"request": "launch",
 			"type": "node",
@@ -305,7 +278,6 @@
 				"TSS_REMOTE_DEBUG": "9223",
 				"TSS_DEBUG": "9223",
 			},
-			"preLaunchTask": "check-vscode-compat",
 			"outFiles": [
 				"${workspaceFolder}/dist/**/*.js",
 				"!**/node_modules/**"
@@ -364,7 +336,6 @@
 				"!**/node_modules/**"
 			],
 			"autoAttachChildProcesses": true,
-			"preLaunchTask": "check-vscode-compat",
 			"presentation": {
 				"group": "1_launch"
 			}

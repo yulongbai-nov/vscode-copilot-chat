@@ -20,15 +20,14 @@ import { FeedbackCommandContribution } from '../../conversation/vscode-node/feed
 import { LanguageModelAccess } from '../../conversation/vscode-node/languageModelAccess';
 import { LogWorkspaceStateContribution } from '../../conversation/vscode-node/logWorkspaceState';
 import { RemoteAgentContribution } from '../../conversation/vscode-node/remoteAgents';
+import { DiagnosticsContextContribution } from '../../diagnosticsContext/vscode/diagnosticsContextProvider';
 import { LanguageModelProxyContrib } from '../../externalAgents/vscode-node/lmProxyContrib';
 import { WalkthroughCommandContribution } from '../../getting-started/vscode-node/commands';
 import * as newWorkspaceContribution from '../../getting-started/vscode-node/newWorkspace.contribution';
 import { IgnoredFileProviderContribution } from '../../ignore/vscode-node/ignoreProvider';
-import { InlineChatHintFeature } from '../../inlineChat/vscode-node/inlineChatHint';
 import { InlineEditProviderFeature } from '../../inlineEdits/vscode-node/inlineEditProviderFeature';
 import { FixTestFailureContribution } from '../../intents/vscode-node/fixTestFailureContributions';
 import { TestGenLensContribution } from '../../intents/vscode-node/testGenLens';
-import { TypeHierarchyContribution } from '../../languages/vscode-node/typeHierarchy.contribution';
 import { LoggingActionsContrib } from '../../log/vscode-node/loggingActions';
 import { RequestLogTree } from '../../log/vscode-node/requestLogTree';
 import { McpSetupCommands } from '../../mcp/vscode-node/commands';
@@ -38,7 +37,6 @@ import { OnboardTerminalTestsContribution } from '../../onboardDebug/vscode-node
 import { DebugCommandsContribution } from '../../prompt/vscode-node/debugCommands';
 import { RenameSuggestionsContrib } from '../../prompt/vscode-node/renameSuggestions';
 import { PromptFileContextContribution } from '../../promptFileContext/vscode-node/promptFileContextService';
-import { PromptSectionVisualizerContribution } from '../../promptSectionVisualizer/vscode-node/promptSectionVisualizerContribution';
 import { RelatedFilesProviderContribution } from '../../relatedFiles/vscode-node/relatedFiles.contribution';
 import { ChatReplayContribution } from '../../replay/vscode-node/chatReplayContrib';
 import { SearchPanelCommands } from '../../search/vscode-node/commands';
@@ -83,7 +81,7 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(ChatQuotaContribution),
 	asContributionFactory(NotebookFollowCommands),
 	asContributionFactory(PromptFileContextContribution),
-	asContributionFactory(TypeHierarchyContribution),
+	asContributionFactory(DiagnosticsContextContribution),
 	asContributionFactory(ChatReplayContribution),
 	asContributionFactory(CompletionsCoreContribution),
 	asContributionFactory(CompletionsUnificationContribution),
@@ -101,7 +99,6 @@ export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(ConfigurationMigrationContribution),
 	asContributionFactory(TestGenLensContribution),
 	asContributionFactory(RequestLogTree),
-	asContributionFactory(InlineChatHintFeature),
 	asContributionFactory(OnboardTerminalTestsContribution),
 	asContributionFactory(ToolsContribution),
 	asContributionFactory(RemoteAgentContribution),
@@ -115,6 +112,5 @@ export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(BYOKContrib),
 	asContributionFactory(McpSetupCommands),
 	asContributionFactory(LanguageModelProxyContrib),
-	asContributionFactory(PromptSectionVisualizerContribution),
 	newWorkspaceContribution,
 ];

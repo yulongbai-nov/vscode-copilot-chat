@@ -18,18 +18,19 @@ import { IInstantiationService, ServicesAccessor } from '../../../util/vs/platfo
 import { ConfigKey, IConfigurationService } from '../../configuration/common/configurationService';
 import { ILogService } from '../../log/common/logService';
 import { FinishedCallback, IResponseDelta, OpenAiResponsesFunctionTool } from '../../networking/common/fetch';
-import { ICreateEndpointBodyOptions, IEndpointBody } from '../../networking/common/networking';
+import { IChatEndpoint, ICreateEndpointBodyOptions, IEndpointBody } from '../../networking/common/networking';
 import { ChatCompletion, FinishedCompletionReason, TokenLogProb } from '../../networking/common/openai';
 import { IExperimentationService } from '../../telemetry/common/nullExperimentationService';
 import { ITelemetryService } from '../../telemetry/common/telemetry';
 import { TelemetryData } from '../../telemetry/common/telemetryData';
-import { IChatModelInformation } from '../common/endpointProvider';
+import { getVerbosityForModelSync } from '../common/chatModelCapabilities';
 import { getStatefulMarkerAndIndex } from '../common/statefulMarkerContainer';
 import { rawPartAsThinkingData } from '../common/thinkingDataContainer';
 
-export function createResponsesRequestBody(accessor: ServicesAccessor, options: ICreateEndpointBodyOptions, model: string, modelInfo: IChatModelInformation): IEndpointBody {
+export function createResponsesRequestBody(accessor: ServicesAccessor, options: ICreateEndpointBodyOptions, model: string, endpoint: IChatEndpoint): IEndpointBody {
 	const configService = accessor.get(IConfigurationService);
 	const expService = accessor.get(IExperimentationService);
+	const verbosity = getVerbosityForModelSync(endpoint);
 	const body: IEndpointBody = {
 		model,
 		...rawMessagesToResponseAPI(model, options.messages, !!options.ignoreStatefulMarker),
@@ -48,7 +49,8 @@ export function createResponsesRequestBody(accessor: ServicesAccessor, options: 
 			? { type: 'function', name: options.postOptions.tool_choice.function.name }
 			: options.postOptions.tool_choice,
 		top_logprobs: options.postOptions.logprobs ? 3 : undefined,
-		store: false
+		store: false,
+		text: verbosity ? { verbosity } : undefined,
 	};
 
 	body.truncation = configService.getConfig(ConfigKey.Internal.UseResponsesApiTruncation) ?
@@ -304,7 +306,7 @@ function ensureContentArray(content: string | OpenAI.Responses.ResponseInputMess
 	return content;
 }
 
-function responseContentToRawContent(part: OpenAI.Responses.ResponseInputContent): Raw.ChatCompletionContentPart | undefined {
+function responseContentToRawContent(part: OpenAI.Responses.ResponseInputContent | OpenAI.Responses.ResponseFunctionCallOutputItem): Raw.ChatCompletionContentPart | undefined {
 	switch (part.type) {
 		case 'input_text':
 			return { type: Raw.ChatCompletionContentPartKind.Text, text: part.text };
@@ -336,34 +338,11 @@ function responseOutputToRawContent(part: OpenAI.Responses.ResponseOutputText | 
 	}
 }
 
-type ResponseFunctionOutputItem = OpenAI.Responses.ResponseFunctionCallOutputItem | OpenAI.Responses.ResponseInputContent;
-
-function responseFunctionOutputToRawContents(output: string | ReadonlyArray<ResponseFunctionOutputItem>): Raw.ChatCompletionContentPart[] {
+function responseFunctionOutputToRawContents(output: string | OpenAI.Responses.ResponseFunctionCallOutputItemList): Raw.ChatCompletionContentPart[] {
 	if (typeof output === 'string') {
 		return [{ type: Raw.ChatCompletionContentPartKind.Text, text: output }];
 	}
-	return coalesce(output.map(normalizeFunctionCallOutputItem).map(responseContentToRawContent));
-}
-
-function normalizeFunctionCallOutputItem(item: ResponseFunctionOutputItem): OpenAI.Responses.ResponseInputContent {
-	if (item.type === 'input_image') {
-		return {
-			type: 'input_image',
-			detail: item.detail ?? 'auto',
-			file_id: item.file_id,
-			image_url: item.image_url
-		};
-	}
-	if (item.type === 'input_file') {
-		return {
-			type: 'input_file',
-			file_data: item.file_data ?? undefined,
-			file_id: item.file_id ?? undefined,
-			file_url: item.file_url ?? undefined,
-			filename: item.filename ?? undefined,
-		};
-	}
-	return item;
+	return coalesce(output.map(responseContentToRawContent));
 }
 
 export async function processResponseFromChatEndpoint(instantiationService: IInstantiationService, telemetryService: ITelemetryService, logService: ILogService, response: Response, expectedNumChoices: number, finishCallback: FinishedCallback, telemetryData: TelemetryData): Promise<AsyncIterableObject<ChatCompletion>> {

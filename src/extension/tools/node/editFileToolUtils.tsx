@@ -9,6 +9,7 @@ import { homedir } from 'os';
 import type { LanguageModelChat, PreparedToolInvocation } from 'vscode';
 import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ICustomInstructionsService } from '../../../platform/customInstructions/common/customInstructionsService';
+import { IDiffService } from '../../../platform/diff/common/diffService';
 import { NotebookDocumentSnapshot } from '../../../platform/editing/common/notebookDocumentSnapshot';
 import { OffsetLineColumnConverter } from '../../../platform/editing/common/offsetLineColumnConverter';
 import { TextDocumentSnapshot } from '../../../platform/editing/common/textDocumentSnapshot';
@@ -17,17 +18,20 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { IAlternativeNotebookContentService } from '../../../platform/notebook/common/alternativeContent';
 import { INotebookService } from '../../../platform/notebook/common/notebookService';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
+import { getLanguageId } from '../../../util/common/markdown';
 import { findNotebook } from '../../../util/common/notebooks';
 import * as glob from '../../../util/vs/base/common/glob';
 import { ResourceMap } from '../../../util/vs/base/common/map';
 import { Schemas } from '../../../util/vs/base/common/network';
 import { isMacintosh, isWindows } from '../../../util/vs/base/common/platform';
-import { extUriBiasedIgnorePathCase, normalizePath, relativePath } from '../../../util/vs/base/common/resources';
+import { extUriBiasedIgnorePathCase, normalizePath } from '../../../util/vs/base/common/resources';
+import { isDefined } from '../../../util/vs/base/common/types';
 import { URI } from '../../../util/vs/base/common/uri';
 import { Position as EditorPosition } from '../../../util/vs/editor/common/core/position';
 import { ServicesAccessor } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { EndOfLine, Position, Range, TextEdit } from '../../../vscodeTypes';
 import { IBuildPromptContext } from '../../prompt/common/intents';
+import { formatUriForFileWidget } from '../common/toolUtils';
 
 // Simplified Hunk type for the patch
 interface Hunk {
@@ -88,6 +92,66 @@ export class ContentFormatError extends EditError {
  */
 function escapeRegex(str: string): string {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Formats a diff computed by IDiffService as a unified diff string.
+ * Lines starting with '-' are removed, lines starting with '+' are added.
+ * Context lines (unchanged) are prefixed with a space.
+ * This outputs the entire file with all changes marked.
+ */
+export async function formatDiffAsUnified(accessor: ServicesAccessor, uri: URI, oldContent: string, newContent: string): Promise<string> {
+	const diffService = accessor.get(IDiffService);
+	const diff = await diffService.computeDiff(oldContent, newContent, {
+		ignoreTrimWhitespace: false,
+		maxComputationTimeMs: 5000,
+		computeMoves: false,
+	});
+
+	const result: string[] = [
+		'```diff:' + getLanguageId(uri),
+		`<vscode_codeblock_uri>${uri.toString()}</vscode_codeblock_uri>`
+	];
+	const oldLines = oldContent.split('\n');
+	const newLines = newContent.split('\n');
+
+	let oldLineIdx = 0;
+	let newLineIdx = 0;
+
+	for (const change of diff.changes) {
+		const originalStart = change.original.startLineNumber - 1; // Convert to 0-based
+		const originalEnd = change.original.endLineNumberExclusive - 1;
+		const modifiedStart = change.modified.startLineNumber - 1;
+		const modifiedEnd = change.modified.endLineNumberExclusive - 1;
+
+		// Add all unchanged lines before this change
+		while (oldLineIdx < originalStart) {
+			result.push(`  ${oldLines[oldLineIdx]}`);
+			oldLineIdx++;
+			newLineIdx++;
+		}
+
+		// Add removed lines
+		for (let i = originalStart; i < originalEnd; i++) {
+			result.push(`- ${oldLines[i]}`);
+			oldLineIdx++;
+		}
+
+		// Add added lines
+		for (let i = modifiedStart; i < modifiedEnd; i++) {
+			result.push(`+ ${newLines[i]}`);
+			newLineIdx++;
+		}
+	}
+
+	// Add any remaining unchanged lines after all changes
+	while (oldLineIdx < oldLines.length) {
+		result.push(`  ${oldLines[oldLineIdx]}`);
+		oldLineIdx++;
+	}
+
+	result.push('```');
+	return result.join('\n');
 }
 
 /**
@@ -556,18 +620,84 @@ const ALWAYS_CHECKED_EDIT_PATTERNS: Readonly<Record<string, boolean>> = {
 	'**/.vscode/*.json': false,
 };
 
-const allPlatformPatterns = [homedir() + '/.*', homedir() + '/.*/**'];
+const allPlatformPatterns: (glob.ParsedPattern | string)[] = [
+	glob.parse(homedir() + '/.*'),
+	glob.parse(homedir() + '/.*/**'),
+];
+
+const specializedPatterns: (glob.ParsedPattern | string | undefined)[] =
+	isWindows
+		? [process.env.APPDATA, process.env.LOCALAPPDATA]
+		: isMacintosh
+			? [homedir() + '/Library']
+			: [];
 
 // Path prefixes under which confirmation is unconditionally required
-const platformConfirmationRequiredPaths = (
-	isWindows
-		? [process.env.APPDATA + '/**', process.env.LOCALAPPDATA + '/**']
-		: isMacintosh
-			? [homedir() + '/Library/**']
-			: []
-).concat(allPlatformPatterns).map(p => glob.parse(p));
+const platformConfirmationRequiredPaths = specializedPatterns.filter(isDefined).concat(allPlatformPatterns);
 
-const enum ConfirmationCheckResult {
+/**
+ * Validates that a path doesn't contain suspicious characters that could be used
+ * to bypass security checks on Windows (e.g., NTFS Alternate Data Streams, invalid chars).
+ * Throws an error if the path is suspicious.
+ */
+export function assertPathIsSafe(fsPath: string, _isWindows = isWindows): void {
+	if (fsPath.includes('\0')) {
+		throw new Error(`Path contains null bytes: ${fsPath}`);
+	}
+
+	if (!_isWindows) {
+		return;
+	}
+
+	// Check for NTFS Alternate Data Streams (ADS)
+	const colonIndex = fsPath.indexOf(':', 2);
+	if (colonIndex !== -1) {
+		throw new Error(`Path contains invalid characters (alternate data stream): ${fsPath}`);
+	}
+
+	// Check for invalid Windows filename characters
+	const invalidChars = /[<>"|?*]/;
+	const pathAfterDrive = fsPath.length > 2 ? fsPath.substring(2) : fsPath;
+	if (invalidChars.test(pathAfterDrive)) {
+		throw new Error(`Path contains invalid characters: ${fsPath}`);
+	}
+
+	// Check for named pipes or device paths
+	if (fsPath.startsWith('\\\\.') || fsPath.startsWith('\\\\?')) {
+		throw new Error(`Path is a reserved device path: ${fsPath}`);
+	}
+
+	const reserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i;
+
+	// Check for trailing dots and spaces on path components (Windows quirk)
+	const parts = fsPath.split('\\');
+	for (const part of parts) {
+		if (part.length === 0) {
+			continue;
+		}
+
+		// Reserved device names. Would error on edit, but fail explicitly
+		if (reserved.test(part)) {
+			throw new Error(`Reserved device name in path: ${fsPath}`);
+		}
+
+		// Check for trailing dots or spaces
+		if (part.endsWith('.') || part.endsWith(' ')) {
+			throw new Error(`Path contains invalid trailing characters: ${fsPath}`);
+		}
+
+		// Check for 8.3 short filename pattern
+		const tildeIndex = part.indexOf('~');
+		if (tildeIndex !== -1) {
+			const afterTilde = part.substring(tildeIndex + 1);
+			if (afterTilde.length > 0 && /^\d/.test(afterTilde)) {
+				throw new Error(`Path appears to use short filename format (8.3 names): ${fsPath}. Please use the full path.`);
+			}
+		}
+	}
+}
+
+export const enum ConfirmationCheckResult {
 	NoConfirmation,
 	NoPermissions,
 	Sensitive,
@@ -579,7 +709,7 @@ const enum ConfirmationCheckResult {
  * Returns a function that returns whether a URI is approved for editing without
  * further user confirmation.
  */
-function makeUriConfirmationChecker(configuration: IConfigurationService, workspaceService: IWorkspaceService, customInstructionsService: ICustomInstructionsService) {
+export function makeUriConfirmationChecker(configuration: IConfigurationService, workspaceService: IWorkspaceService, customInstructionsService: ICustomInstructionsService) {
 	const patterns = configuration.getNonExtensionConfig<Record<string, boolean>>('chat.tools.edits.autoApprove');
 
 	const checks = new ResourceMap<{ patterns: { pattern: glob.ParsedPattern; isApproved: boolean }[]; ignoreCasing: boolean }>();
@@ -612,7 +742,23 @@ function makeUriConfirmationChecker(configuration: IConfigurationService, worksp
 		let ok = true;
 		let fsPath = uri.fsPath;
 
-		if (platformConfirmationRequiredPaths.some(p => p(fsPath))) {
+		assertPathIsSafe(fsPath);
+
+		const platformCheckFailed = platformConfirmationRequiredPaths.some(p => {
+			if (typeof p === 'function') {
+				return p(fsPath);
+			}
+
+			const parentURI = URI.file(p);
+			if (extUriBiasedIgnorePathCase.isEqualOrParent(uri, parentURI)) {
+				// If the workspace is opened in the restricted folder, still allow edits within that workspace
+				return workspaceFolder && extUriBiasedIgnorePathCase.isEqualOrParent(workspaceFolder, parentURI) ? false : true;
+			}
+
+			return false;
+		});
+
+		if (platformCheckFailed) {
 			return ConfirmationCheckResult.SystemFile;
 		}
 
@@ -635,6 +781,8 @@ function makeUriConfirmationChecker(configuration: IConfigurationService, worksp
 		if (uri.scheme === Schemas.file) {
 			try {
 				const linked = await realpath(uri.fsPath);
+				assertPathIsSafe(linked);
+
 				if (linked !== uri.fsPath) {
 					toCheck.push(URI.file(linked));
 				}
@@ -650,9 +798,8 @@ function makeUriConfirmationChecker(configuration: IConfigurationService, worksp
 	};
 }
 
-export async function createEditConfirmation(accessor: ServicesAccessor, uris: readonly URI[], asString: () => string): Promise<PreparedToolInvocation> {
+export async function createEditConfirmation(accessor: ServicesAccessor, uris: readonly URI[], detailMessage?: (urisNeedingConfirmation: readonly URI[]) => Promise<string>): Promise<PreparedToolInvocation> {
 	const checker = makeUriConfirmationChecker(accessor.get(IConfigurationService), accessor.get(IWorkspaceService), accessor.get(ICustomInstructionsService));
-	const workspaceService = accessor.get(IWorkspaceService);
 	const needsConfirmation = (await Promise.all(uris
 		.map(async uri => ({ uri, reason: await checker(uri) }))
 	)).filter(r => r.reason !== ConfirmationCheckResult.NoConfirmation);
@@ -661,10 +808,7 @@ export async function createEditConfirmation(accessor: ServicesAccessor, uris: r
 		return { presentation: 'hidden' };
 	}
 
-	const fileParts = needsConfirmation.map(({ uri }) => {
-		const wf = workspaceService.getWorkspaceFolder(uri);
-		return '`' + (wf ? relativePath(wf, uri) : uri.fsPath) + '`';
-	}).join(', ');
+	const fileParts = needsConfirmation.map(({ uri }) => formatUriForFileWidget(uri)).join(', ');
 
 	let message: string;
 	if (needsConfirmation.some(r => r.reason === ConfirmationCheckResult.NoPermissions)) {
@@ -677,10 +821,13 @@ export async function createEditConfirmation(accessor: ServicesAccessor, uris: r
 		message = t`The model wants to edit system files (${fileParts}).`;
 	}
 
+	const urisNeedingConfirmation = needsConfirmation.map(c => c.uri);
+	const details = detailMessage ? await detailMessage(urisNeedingConfirmation) : undefined;
+
 	return {
 		confirmationMessages: {
 			title: t('Allow edits to sensitive files?'),
-			message: message + ' ' + t`Do you want to allow this?` + '\n\n' + asString(),
+			message: message + ' ' + t`Do you want to allow this?` + (details ? '\n\n' + details : ''),
 		},
 		presentation: 'hiddenAfterComplete'
 	};
