@@ -36,7 +36,6 @@ export enum ToolName {
 	CreateNewJupyterNotebook = 'create_new_jupyter_notebook',
 	SearchWorkspaceSymbols = 'search_workspace_symbols',
 	Usages = 'list_code_usages',
-	TypeHierarchy = 'copilot_getTypeHierarchy',
 	EditFile = 'insert_edit_into_file',
 	CreateFile = 'create_file',
 	ReplaceString = 'replace_string_in_file',
@@ -67,7 +66,7 @@ export enum ToolName {
 	CoreRunTest = 'runTests',
 	ToolReplay = 'tool_replay',
 	EditFilesPlaceholder = 'edit_files',
-	RunSubagent = 'runSubagent',
+	CoreRunSubagent = 'runSubagent',
 	CoreConfirmationTool = 'vscode_get_confirmation',
 	CoreTerminalConfirmationTool = 'vscode_get_terminal_confirmation'
 }
@@ -77,7 +76,6 @@ export enum ContributedToolName {
 	Codebase = 'copilot_searchCodebase',
 	SearchWorkspaceSymbols = 'copilot_searchWorkspaceSymbols',
 	Usages = 'copilot_listCodeUsages',
-	TypeHierarchy = 'copilot_getTypeHierarchy',
 	UpdateUserPreferences = 'copilot_updateUserPreferences',
 	VSCodeAPI = 'copilot_getVSCodeAPI',
 	TestFailure = 'copilot_testFailure',
@@ -175,7 +173,7 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.FindFiles]: ToolCategory.Core,
 	[ToolName.CreateDirectory]: ToolCategory.Core,
 	[ToolName.ReadProjectStructure]: ToolCategory.Core,
-	[ToolName.RunSubagent]: ToolCategory.Core,
+	[ToolName.CoreRunSubagent]: ToolCategory.Core,
 	[ToolName.Memory]: ToolCategory.Core,
 
 	// already enabled only when tasks are enabled
@@ -211,7 +209,6 @@ export const toolCategories: Record<ToolName, ToolCategory> = {
 	[ToolName.SearchViewResults]: ToolCategory.VSCodeInteraction,
 	[ToolName.CoreTerminalSelection]: ToolCategory.VSCodeInteraction,
 	[ToolName.CoreTerminalLastCommand]: ToolCategory.VSCodeInteraction,
-	[ToolName.TypeHierarchy]: ToolCategory.VSCodeInteraction,
 
 	// Testing
 	[ToolName.RunTests]: ToolCategory.Testing,

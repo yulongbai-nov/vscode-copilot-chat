@@ -1,7 +1,6 @@
 name: PR Checks
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - 'gh-readonly-queue/main/*'
@@ -17,22 +16,16 @@ permissions:
 jobs:
   check-test-cache:
     name: Check test cache
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted, 1ES.Pool=1es-vscode-ubuntu-22.04-x64 ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          lfs: false
-          fetch-depth: 0  # Need full history for merge-base with upstream
-
-      - name: Hydrate simulation cache
-        run: npx --yes tsx script/hydrateSimulationCache.ts
+          lfs: true
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22.14.x'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
 
       - name: Restore build cache
         uses: actions/cache/restore@v4
@@ -62,45 +55,33 @@ jobs:
 
   check-telemetry:
     name: Check telemetry events
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted, 1ES.Pool=1es-vscode-ubuntu-22.04-x64 ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          lfs: false
-          fetch-depth: 0  # Need full history for merge-base with upstream
-
-      - name: Hydrate simulation cache
-        run: npx --yes tsx script/hydrateSimulationCache.ts
+          lfs: true
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22.14.x'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
 
       - name: Validate telemetry events
         run: npx --package=@vscode/telemetry-extractor --yes vscode-telemetry-extractor -s . > /dev/null
 
   linux-tests:
     name: Test (Linux)
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted, 1ES.Pool=1es-vscode-ubuntu-22.04-x64 ]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          lfs: false
-          fetch-depth: 0  # Need full history for merge-base with upstream
-
-      - name: Hydrate simulation cache
-        run: npx --yes tsx script/hydrateSimulationCache.ts
+          lfs: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22.14.x'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -151,13 +132,9 @@ jobs:
 
       - name: Run vitest unit tests
         run: npm run test:unit
-        env:
-          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run simulation tests with cache
         run: npm run simulate-ci
-        env:
-          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run extension tests using VS Code
         run: xvfb-run -a npm run test:extension
@@ -184,24 +161,17 @@ jobs:
 
   windows-tests:
     name: Test (Windows)
-    runs-on: windows-latest
+    runs-on: [ self-hosted, 1ES.Pool=1es-vscode-windows-2022-x64 ]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          lfs: false
-          fetch-depth: 0  # Need full history for merge-base with upstream
-
-      - name: Hydrate simulation cache
-        shell: pwsh
-        run: npx --yes tsx script/hydrateSimulationCache.ts
+          lfs: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22.14.x'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -251,13 +221,9 @@ jobs:
 
       - name: Run vitest unit tests
         run: npm run test:unit
-        env:
-          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run simulation tests with cache
         run: npm run simulate-ci
-        env:
-          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run extension tests using VS Code
         run: npm run test:extension
