@@ -28,7 +28,7 @@ import { IFileSystemService } from '../../filesystem/common/fileSystemService';
 import { FileType, RelativePattern } from '../../filesystem/common/fileTypes';
 import { NodeFileSystemService } from '../../filesystem/node/fileSystemServiceImpl';
 import { IGitService, RepoContext } from '../../git/common/gitService';
-import { Change } from '../../git/vscode/git';
+import { Change, CommitShortStat } from '../../git/vscode/git';
 import { AbstractLanguageDiagnosticsService } from '../../languages/common/languageDiagnosticsService';
 import { ILanguageFeaturesService } from '../../languages/common/languageFeaturesService';
 import { ILogService } from '../../log/common/logService';
@@ -235,7 +235,7 @@ export class SimulationFileSystemAdaptor implements IFileSystemService {
 		return this._delegate.isWritableFileSystem(scheme);
 	}
 
-	createFileSystemWatcher(glob: string): vscode.FileSystemWatcher {
+	createFileSystemWatcher(glob: string | vscode.RelativePattern): vscode.FileSystemWatcher {
 		return this._delegate.createFileSystemWatcher(glob);
 	}
 }
@@ -741,12 +741,20 @@ export class TestingGitService implements IGitService {
 		return undefined;
 	}
 
+	async diffIndexWithHEADShortStats(uri: URI): Promise<CommitShortStat | undefined> {
+		return undefined;
+	}
+
 	async fetch(uri: URI, remote?: string, ref?: string, depth?: number): Promise<void> {
 		return;
 	}
 
 	async getMergeBase(uri: URI, ref1: string, ref2: string): Promise<string | undefined> {
 		return undefined;
+	}
+
+	async add(uri: URI, paths: string[]): Promise<void> {
+		return;
 	}
 }
 
@@ -1008,14 +1016,5 @@ export class TestingLanguageService implements ILanguageFeaturesService {
 	}
 	getDiagnostics(uri: vscode.Uri): vscode.Diagnostic[] {
 		return [];
-	}
-	prepareTypeHierarchy(uri: vscode.Uri, position: vscode.Position): Promise<vscode.TypeHierarchyItem[]> {
-		return Promise.resolve([]);
-	}
-	getTypeHierarchySupertypes(item: vscode.TypeHierarchyItem): Promise<vscode.TypeHierarchyItem[]> {
-		return Promise.resolve([]);
-	}
-	getTypeHierarchySubtypes(item: vscode.TypeHierarchyItem): Promise<vscode.TypeHierarchyItem[]> {
-		return Promise.resolve([]);
 	}
 }

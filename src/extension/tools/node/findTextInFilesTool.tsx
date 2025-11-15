@@ -46,6 +46,12 @@ export class FindTextInFilesTool implements ICopilotTool<IFindTextInFilesToolPar
 	) { }
 
 	async invoke(options: vscode.LanguageModelToolInvocationOptions<IFindTextInFilesToolParams>, token: CancellationToken) {
+		// TODO strict input validation
+		// Certain models just really want to pass incorrect input
+		if ((options.input as unknown as Record<string, string>).pattern) {
+			throw new Error('The property "pattern" is not supported, please use "query"');
+		}
+
 		const endpoint = options.model && (await this.endpointProvider.getChatEndpoint(options.model));
 		const modelFamily = endpoint?.family;
 
@@ -184,6 +190,10 @@ export class FindTextInFilesTool implements ICopilotTool<IFindTextInFilesToolPar
 
 	async resolveInput(input: IFindTextInFilesToolParams, _promptContext: IBuildPromptContext, mode: CopilotToolMode): Promise<IFindTextInFilesToolParams> {
 		let includePattern = input.includePattern;
+		if (includePattern === '**') {
+			includePattern = undefined;
+		}
+
 		if (includePattern && !includePattern.startsWith('**/')) {
 			includePattern = `**/${includePattern}`;
 		}

@@ -19,7 +19,7 @@ __pycache__/
 # Secret token files
 /.env
 *.token
-*.node
+
 # Test infra
 test/simulation/language/harness/
 
@@ -32,13 +32,4 @@ coverage/
 # Base cache database (GC mode)
 test/simulation/cache/_base.sqlite
 
-# Simulation cache content is hydrated from upstream as needed
-test/simulation/cache/base.sqlite
-test/simulation/cache/layers/
-
 test/aml/out
-src/extension/completions-core
-
-.tmp/
-*.vsix
-.github/workflows/pr.yml

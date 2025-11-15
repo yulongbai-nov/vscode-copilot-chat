@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { IGitService } from '../../../platform/git/common/gitService';
 import { IOctoKitService } from '../../../platform/github/common/githubService';
 import { OctoKitService } from '../../../platform/github/common/octoKitServiceImpl';
 import { ILogService } from '../../../platform/log/common/logService';
@@ -17,6 +18,7 @@ import { ClaudeCodeSessionService, IClaudeCodeSessionService } from '../../agent
 import { CopilotCLIModels, CopilotCLISDK, ICopilotCLIModels, ICopilotCLISDK } from '../../agents/copilotcli/node/copilotCli';
 import { CopilotCLIPromptResolver } from '../../agents/copilotcli/node/copilotcliPromptResolver';
 import { CopilotCLISessionService, ICopilotCLISessionService } from '../../agents/copilotcli/node/copilotcliSessionService';
+import { CopilotCLIMCPHandler, ICopilotCLIMCPHandler } from '../../agents/copilotcli/node/mcpHandler';
 import { ILanguageModelServer, LanguageModelServer } from '../../agents/node/langModelServer';
 import { IExtensionContribution } from '../../common/contributions';
 import { ChatSummarizerProvider } from '../../prompt/node/summarizer';
@@ -94,6 +96,7 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 				[ICopilotCLISDK, new SyncDescriptor(CopilotCLISDK)],
 				[ILanguageModelServer, new SyncDescriptor(LanguageModelServer)],
 				[ICopilotCLITerminalIntegration, new SyncDescriptor(CopilotCLITerminalIntegration)],
+				[ICopilotCLIMCPHandler, new SyncDescriptor(CopilotCLIMCPHandler)],
 			));
 
 		const copilotCLIWorktreeManager = copilotcliAgentInstaService.createInstance(CopilotCLIWorktreeManager);
@@ -102,19 +105,20 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 		const promptResolver = copilotcliAgentInstaService.createInstance(CopilotCLIPromptResolver);
 		const copilotcliChatSessionContentProvider = copilotcliAgentInstaService.createInstance(CopilotCLIChatSessionContentProvider, copilotCLIWorktreeManager);
 		const summarizer = copilotcliAgentInstaService.createInstance(ChatSummarizerProvider);
+		const gitService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(IGitService));
 
-		const copilotcliChatSessionParticipant = copilotcliAgentInstaService.createInstance(
+		const copilotcliChatSessionParticipant = this._register(copilotcliAgentInstaService.createInstance(
 			CopilotCLIChatSessionParticipant,
 			promptResolver,
 			copilotcliSessionItemProvider,
 			cloudSessionProvider,
 			summarizer,
 			copilotCLIWorktreeManager
-		);
+		));
 		const copilotCLISessionService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(ICopilotCLISessionService));
 		const copilotcliParticipant = vscode.chat.createChatParticipant(this.copilotcliSessionType, copilotcliChatSessionParticipant.createHandler());
 		this._register(vscode.chat.registerChatSessionContentProvider(this.copilotcliSessionType, copilotcliChatSessionContentProvider, copilotcliParticipant));
-		this._register(registerCLIChatCommands(copilotcliSessionItemProvider, copilotCLISessionService));
+		this._register(registerCLIChatCommands(copilotcliSessionItemProvider, copilotCLISessionService, gitService));
 	}
 
 	private registerCopilotCloudAgent() {
@@ -154,8 +158,12 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 			})
 		);
 		this.copilotCloudRegistrations.add(
+			vscode.commands.registerCommand('agentSession.copilot-cloud-agent.openChanges', async (sessionItemResource: vscode.Uri) => {
+				await cloudSessionsProvider.openChanges(sessionItemResource);
+			})
+		);
+		this.copilotCloudRegistrations.add(
 			vscode.commands.registerCommand(CLOSE_SESSION_PR_CMD, async (ctx: CrossChatSessionWithPR) => {
-				// await this.installPullRequestExtension();
 				try {
 					const success = await this.octoKitService.closePullRequest(
 						ctx.pullRequestDetails.repository.owner.login,

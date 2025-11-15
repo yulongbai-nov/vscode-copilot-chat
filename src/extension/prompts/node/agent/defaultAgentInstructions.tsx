@@ -6,6 +6,7 @@
 import { BasePromptElementProps, PromptElement, PromptSizing } from '@vscode/prompt-tsx';
 import type { LanguageModelToolInformation } from 'vscode';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
+import { isGpt5PlusFamily } from '../../../../platform/endpoint/common/chatModelCapabilities';
 import { IExperimentationService } from '../../../../platform/telemetry/common/nullExperimentationService';
 import { LanguageModelToolMCPSource } from '../../../../vscodeTypes';
 import { ToolName } from '../../../tools/common/toolNames';
@@ -400,7 +401,7 @@ export class ApplyPatchInstructions extends PromptElement<DefaultAgentPromptProp
 	}
 
 	async render(state: void, sizing: PromptSizing) {
-		const isGpt5 = this.props.modelFamily?.startsWith('gpt-5') === true;
+		const isGpt5 = isGpt5PlusFamily(this.props.modelFamily);
 		const useSimpleInstructions = isGpt5 && this.configurationService.getExperimentBasedConfig(ConfigKey.Internal.Gpt5AlternativePatch, this._experimentationService);
 
 		return <Tag name='applyPatchInstructions'>
