@@ -850,6 +850,8 @@ export namespace ConfigKey {
 
 	/** Prompt Section Visualizer settings */
 	export const PromptSectionVisualizerEnabled = defineSetting<boolean>('chat.promptSectionVisualizer.enabled', ConfigType.Simple, false);
+	export const PromptSectionVisualizerRenderMode = defineSetting<'inline' | 'standalone' | 'auto'>('chat.promptSectionVisualizer.renderMode', ConfigType.Simple, 'auto');
+	export const PromptSectionVisualizerUseNativeRendering = defineSetting<boolean>('chat.promptSectionVisualizer.useNativeRendering', ConfigType.Simple, false);
 	export const PromptSectionVisualizerPersistCollapseState = defineSetting<boolean>('chat.promptSectionVisualizer.persistCollapseState', ConfigType.Simple, true);
 	export const PromptSectionVisualizerAutoCollapseLargeSections = defineSetting<boolean>('chat.promptSectionVisualizer.autoCollapseLargeSections', ConfigType.Simple, false);
 	export const PromptSectionVisualizerLargeSectionTokenThreshold = defineSetting<number>('chat.promptSectionVisualizer.largeSectionTokenThreshold', ConfigType.Simple, 500);
