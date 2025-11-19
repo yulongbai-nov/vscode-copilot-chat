@@ -59,3 +59,120 @@ This document captures the current state of the simulation cache (`test/simulati
 - [ ] Document the update in PR notes (mention quota impact).
 
 Keeping the cache lean and coordinating refreshes are the easiest ways to avoid LFS quota surprises.
+
+## Fork without cache blobs
+
+The fork intentionally drops every `*.sqlite` file before automation pushes a sync branch. `script/sync-fork-main-merge.sh` strips the cache directory from the merge commit, so the fork never references new Git LFS objects. Developers hydrate the cache on demand with `script/hydrateSimulationCache.ts`, which pulls both the pointer files and the payloads directly from `upstream/main` without touching fork storage.
+
+Implications for maintainers:
+- Cloning the fork yields an empty `test/simulation/cache/` (aside from the README). Run `npx --yes tsx script/hydrateSimulationCache.ts` before executing simulations or `npm install`.
+- The hydrated SQLite files remain untracked thanks to `.gitignore`; use `git clean -xfd test/simulation/cache` to reclaim space when you are done.
+- CI pipelines must run the hydration helper as part of their setup phase so the cache exists before tests.
+
+Keep this policy in mind when reviewing sync PRs: a diff that reintroduces `*.sqlite` payloads indicates the strip step failed and should be investigated.
+
+### Repository defaults disable automatic LFS fetches
+
+The repo includes a `.lfsconfig` that sets:
+
+```
+[lfs]
+    fetchrecentrefsdays = 0
+    fetchrecentcommitsdays = 0
+    fetchrecentremoterefs = false
+    fetchrecentalways = false
+    fetchexclude = *
+```
+
+Clones therefore skip all LFS hydration during `git pull`, `fetch`, or `checkout`. You must run `script/hydrateSimulationCache.ts` (or an equivalent manual `git lfs fetch --include="test/simulation/cache/*" --exclude=""`) any time you actually need the SQLite blobs. This keeps routine source control operations within the LFS quota while still allowing explicit cache downloads for tests.
+
+## Cache hydration workflow
+
+Run the helper script to hydrate the cache for the current branch:
+
+```pwsh
+npx --yes tsx script/hydrateSimulationCache.ts
+```
+
+The script ensures the `upstream` remote exists (adding it when missing), fetches the latest `upstream/main`, computes the merge base with your branch, and pulls only the LFS objects reachable from that commit. `script/postinstall.ts` invokes the same helper automatically during `npm install` when `base.sqlite` is missing.
+
+If the helper fails (for example, due to restricted network access), perform the steps manually:
+
+```pwsh
+git remote add upstream https://github.com/microsoft/vscode-copilot-chat.git  # if needed
+git fetch upstream main
+$mergeBase = git merge-base HEAD upstream/main
+git lfs fetch upstream $mergeBase --include="test/simulation/cache/*" --exclude=""
+git lfs checkout test/simulation/cache
+```
+
+Re-run `npm install` afterwards so the postinstall checks succeed.
+
+### Continuous integration
+
+Add the following steps to CI pipelines before any build or test phases:
+
+```yaml
+- name: Hydrate simulation cache
+  run: npx --yes tsx script/hydrateSimulationCache.ts
+- name: Cache simulation artifacts
+  uses: actions/cache@v4
+  with:
+    path: test/simulation/cache
+    key: sim-cache-${{ hashFiles('test/simulation/cache/base.sqlite') }}
+    restore-keys: |
+      sim-cache-
+```
+
+Caching the hydrated directory keeps subsequent runs fast and removes the need to store the blobs in your fork.
+
+## Pruning LFS objects from your fork
+
+To drop historical cache layers from the fork entirely:
+
+1. Clone the fork with LFS smudge disabled to avoid download failures:
+   ```pwsh
+   git clone --filter=blob:none --config "filter.lfs.smudge=git-lfs smudge --skip" <your-fork-url> cleaned-fork
+   ```
+2. Enter the clone and rewrite history to remove cache layer payloads:
+   ```pwsh
+   cd cleaned-fork
+   git filter-repo --path test/simulation/cache/layers --invert-paths --force
+   ```
+   Or run the bundled helper (use `--` twice so the flag reaches the script):
+   ```pwsh
+   npm install
+   npm run prune:simulation-cache -- -- --yes
+   ```
+   If your shell still drops the flag, invoke `tsx` directly (this avoids npm mutating `package-lock.json`):
+   ```pwsh
+   node ./node_modules/tsx/dist/cli.js script/tools/pruneSimulationCache.ts --yes
+   ```
+   If a previous attempt added `"peer": true` entries to `package-lock.json`, reset it with `git checkout -- package-lock.json` before rerunning.
+3. Force-push the rewritten history:
+   ```pwsh
+   git push --force-with-lease origin main
+   ```
+4. Rehydrate the required cache files using the workflow above, then run:
+   ```pwsh
+   git lfs prune --recent
+   ```
+5. Notify collaborators to reclone the fork because history changed.
+
+## Guardrails against new cache layers
+
+- The repository contains `.github/workflows/cache-guard.yml`, which fails any push or pull request that modifies `test/simulation/cache/layers/**`.
+- `test/simulation/cache/layers/` is ignored in `.gitignore`, so locally generated layers stay out of staged changes.
+- Developers can install a local pre-push hook to catch violations before hitting the remote:
+  ```pwsh
+  @"
+  git diff --cached --name-only | Select-String '^test/simulation/cache/layers/'
+  if ($?) {
+      Write-Error 'Simulation cache layers must not be pushed. Fetch from upstream instead.'
+      exit 1
+  }
+  "@ | Set-Content -Path .git/hooks/pre-push -Encoding ascii
+  chmod +x .git/hooks/pre-push
+  ```
+
+With these safeguards in place, the fork stays lean while still allowing developers and CI jobs to obtain the simulator cache when needed.

@@ -1,0 +1,7 @@
+[lfs]
+	fetchrecentrefsdays = 0
+	fetchrecentcommitsdays = 0
+	fetchrecentremoterefs = false
+	fetchrecentalways = false
+	# Default to fetching no LFS blobs; hydrateSimulationCache explicitly overrides
+	fetchexclude = *
