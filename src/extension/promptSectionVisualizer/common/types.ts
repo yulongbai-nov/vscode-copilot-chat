@@ -5,7 +5,6 @@
 import { CodeBlock } from '../../prompt/common/conversation';
 import { TokenizerType } from '../../../util/common/tokenizer';
 
-
 /**
  * Represents a parsed prompt section with XML-like tags
  */
@@ -201,3 +200,8 @@ export interface RenderOptions {
 	/** Maximum sections to render before pagination */
 	maxSections?: number;
 }
+
+/**
+ * Options used by section editors (shape defined by concrete editor implementation).
+ */
+export type SectionEditorOptions = Readonly<Record<string, unknown>>;

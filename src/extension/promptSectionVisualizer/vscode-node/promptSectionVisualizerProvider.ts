@@ -175,11 +175,11 @@ export class PromptSectionVisualizerProvider extends Disposable implements vscod
 	 * - github.copilot.promptVisualizer.moveSectionDown
 	 */
 	private _handleWebviewMessage(message: unknown): void {
+		const messageType = typeof (message as { type?: unknown })?.type === 'string'
+			? String((message as { type: string }).type)
+			: 'unknown';
 		// Custom WebView message passing has been removed
 		// All actions are now handled through VS Code commands
-		const messageType = typeof (message as { type?: unknown }).type === 'string'
-			? (message as { type: string }).type
-			: 'unknown';
 		this._logService.trace(`Received deprecated webview message: ${messageType}`);
 		this._logService.info('WebView message passing is deprecated. Please use VS Code commands instead.');
 	}

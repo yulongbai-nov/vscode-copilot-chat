@@ -5,13 +5,15 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ITokenizerProvider } from '../../../../platform/tokenizer/node/tokenizer';
+import { TokenizerType } from '../../../../util/common/tokenizer';
 import { PromptSection, TokenizationEndpoint } from '../../common/types';
 import { TokenUsageCalculator } from '../../node/tokenUsageCalculator';
 
 describe('TokenUsageCalculator', () => {
 	let calculator: TokenUsageCalculator;
 	let mockTokenizerProvider: ITokenizerProvider;
-	let mockTokenizer: any;
+	type TokenLengthMock = ReturnType<typeof vi.fn>;
+	let mockTokenizer: { tokenLength: TokenLengthMock };
 
 	const createMockSection = (id: string, content: string, tagName: string = 'context'): PromptSection => ({
 		id,
@@ -26,7 +28,7 @@ describe('TokenUsageCalculator', () => {
 	});
 
 	const mockEndpoint: TokenizationEndpoint = {
-		tokenizer: 'cl100k_base'
+		tokenizer: TokenizerType.CL100K
 	};
 
 	beforeEach(() => {
@@ -38,7 +40,7 @@ describe('TokenUsageCalculator', () => {
 		// Create mock tokenizer provider
 		mockTokenizerProvider = {
 			acquireTokenizer: vi.fn().mockReturnValue(mockTokenizer)
-		} as any;
+		} as unknown as ITokenizerProvider;
 
 		// Create calculator instance
 		calculator = new TokenUsageCalculator(mockTokenizerProvider);

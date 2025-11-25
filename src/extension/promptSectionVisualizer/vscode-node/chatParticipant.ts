@@ -143,10 +143,11 @@ export class PromptVisualizerChatParticipant extends Disposable {
 			await this._controller.handleChatContext(context, request);
 
 			// Render sections using the controller's inline mode
-			const renderOptions: Partial<RenderOptions> = {
+			const renderOptions: RenderOptions = {
 				showActions: true,
 				enableCollapse: true,
-				showTokenBreakdown: true
+				showTokenBreakdown: true,
+				mode: 'inline'
 			};
 
 			await this._controller.renderInline(stream, renderOptions);

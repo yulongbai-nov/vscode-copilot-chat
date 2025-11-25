@@ -14,12 +14,12 @@ import {
 	ParseResult,
 	PromptSection,
 	RenderableElement,
+	SectionEditorOptions,
 	TokenizationEndpoint,
 	ValidationResult,
 	VisualizerState
 } from './types';
 
-export type SectionEditorOptions = Readonly<Record<string, unknown>>;
 export type SectionEditorState = Readonly<Record<string, unknown>>;
 
 /**
@@ -358,7 +358,7 @@ export interface IPromptVisualizerController extends IDisposable {
 	/**
 	 * Set the provider instance for standalone mode
 	 */
-	setProvider(provider: unknown): void;
+	setProvider(provider: vscode.WebviewViewProvider): void;
 
 	/**
 	 * Render in standalone webview panel mode
