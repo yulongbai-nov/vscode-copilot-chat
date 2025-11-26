@@ -205,23 +205,29 @@ export class NativeChatRenderer {
 	private _renderActionButtons(section: PromptSection, stream: vscode.ChatResponseStream): void {
 		// Edit button
 		stream.button({
-			title: 'Edit',
-			command: 'github.copilot.promptVisualizer.editSection',
-			arguments: [section.id]
+			value: {
+				title: 'Edit',
+				command: 'github.copilot.promptVisualizer.editSection',
+				arguments: [section.id]
+			}
 		});
 
 		// Delete button
 		stream.button({
-			title: 'Delete',
-			command: 'github.copilot.promptVisualizer.deleteSection',
-			arguments: [section.id]
+			value: {
+				title: 'Delete',
+				command: 'github.copilot.promptVisualizer.deleteSection',
+				arguments: [section.id]
+			}
 		});
 
 		// Collapse/Expand button
 		stream.button({
-			title: section.isCollapsed ? 'Expand' : 'Collapse',
-			command: 'github.copilot.promptVisualizer.toggleCollapse',
-			arguments: [section.id]
+			value: {
+				title: section.isCollapsed ? 'Expand' : 'Collapse',
+				command: 'github.copilot.promptVisualizer.toggleCollapse',
+				arguments: [section.id]
+			}
 		});
 	}
 
@@ -231,8 +237,10 @@ export class NativeChatRenderer {
 	private _renderLoadMore(remainingCount: number, stream: vscode.ChatResponseStream): void {
 		stream.markdown(`\n**${remainingCount} more sections...**\n\n`);
 		stream.button({
-			title: `Load ${remainingCount} more sections`,
-			command: 'github.copilot.promptVisualizer.loadMore'
+			value: {
+				title: `Load ${remainingCount} more sections`,
+				command: 'github.copilot.promptVisualizer.loadMore'
+			}
 		});
 	}
 
@@ -246,8 +254,10 @@ export class NativeChatRenderer {
 		if (options.showActions) {
 			stream.markdown('\n### Actions\n\n');
 			stream.button({
-				title: 'Add Section',
-				command: 'github.copilot.promptVisualizer.addSection'
+				value: {
+					title: 'Add Section',
+					command: 'github.copilot.promptVisualizer.addSection'
+				}
 			});
 		}
 	}
