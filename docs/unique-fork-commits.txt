@@ -1,0 +1,91 @@
+6e677e86 Merge pull request #61 from yulongbai-nov/feature/restore-merge-nightly-sync
+d15c1481 Restore merge-based nightly sync
+f390091f remove .lfsconfig
+6c98192c ci: remove Copilot maintenance delegate workflow and script; tighten fork-nightly-squash-sync permissions
+f2e20db2 ci: use PAT for origin pushes (#0)
+af9c760c Chore/cache hydration squash (#52)
+d806a628 Align hydration flow with squash sync (#51)
+060ef0c6 Nightly upstream merge (61247052) (#50)
+2ef10235 tests: await snapshot matchers (#49)
+f210d7c2 prompt-visualizer: tighten typing (#48)
+3beb0f92 Fix/sync script lfs (#46)
+e545c5ad automation: merge upstream via git merge
+8435119b docs: document disabled LFS hydration
+386ae095 config: fix prompt visualizer settings
+4f56fc99 tools: remove runSubagent import
+89eff308 Fix/nightly sync lfs pointer only (#43)
+3869e376 ci: disable cache guard workflow
+deb385f4 chore(sync): strip simulation cache artifacts before pushing
+a4d72711 chore(cache): hydrate pointers from upstream before checkout
+ffb00319 docs: record pointer-only cache workflow
+c2e0553b chore(cache): stop tracking simulation cache blobs
+5125bc05 fix: Document pointer-only workflow for Git LFS in simulation cache guide and sync script
+869e4ffd fix: Simplify nightly merge to only push LFS pointers, not objects
+d2df1709 Replace GITHUB_TOKEN with GH_TOKEN in workflows
+987bb524 fix: Add fetch-depth: 0 to all remaining workflows using hydrateSimulationCache.ts
+e74e6d49 fix: Add fetch-depth: 0 to all jobs using hydrateSimulationCache.ts
+d01c71dc ci: Re-enable all test jobs after debugging fixes
+11601318 debug: Add detailed error logging for all git commands in hydration script
+410da8a5 fix: Use fetch-depth: 0 to enable git merge-base with upstream
+c35df1de fix: Detect and hydrate LFS pointer files instead of skipping them
+5b06fd34 debug: Add detailed logging for cache hydration and validation
+01d5b956 simulation-cache: hydrate via merge-base helper (#37)
+050b52cb promptSectionVisualizer: accept vscode.Command in mock stream; add render mode configs
+8c571c89 workflows: add manual dispatch triggers (#32)
+e1a5d1d2 workflows: fix nightly merge env warnings
+053cc5ee endpoint: fix responses api typings
+02cbc40c endpoint: fix responses api typings
+5234c397 docs: mark task 9.6 as completed in spec
+4bb67ace docs: add E2E test plan and simulation cache guide
+fe6cee88 test: update existing tests for deprecated WebView and chat integration
+5de6bf88 test: add comprehensive tests for native Chat API components
+2f349298 feat: register chat participant and update package configuration
+437bb33d refactor: remove custom WebView HTML/CSS/JS files
+8c921925 refactor: deprecate custom WebView and update service registration
+a237dde4 feat: implement native Chat API rendering components
+361adbe9 feat: add feature flag service interface and chat integration types
+0edde636 docs: add chat-api-migration spec documents
+e77f3755 build: improve vscode compatibility detection
+2178f6bd promptSectionVisualizer: add core feature implementation
+ff65a17c ci: hydrate simulation cache from upstream
+2e2b7e5d docs: clarify simulation cache prune helper usage and add fallback tsx invocation; remove handoff.md
+279b1d36 docs: capture simulation cache maintenance plan
+dd07b90d chore: add simulation cache pruning helper
+9fed4d50 ci: prevent cache layer commits
+23adc962 build: hydrate simulation cache during postinstall
+5d7f5731 automation: harden nightly sync LFS handling (#none)
+213278dc Fix Git LFS push failures and enable manual workflow triggering from any branch (#23)
+ef689f7f Handle merge conflicts by creating PR instead of aborting (#21)
+b4ba3c4e Fix Git LFS merge errors by skipping smudge filter
+76a4ae11 Simplify GitHub CLI authentication check
+946536f1 test: support fork repo detection (#none)
+c7dbf963 automation: add nightly merge sync workflow (#none)
+63114438 automation: retire legacy sync workflows (#none)
+309f60bf automation: add fork main sync workflow
+3729eb14 Fix sync-fork-main-pr.sh: Use owner:branch format for gh pr create (#16)
+f2d2f00d Fix sync-fork-main-pr.sh to check commit count instead of content diff (#15)
+5642e60e Fix false positive error on login check in sync script (#14)
+d5710473 Remove token scopes from GitHub auth status check
+d7266119 Add environment setting to fork-main-sync workflow
+8b5ee3f2 Automation/fork main sync (#13)
+814f114b automation: add fork main sync workflow (#12)
+10503bf3 build: enforce vscode build date check (#none) (#11)
+53a926ed build: enforce vscode compat check (#none)
+f460da4d chore(gitignore): add *.vsix to ignore packaged extensions
+a1d1b5fc docs(archived): add archived design, intent, chat UI, prompt and type-hierarchy maintenance docs
+b9a8cc16 fix(type-hierarchy): align path usage across runtimes
+809ab48a docs(maintenance): clarify delegate scripts per review
+0e69473b workflow: externalize maintenance delegate logic
+fcaec219 maintenance: auto delegate failing checks
+caedc8ea maintenance: add copilot delegate workflow
+c7edc612 docs: generalize maintenance playbook
+cb91b7ae maintenance: use github runners with npm cache
+1e86d993 maintenance: bootstrap stack branch in script
+146d478e maintenance: schedule upkeep workflow
+2041a6da maintenance: add type hierarchy upkeep workflow
+788f7e73 type-hierarchy: register provider and tooling docs
+06b08aa3 feat(typeHierarchy): add TypeScript provider infrastructure
+8c1b5549 feat(tools): implement LSP type hierarchy tool with complete interface support
+c29f22ed feat(tools): implement type hierarchy LSP tool
+60567a67 docs: Add comprehensive LSP capabilities documentation and verification
+f3332f98 docs(agent-mode): align references with standards
