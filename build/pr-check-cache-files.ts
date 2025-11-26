@@ -38,7 +38,7 @@ const collaborators = [
 	"hawkticehurst", "hediet", "isidorn", "jo-oikawa", "joaomoreno", "joshspicer", "jrieken", "jruales", "justschen", "karthiknadig",
 	"kieferrm", "kkbrooks", "kycutler", "lramos15", "lszomoru", "luabud", "meganrogge", "minsa110", "mjbvz", "mrleemurray", "nguyenchristy",
 	"ntrogh", "olguzzar", "osortega", "pierceboggan", "pwang347", "rebornix", "roblourens", "rzhao271", "sandy081", "sbatten", "TylerLeonhardt",
-	"Tyriar", "ulugbekna", "vijayupadya", "Yoyokrazy", "yulongbai-nov"
+	"Tyriar", "ulugbekna", "vijayupadya", "Yoyokrazy", "yulongbai-nov", "github-actions[bot]"
 ];
 const collaboratorSet = new Set(collaborators);
 const verificationOverrides = new Set(["github-actions[bot]", "yulongbai-nov"]);
