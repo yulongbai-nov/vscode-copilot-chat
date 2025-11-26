@@ -1,0 +1,150 @@
+name: Fork Nightly Merge Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Target branch to merge into (default: main)'
+        required: false
+        default: 'main'
+      sync_branch:
+        description: 'Sync branch name (default: automation/nightly-upstream-merge)'
+        required: false
+        default: 'automation/nightly-upstream-merge'
+      upstream_repo:
+        description: 'Upstream repository (default: microsoft/vscode-copilot-chat)'
+        required: false
+        default: 'microsoft/vscode-copilot-chat'
+      upstream_branch:
+        description: 'Upstream branch to merge from (default: main)'
+        required: false
+        default: 'main'
+      conflict_strategy:
+        description: 'Conflict handling mode'
+        required: false
+        type: choice
+        default: 'commit'
+        options:
+          - commit
+          - report
+      dry_run:
+        description: 'Dry run mode - stop before pushing'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '15 2 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge_sync:
+    runs-on: ubuntu-latest
+    environment: develop
+    outputs:
+      sync_outcome: ${{ steps.capture_metadata.outputs.sync_outcome }}
+      pr_number: ${{ steps.capture_metadata.outputs.pr_number }}
+      pr_url: ${{ steps.capture_metadata.outputs.pr_url }}
+    env:
+      MERGE_LOG_PATH: ''
+      PR_URL: ''
+      PR_NUMBER: ''
+      SYNC_OUTCOME: ''
+      UPSTREAM_LOG_PATH: ''
+      CONFLICT_REPORT_PATH: ''
+      SYNC_LOG_DIR: ''
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN }}
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.ref }}
+
+      - name: Configure Git credentials for pushes
+        run: git remote set-url origin https://$GH_TOKEN@github.com/${{ github.repository }}.git
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Configure Git LFS fetch options
+        run: ./script/setup-lfs-config.sh
+
+      - name: Nightly upstream merge sync
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target_branch || 'main' }}
+          SYNC_BRANCH: ${{ inputs.sync_branch || 'automation/nightly-upstream-merge' }}
+          UPSTREAM_REPO: ${{ inputs.upstream_repo || 'microsoft/vscode-copilot-chat' }}
+          UPSTREAM_BRANCH: ${{ inputs.upstream_branch || 'main' }}
+          MERGE_CONFLICT_MODE: ${{ inputs.conflict_strategy || 'commit' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: ./script/sync-fork-merge.sh
+
+      - name: Capture sync metadata
+        id: capture_metadata
+        run: |
+          echo "sync_outcome=${SYNC_OUTCOME:-}" >>"$GITHUB_OUTPUT"
+          echo "pr_number=${PR_NUMBER:-}" >>"$GITHUB_OUTPUT"
+          echo "pr_url=${PR_URL:-}" >>"$GITHUB_OUTPUT"
+
+      - name: Upload sync logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-merge-sync-logs
+          path: ${{ env.SYNC_LOG_DIR != '' && env.SYNC_LOG_DIR || '.github/tmp/sync-logs' }}
+          if-no-files-found: ignore
+
+      - name: Append job summary
+        if: always()
+        shell: bash
+        env:
+          DRY_RUN_INPUT: ${{ inputs.dry_run || 'false' }}
+          TARGET_BRANCH: ${{ inputs.target_branch || 'main' }}
+          SYNC_BRANCH: ${{ inputs.sync_branch || 'automation/nightly-upstream-merge' }}
+          UPSTREAM_REPO: ${{ inputs.upstream_repo || 'microsoft/vscode-copilot-chat' }}
+          UPSTREAM_BRANCH: ${{ inputs.upstream_branch || 'main' }}
+          CONFLICT_STRATEGY: ${{ inputs.conflict_strategy || 'commit' }}
+        run: |
+          {
+            echo "### Fork Nightly Merge Sync"
+            echo ""
+            if [ "${DRY_RUN_INPUT}" = "true" ]; then
+              echo "⚠️ **Dry run mode**: Commands ran locally, push/PR were skipped."
+              echo ""
+            fi
+            echo "**Configuration:**"
+            echo "* Target branch: ${TARGET_BRANCH}"
+            echo "* Sync branch: ${SYNC_BRANCH}"
+            echo "* Upstream repo: ${UPSTREAM_REPO}"
+            echo "* Upstream branch: ${UPSTREAM_BRANCH}"
+            echo "* Conflict strategy: ${CONFLICT_STRATEGY}"
+            echo "* Triggered from: ${GITHUB_REF}"
+            echo ""
+            echo "**Result:**"
+            echo "* Outcome: ${SYNC_OUTCOME:-unknown}"
+            if [ -n "${PR_URL:-}" ]; then
+              echo "* PR: ${PR_URL}"
+            fi
+            if [ -n "${MERGE_LOG_PATH:-}" ]; then
+              echo "* Merge log: ${MERGE_LOG_PATH}"
+            fi
+            if [ -n "${UPSTREAM_LOG_PATH:-}" ] && [ -f "${UPSTREAM_LOG_PATH}" ]; then
+              echo ""
+              echo "**Upstream commits:**"
+              sed 's/^/- /' "${UPSTREAM_LOG_PATH}"
+            fi
+            if [ -n "${CONFLICT_REPORT_PATH:-}" ] && [ -f "${CONFLICT_REPORT_PATH}" ]; then
+              echo ""
+              echo "**Conflict report:**"
+              cat "${CONFLICT_REPORT_PATH}"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"

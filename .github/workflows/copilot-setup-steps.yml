@@ -14,17 +14,23 @@ on:
 jobs:
   copilot-setup-steps:
     name: Setup Development Environment
-    runs-on: vscode-large-runners
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          lfs: true
+          lfs: false
+          fetch-depth: 0  # Need full history for merge-base with upstream
+
+      - name: Hydrate simulation cache
+        run: npx --yes tsx script/hydrateSimulationCache.ts
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '22.14.x'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v6
