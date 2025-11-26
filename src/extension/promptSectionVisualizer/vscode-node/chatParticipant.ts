@@ -9,6 +9,18 @@ import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IPromptStateManager, IPromptVisualizerController } from '../common/services';
 import type { RenderOptions } from '../common/types';
 
+type FollowUpState = {
+	readonly sectionId: string;
+	readonly tagName: string;
+};
+
+type PromptVisualizerChatMetadata = {
+	readonly command: 'visualize-prompt' | 'edit-section';
+	readonly sectionsCount?: number;
+	readonly totalTokens?: number;
+	readonly error?: string;
+};
+
 /**
  * Chat participant that handles visualization requests and renders sections using native chat APIs
  */
@@ -18,7 +30,7 @@ export class PromptVisualizerChatParticipant extends Disposable {
 	static readonly DESCRIPTION = 'Visualize and edit prompt sections';
 
 	private _participant: vscode.ChatParticipant | undefined;
-	private _followUpState: Map<string, any> = new Map();
+	private readonly _followUpState: Map<string, FollowUpState> = new Map();
 
 	constructor(
 		@ILogService private readonly _logService: ILogService,
@@ -360,14 +372,14 @@ export class PromptVisualizerChatParticipant extends Disposable {
 		result: vscode.ChatResult,
 		stream: vscode.ChatResponseStream
 	): void {
-		const metadata = result.metadata as any;
+		const metadata = result.metadata as PromptVisualizerChatMetadata | undefined;
 
-		if (!metadata) {
+		if (!metadata || metadata.command !== 'visualize-prompt') {
 			return;
 		}
 
 		// Provide context-specific follow-up prompts
-		if (metadata.command === 'visualize-prompt' && metadata.sectionsCount > 0) {
+		if ((metadata.sectionsCount ?? 0) > 0) {
 			stream.markdown('\n\n**What would you like to do next?**\n\n');
 
 			stream.button({
