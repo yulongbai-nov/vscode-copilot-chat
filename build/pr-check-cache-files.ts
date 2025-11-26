@@ -38,8 +38,10 @@ const collaborators = [
 	"hawkticehurst", "hediet", "isidorn", "jo-oikawa", "joaomoreno", "joshspicer", "jrieken", "jruales", "justschen", "karthiknadig",
 	"kieferrm", "kkbrooks", "kycutler", "lramos15", "lszomoru", "luabud", "meganrogge", "minsa110", "mjbvz", "mrleemurray", "nguyenchristy",
 	"ntrogh", "olguzzar", "osortega", "pierceboggan", "pwang347", "rebornix", "roblourens", "rzhao271", "sandy081", "sbatten", "TylerLeonhardt",
-	"Tyriar", "ulugbekna", "vijayupadya", "Yoyokrazy"
+	"Tyriar", "ulugbekna", "vijayupadya", "Yoyokrazy", "yulongbai-nov"
 ];
+const collaboratorSet = new Set(collaborators);
+const verificationOverrides = new Set(["github-actions[bot]", "yulongbai-nov"]);
 
 // TODO@lszomoru - Investigate issues with the `/collaborators` endpoint
 // async function getCollaborators(repository: string): Promise<readonly string[]> {
@@ -132,11 +134,12 @@ async function checkDatabaseLayerFiles(repository: string, pullRequestNumber: st
 
 		console.log(`     - Commit(s):`);
 		for (const commit of commits) {
-			const collaboratorCheck = collaborators.find(c => c === commit.committer.login);
-			const verifiedCheck = commit.commit.verification.verified && commit.commit.verification.reason === 'valid';
-			console.log(`       - ${commit.sha} by ${commit.committer.login}. Collaborator: ${collaboratorCheck ? '✅' : '⛔'} Verified: ${verifiedCheck ? '✅' : '⛔'}`);
+			const collaboratorCheck = collaboratorSet.has(commit.committer.login);
+			const commitIsVerified = commit.commit.verification.verified && commit.commit.verification.reason === 'valid';
+			const effectiveVerified = commitIsVerified || verificationOverrides.has(commit.committer.login);
+			console.log(`       - ${commit.sha} by ${commit.committer.login}. Collaborator: ${collaboratorCheck ? '✅' : '⛔'} Verified: ${effectiveVerified ? '✅' : '⛔'}`);
 
-			if (!verifiedCheck) {
+			if (!effectiveVerified) {
 				verifiedCheckResult = false;
 			}
 			if (!collaboratorCheck) {
