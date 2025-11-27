@@ -127,15 +127,13 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			});
 		});
 
-		it('should display migration notice instead of custom UI', () => {
+		it('should render lightweight standalone UI with command bindings', () => {
 			provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
 
 			expect(mockWebview.html).toBeTruthy();
-			// Verify migration notice is shown
-			expect(mockWebview.html).toContain('migration-notice');
-			expect(mockWebview.html).toContain('/visualize-prompt');
-			expect(mockWebview.html).toContain('deprecated');
-			expect(mockWebview.html).toContain('native Chat API');
+			expect(mockWebview.html).toContain('Prompt Section Visualizer');
+			expect(mockWebview.html).toContain('data-command="github.copilot.promptSectionVisualizer.addSection"');
+			expect(mockWebview.html).toContain('github.copilot.promptSectionVisualizer.toggleCollapse');
 		});
 
 		it('should register message handler for backward compatibility', () => {
@@ -145,15 +143,16 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			expect(messageHandler).toBeDefined();
 		});
 
-		it('should not send state updates to webview (deprecated)', () => {
+		it('should send current state to the webview immediately', () => {
 			const mockState = createMockState([createMockSection('1', 'Test content')]);
 			vi.mocked(mockStateManager.getCurrentState).mockReturnValue(mockState);
 
 			provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
 
-			// Custom WebView message passing has been removed
-			// The webview now shows a static migration notice
-			expect(mockWebview.postMessage).not.toHaveBeenCalled();
+			expect(mockWebview.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+				type: 'stateUpdate',
+				state: mockState
+			}));
 		});
 
 		it('should verify custom WebView files are not referenced', () => {
@@ -181,7 +180,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 
 			// Verify message is not processed
 			expect(mockStateManager.updateSection).not.toHaveBeenCalled();
-			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('webview message ignored'));
 		});
 
 		it('should ignore deprecated reorderSections message', () => {
@@ -193,7 +192,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			messageHandler?.(message);
 
 			expect(mockStateManager.reorderSections).not.toHaveBeenCalled();
-			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('webview message ignored'));
 		});
 
 		it('should ignore deprecated addSection message', () => {
@@ -207,7 +206,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			messageHandler?.(message);
 
 			expect(mockStateManager.addSection).not.toHaveBeenCalled();
-			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('webview message ignored'));
 		});
 
 		it('should ignore deprecated removeSection message', () => {
@@ -219,7 +218,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			messageHandler?.(message);
 
 			expect(mockStateManager.removeSection).not.toHaveBeenCalled();
-			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('webview message ignored'));
 		});
 
 		it('should ignore deprecated toggleCollapse message', () => {
@@ -231,7 +230,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			messageHandler?.(message);
 
 			expect(mockStateManager.toggleSectionCollapse).not.toHaveBeenCalled();
-			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('webview message ignored'));
 		});
 
 		it('should ignore deprecated switchMode message', () => {
@@ -244,7 +243,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			messageHandler?.(message);
 
 			expect(mockStateManager.switchSectionMode).not.toHaveBeenCalled();
-			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('webview message ignored'));
 		});
 
 		it('should ignore deprecated ready message', () => {
@@ -257,7 +256,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			messageHandler?.(message);
 
 			expect(mockWebview.postMessage).not.toHaveBeenCalled();
-			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('deprecated'));
+			expect(mockLogService.trace).toHaveBeenCalledWith(expect.stringContaining('webview message ignored'));
 		});
 
 		it('should log deprecation warning for unknown message types', () => {
@@ -269,7 +268,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			messageHandler?.(message);
 
 			expect(mockLogService.trace).toHaveBeenCalledWith(
-				expect.stringContaining('deprecated')
+				expect.stringContaining('webview message ignored')
 			);
 		});
 
@@ -302,13 +301,13 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 		});
 	});
 
-	describe('deprecated state synchronization', () => {
+	describe('state synchronization', () => {
 		beforeEach(() => {
 			provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
 			vi.mocked(mockWebview.postMessage).mockClear();
 		});
 
-		it('should not send state updates to webview', () => {
+		it('should send state updates to webview', () => {
 			const newState = createMockState([
 				createMockSection('1', 'Section 1'),
 				createMockSection('2', 'Section 2')
@@ -316,18 +315,28 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 
 			(mockStateManager as any)._fireStateChange(newState);
 
-			// Verify no messages are sent (deprecated functionality)
-			expect(mockWebview.postMessage).not.toHaveBeenCalled();
+			expect(mockWebview.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+				type: 'stateUpdate',
+				state: newState
+			}));
 		});
 
-		it('should not send messages for multiple state changes', () => {
+		it('should send messages for multiple state changes', () => {
 			const state1 = createMockState([createMockSection('1', 'First')]);
 			const state2 = createMockState([createMockSection('1', 'Updated')]);
 
 			(mockStateManager as any)._fireStateChange(state1);
 			(mockStateManager as any)._fireStateChange(state2);
 
-			expect(mockWebview.postMessage).not.toHaveBeenCalled();
+			expect(mockWebview.postMessage).toHaveBeenCalledTimes(2);
+			expect(mockWebview.postMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+				type: 'stateUpdate',
+				state: state1
+			}));
+			expect(mockWebview.postMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
+				type: 'stateUpdate',
+				state: state2
+			}));
 		});
 
 		it('should not send messages if view is not resolved', () => {
@@ -360,7 +369,7 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			expect(mockWebview.postMessage).not.toHaveBeenCalled();
 		});
 
-		it('should verify state changes do not trigger any webview updates', () => {
+		it('should propagate each state change to the webview', () => {
 			const states = [
 				createMockState([createMockSection('1', 'State 1')]),
 				createMockState([createMockSection('1', 'State 2'), createMockSection('2', 'State 2')]),
@@ -370,7 +379,10 @@ describe('PromptSectionVisualizerProvider - Deprecated WebView', () => {
 			states.forEach(state => {
 				vi.mocked(mockWebview.postMessage).mockClear();
 				(mockStateManager as any)._fireStateChange(state);
-				expect(mockWebview.postMessage).not.toHaveBeenCalled();
+				expect(mockWebview.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+					type: 'stateUpdate',
+					state
+				}));
 			});
 		});
 	});

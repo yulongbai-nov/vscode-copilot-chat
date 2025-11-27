@@ -7,6 +7,7 @@
 			"name": "Launch Copilot Extension",
 			"runtimeExecutable": "${execPath}",
 			"args": [
+				"--disable-extensions",
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
 			"smartStep": true,
@@ -30,6 +31,7 @@
 			"name": "Launch Copilot Extension - Watch Mode",
 			"runtimeExecutable": "${execPath}",
 			"args": [
+				"--disable-extensions",
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
 			"smartStep": true,
@@ -58,7 +60,8 @@
 
 			"attachSimplePort": 5870,
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}",
+				"--disable-extensions",
+				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
 			"smartStep": true,
 			"sourceMaps": true,
@@ -268,6 +271,7 @@
 			"name": "Launch Copilot Extension - TS Server in Debug Mode",
 			"runtimeExecutable": "${execPath}",
 			"args": [
+				"--disable-extensions",
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
 			"smartStep": true,

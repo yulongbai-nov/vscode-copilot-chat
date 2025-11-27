@@ -2203,6 +2203,13 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.promptSectionVisualizer.show",
+				"title": "Prompt Visualizer: Show",
+				"icon": "$(open-preview)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.debug.workbenchState",
 				"title": "%github.copilot.command.logWorkbenchState%",
 				"category": "Developer"
