@@ -131,7 +131,7 @@ testFamilies.forEach(family => {
 		}
 
 		test('simple case', async () => {
-			expect(await agentPromptToString(accessor, {
+			await expect(await agentPromptToString(accessor, {
 				chatVariables: new ChatVariablesCollection(),
 				history: [],
 				query: 'hello',
@@ -140,7 +140,7 @@ testFamilies.forEach(family => {
 
 		test('all tools', async () => {
 			const toolsService = accessor.get(IToolsService);
-			expect(await agentPromptToString(accessor, {
+			await expect(await agentPromptToString(accessor, {
 				chatVariables: new ChatVariablesCollection(),
 				history: [],
 				query: 'hello',
@@ -155,7 +155,7 @@ testFamilies.forEach(family => {
 		test('all non-edit tools', async () => {
 			const toolsService = accessor.get(IToolsService);
 			const editTools: Set<string> = new Set([ToolName.ApplyPatch, ToolName.EditFile, ToolName.ReplaceString, ToolName.MultiReplaceString]);
-			expect(await agentPromptToString(accessor, {
+			await expect(await agentPromptToString(accessor, {
 				chatVariables: new ChatVariablesCollection(),
 				history: [],
 				query: 'hello',
@@ -168,7 +168,7 @@ testFamilies.forEach(family => {
 		});
 
 		test('one attachment', async () => {
-			expect(await agentPromptToString(accessor, {
+			await expect(await agentPromptToString(accessor, {
 				chatVariables: new ChatVariablesCollection([{ id: 'vscode.file', name: 'file', value: fileTsUri }]),
 				history: [],
 				query: 'hello',
@@ -182,7 +182,7 @@ testFamilies.forEach(family => {
 		};
 
 		test('tool use', async () => {
-			expect(await agentPromptToString(
+			await expect(await agentPromptToString(
 				accessor,
 				{
 					chatVariables: new ChatVariablesCollection([{ id: 'vscode.file', name: 'file', value: fileTsUri }]),
@@ -197,7 +197,7 @@ testFamilies.forEach(family => {
 		});
 
 		test('cache BPs', async () => {
-			expect(await agentPromptToString(
+			await expect(await agentPromptToString(
 				accessor,
 				{
 					chatVariables: new ChatVariablesCollection([{ id: 'vscode.file', name: 'file', value: fileTsUri }]),
@@ -229,7 +229,7 @@ testFamilies.forEach(family => {
 			};
 			previousTurn.setResponse(TurnStatus.Success, { type: 'user', message: 'response' }, 'responseId', previousTurnResult);
 
-			expect(await agentPromptToString(
+			await expect(await agentPromptToString(
 				accessor,
 				{
 					chatVariables: new ChatVariablesCollection([]),
@@ -255,7 +255,7 @@ testFamilies.forEach(family => {
 
 		test('custom instructions not in system message', async () => {
 			accessor.get(IConfigurationService).setConfig(ConfigKey.CustomInstructionsInSystemMessage, false);
-			expect(await agentPromptToString(accessor, {
+			await expect(await agentPromptToString(accessor, {
 				chatVariables: new ChatVariablesCollection(),
 				history: [],
 				query: 'hello',
@@ -265,7 +265,7 @@ testFamilies.forEach(family => {
 
 		test('omit base agent instructions', async () => {
 			accessor.get(IConfigurationService).setConfig(ConfigKey.Advanced.OmitBaseAgentInstructions, true);
-			expect(await agentPromptToString(accessor, {
+			await expect(await agentPromptToString(accessor, {
 				chatVariables: new ChatVariablesCollection(),
 				history: [],
 				query: 'hello',
@@ -275,7 +275,7 @@ testFamilies.forEach(family => {
 		test('edited file events are grouped by kind', async () => {
 			const otherUri = URI.file('/workspace/other.ts');
 
-			expect((await agentPromptToString(accessor, {
+			await expect((await agentPromptToString(accessor, {
 				chatVariables: new ChatVariablesCollection(),
 				history: [],
 				query: 'hello',

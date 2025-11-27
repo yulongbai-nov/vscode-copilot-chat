@@ -305,7 +305,7 @@ function ensureContentArray(content: string | OpenAI.Responses.ResponseInputMess
 	return content;
 }
 
-function responseContentToRawContent(part: OpenAI.Responses.ResponseInputContent | OpenAI.Responses.ResponseFunctionCallOutputItem): Raw.ChatCompletionContentPart | undefined {
+function responseContentToRawContent(part: OpenAI.Responses.ResponseInputContent): Raw.ChatCompletionContentPart | undefined {
 	switch (part.type) {
 		case 'input_text':
 			return { type: Raw.ChatCompletionContentPartKind.Text, text: part.text };
@@ -337,11 +337,34 @@ function responseOutputToRawContent(part: OpenAI.Responses.ResponseOutputText | 
 	}
 }
 
-function responseFunctionOutputToRawContents(output: string | OpenAI.Responses.ResponseFunctionCallOutputItemList): Raw.ChatCompletionContentPart[] {
+type ResponseFunctionOutputItem = OpenAI.Responses.ResponseFunctionCallOutputItem | OpenAI.Responses.ResponseInputContent;
+
+function responseFunctionOutputToRawContents(output: string | ReadonlyArray<ResponseFunctionOutputItem>): Raw.ChatCompletionContentPart[] {
 	if (typeof output === 'string') {
 		return [{ type: Raw.ChatCompletionContentPartKind.Text, text: output }];
 	}
-	return coalesce(output.map(responseContentToRawContent));
+	return coalesce(output.map(normalizeFunctionCallOutputItem).map(responseContentToRawContent));
+}
+
+function normalizeFunctionCallOutputItem(item: ResponseFunctionOutputItem): OpenAI.Responses.ResponseInputContent {
+	if (item.type === 'input_image') {
+		return {
+			type: 'input_image',
+			detail: item.detail ?? 'auto',
+			file_id: item.file_id,
+			image_url: item.image_url
+		};
+	}
+	if (item.type === 'input_file') {
+		return {
+			type: 'input_file',
+			file_data: item.file_data ?? undefined,
+			file_id: item.file_id ?? undefined,
+			file_url: item.file_url ?? undefined,
+			filename: item.filename ?? undefined,
+		};
+	}
+	return item;
 }
 
 export async function processResponseFromChatEndpoint(instantiationService: IInstantiationService, telemetryService: ITelemetryService, logService: ILogService, response: Response, expectedNumChoices: number, finishCallback: FinishedCallback, telemetryData: TelemetryData): Promise<AsyncIterableObject<ChatCompletion>> {
