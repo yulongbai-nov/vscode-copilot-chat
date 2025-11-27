@@ -22,6 +22,11 @@ export const enum TelemetryEvents {
 	SectionCollapsed = 'promptSectionVisualizer.sectionCollapsed',
 	SectionExpanded = 'promptSectionVisualizer.sectionExpanded',
 
+	// View / mode events
+	VisualizerShow = 'promptSectionVisualizer.view.show',
+	VisualizerToggle = 'promptSectionVisualizer.view.toggle',
+	VisualizerModeSwitch = 'promptSectionVisualizer.mode.switch',
+
 	// Token calculation events
 	TokenCalculationSuccess = 'promptSectionVisualizer.tokenCalculation.success',
 	TokenCalculationFailure = 'promptSectionVisualizer.tokenCalculation.failure',
@@ -67,6 +72,37 @@ export class VisualizerTelemetryService extends Disposable {
 	trackVisualizerDisabled(): void {
 		this.telemetryService.sendMSFTTelemetryEvent(TelemetryEvents.VisualizerDisabled, {
 			timestamp: new Date().toISOString()
+		});
+	}
+
+	/**
+	 * Track visualizer show event by surface
+	 */
+	trackVisualizerShown(surface: 'inline' | 'standalone', sectionCount: number): void {
+		this.telemetryService.sendMSFTTelemetryEvent(TelemetryEvents.VisualizerShow, {
+			surface
+		}, {
+			sectionCount
+		});
+	}
+
+	/**
+	 * Track visualizer toggle event
+	 */
+	trackVisualizerToggled(enabled: boolean): void {
+		this.telemetryService.sendMSFTTelemetryEvent(TelemetryEvents.VisualizerToggle, {
+			enabled: String(enabled)
+		});
+	}
+
+	/**
+	 * Track render mode switch event
+	 */
+	trackModeSwitched(from: 'inline' | 'standalone', to: 'inline' | 'standalone', persisted: boolean): void {
+		this.telemetryService.sendMSFTTelemetryEvent(TelemetryEvents.VisualizerModeSwitch, {
+			from,
+			to,
+			persisted: String(persisted)
 		});
 	}
 

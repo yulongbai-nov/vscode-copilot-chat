@@ -56,6 +56,17 @@ This guide walks through the hands-on verification steps for the Prompt Section 
 4. Trigger `/visualize-prompt` with malformed tags and ensure the chat participant returns a helpful error instead of throwing.
 5. Delete a section via chat follow-up buttons and confirm the state updates in both inline and standalone modes.
 
+## Inline ↔ Panel parity checklist
+
+1. Use the prompt from `.kiro/specs/prompt-section-visualizer/standalone-renderer/inline-chat-visual-test.md` and run `/visualize-prompt` in Copilot Chat.
+2. Open the Prompt Section Visualizer panel (Command Palette: `Prompt Visualizer: Show`) while the same prompt is active.
+3. Verify that inline chat and the panel show:
+   - The same sections in the same order (including collapse state).
+   - Matching token badges and warning levels per section.
+   - The header summary with total tokens and a breakdown including **Content**, **Tags**, and **Overhead**.
+   - Identical rendered content (markdown, lists, and code blocks) for each section, accounting for chat markdown vs. webview HTML styling.
+4. If you configure pagination (`maxSections`) for the visualizer, confirm that both inline and panel surfaces emit the same **Load more** affordance and progress messages for large prompts.
+
 ## Mode switching & persistence
 
 1. Toggle `github.copilot.chat.promptSectionVisualizer.renderMode` between `inline`, `standalone`, and `auto`.

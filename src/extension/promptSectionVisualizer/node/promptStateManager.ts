@@ -11,7 +11,7 @@ import { TokenizerType } from '../../../util/common/tokenizer';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IContentRenderer, IPromptStateManager, ISectionParserService, ITokenUsageCalculator } from '../common/services';
-import { PromptSection, TokenizationEndpoint, VisualizerState } from '../common/types';
+import { PromptSection, PromptStatePatch, TokenizationEndpoint, VisualizerState } from '../common/types';
 import { ErrorHandler } from './errorHandler';
 import { VisualizerTelemetryService } from './telemetryService';
 
@@ -33,6 +33,8 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 
 	private readonly _onDidChangeState = new Emitter<VisualizerState>();
 	public readonly onDidChangeState: Event<VisualizerState> = this._onDidChangeState.event;
+	private readonly _onDidApplyPatch = new Emitter<PromptStatePatch>();
+	public readonly onDidApplyPatch: Event<PromptStatePatch> = this._onDidApplyPatch.event;
 
 	private _state: VisualizerState = {
 		sections: [],
@@ -56,6 +58,8 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 	) {
 		super();
 
+		this._register(this._onDidChangeState);
+		this._register(this._onDidApplyPatch);
 		this._errorHandler = new ErrorHandler(logService, telemetryService);
 		this._register(this._errorHandler);
 
@@ -75,6 +79,14 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 				const enabled = this._configurationService.getConfig(ConfigKey.PromptSectionVisualizerEnabled);
 				if (this._state.isEnabled !== enabled) {
 					this._state.isEnabled = enabled;
+
+					if (enabled) {
+						this._telemetryService?.trackVisualizerEnabled();
+					} else {
+						this._telemetryService?.trackVisualizerDisabled();
+					}
+					this._telemetryService?.trackVisualizerToggled(enabled);
+
 					this._fireStateChange();
 				}
 			}
@@ -121,6 +133,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 				}
 
 				this._state.sections[sectionIndex] = section;
+				this._emitPatch({ type: 'sectionUpdated', section: this._cloneSection(section) });
 				this._recalculateTokensForSection(section);
 				this._fireStateChange();
 			}
@@ -146,6 +159,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 		this._telemetryService?.trackSectionReordered(reorderedSections.length);
 
 		this._state.sections = reorderedSections;
+		this._emitPatch({ type: 'sectionsReordered', order: reorderedSections.map(section => section.id) });
 		this._fireStateChange();
 	}
 
@@ -175,16 +189,20 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 			plainTextFallback: analysis.plainTextFallback
 		} : undefined;
 
+		let insertIndex: number;
 		if (position !== undefined && position >= 0 && position < this._state.sections.length) {
 			this._state.sections.splice(position, 0, newSection);
+			insertIndex = position;
 		} else {
 			this._state.sections.push(newSection);
+			insertIndex = this._state.sections.length - 1;
 		}
 
 		// Track section addition
 		this._telemetryService?.trackSectionAdded(tagName);
 
 		this._recalculateTokensForSection(newSection);
+		this._emitPatch({ type: 'sectionAdded', section: this._cloneSection(newSection), index: insertIndex });
 		this._fireStateChange();
 	}
 
@@ -198,6 +216,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 			this._telemetryService?.trackSectionDeleted(section.tagName);
 			this._state.sections.splice(index, 1);
 			this._recalculateAllTokens();
+			this._emitPatch({ type: 'sectionRemoved', sectionId });
 			this._fireStateChange();
 		}
 	}
@@ -218,6 +237,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 			}
 
 			this._persistCollapseState();
+			this._emitPatch({ type: 'sectionCollapseToggled', sectionId, isCollapsed: section.isCollapsed });
 			this._fireStateChange();
 		}
 	}
@@ -229,6 +249,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 		const section = this._state.sections.find(s => s.id === sectionId);
 		if (section) {
 			section.isEditing = mode === 'edit';
+			this._emitPatch({ type: 'sectionModeChanged', sectionId, mode });
 			this._fireStateChange();
 		}
 	}
@@ -284,6 +305,10 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 			this._restoreCollapseState();
 
 			this._recalculateAllTokens();
+			this._emitPatch({
+				type: 'stateReset',
+				sections: this._state.sections.map(section => this._cloneSection(section))
+			});
 			this._fireStateChange();
 		} catch (error) {
 			this._errorHandler.handleStateSyncError(error as Error, 'updatePrompt');
@@ -316,6 +341,8 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 				this._recalculateTotal();
 			}
 		}
+		this._emitPatch({ type: 'sectionUpdated', section: this._cloneSection(section) });
+		this._fireStateChange();
 	}
 
 	private async _recalculateAllTokens(): Promise<void> {
@@ -378,6 +405,36 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 
 	private _fireStateChange(): void {
 		this._onDidChangeState.fire({ ...this._state });
+	}
+
+	private _emitPatch(patch: PromptStatePatch): void {
+		this._onDidApplyPatch.fire(patch);
+	}
+
+	private _cloneSection(section: PromptSection): PromptSection {
+		return {
+			...section,
+			tokenBreakdown: section.tokenBreakdown ? { ...section.tokenBreakdown } : undefined,
+			renderedContent: section.renderedContent
+				? {
+					...section.renderedContent,
+					elements: Array.isArray(section.renderedContent.elements)
+						? section.renderedContent.elements.map(element => ({ ...element }))
+						: []
+				}
+				: undefined,
+			metadata: section.metadata
+				? {
+					...section.metadata,
+					createdAt: section.metadata.createdAt ? new Date(section.metadata.createdAt) : undefined,
+					lastModified: section.metadata.lastModified ? new Date(section.metadata.lastModified) : undefined,
+					customAttributes: { ...section.metadata.customAttributes },
+					validationRules: section.metadata.validationRules
+						? section.metadata.validationRules.map(rule => ({ ...rule }))
+						: undefined
+				}
+				: undefined
+		};
 	}
 
 	/**
@@ -457,6 +514,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 		} else {
 			this._telemetryService?.trackVisualizerDisabled();
 		}
+		this._telemetryService?.trackVisualizerToggled(enabled);
 
 		await this._configurationService.setConfig(ConfigKey.PromptSectionVisualizerEnabled, enabled);
 		this._fireStateChange();

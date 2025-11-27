@@ -239,6 +239,57 @@ describe('PromptStateManager', () => {
 		});
 	});
 
+	describe('patch events', () => {
+		it('emits sectionAdded and sectionUpdated patches when adding a section', async () => {
+			const patches: any[] = [];
+			stateManager.onDidApplyPatch(patch => patches.push(patch));
+
+			stateManager.addSection('context', 'Hello world');
+
+			expect(patches.some(patch => patch.type === 'sectionAdded')).toBe(true);
+
+			// Allow async token recalculation to finish to capture sectionUpdated patch
+			await Promise.resolve();
+			expect(patches.some(patch => patch.type === 'sectionUpdated')).toBe(true);
+		});
+
+		it('emits sectionRemoved patch when removing a section', async () => {
+			stateManager.addSection('context', 'Hello world');
+			await Promise.resolve();
+
+			const patches: any[] = [];
+			stateManager.onDidApplyPatch(patch => patches.push(patch));
+
+			const sectionId = stateManager.getCurrentState().sections[0]?.id ?? '';
+			stateManager.removeSection(sectionId);
+
+			expect(patches).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ type: 'sectionRemoved', sectionId })
+				])
+			);
+		});
+
+		it('emits sectionsReordered patch when order changes', () => {
+			stateManager.addSection('context', 'First');
+			stateManager.addSection('instructions', 'Second');
+
+			const patches: any[] = [];
+			stateManager.onDidApplyPatch(patch => patches.push(patch));
+
+			const currentOrder = stateManager.getCurrentState().sections.map(section => section.id);
+			const reordered = [...currentOrder].reverse();
+
+			stateManager.reorderSections(reordered);
+
+			expect(patches).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ type: 'sectionsReordered', order: reordered })
+				])
+			);
+		});
+	});
+
 	describe('auto-collapse large sections', () => {
 		it('should auto-collapse sections exceeding token threshold', () => {
 			configValues.set(ConfigKey.PromptSectionVisualizerAutoCollapseLargeSections.fullyQualifiedId, true);

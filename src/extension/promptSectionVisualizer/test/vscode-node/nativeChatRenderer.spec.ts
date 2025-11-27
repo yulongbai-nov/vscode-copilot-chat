@@ -3,19 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
-import { IContentRenderer, ISectionParserService, ITokenUsageCalculator } from '../../common/services';
+import { IPromptSectionRenderer, PromptRendererCommandButtonPart, PromptRendererHeaderPart, PromptRendererLoadMorePart, PromptRendererPart, PromptRendererProgressPart, PromptRendererSectionPart, PromptRendererWarningPart } from '../../common/rendering/promptSectionRenderer';
 import { PromptSection, RenderOptions } from '../../common/types';
 import { NativeChatRenderer } from '../../vscode-node/nativeChatRenderer';
 
-/**
- * Mock ChatResponseStream for testing
- */
-class MockChatResponseStream {
+class MockChatResponseStream implements vscode.ChatResponseStream {
 	public markdownParts: string[] = [];
 	public warningParts: string[] = [];
-	public buttonParts: Array<{ title: string; command: string; arguments?: any[] }> = [];
+	public buttonParts: Array<{ title: string; command: string; arguments?: unknown[] }> = [];
 	public progressParts: string[] = [];
 
 	markdown(value: string | vscode.MarkdownString): void {
@@ -27,12 +24,8 @@ class MockChatResponseStream {
 	}
 
 	button(part: vscode.ChatResponseCommandButtonPart | vscode.Command): this {
-		const command = (part as vscode.ChatResponseCommandButtonPart).value ?? part as vscode.Command;
-		this.buttonParts.push({
-			title: command.title ?? '',
-			command: command.command,
-			arguments: command.arguments
-		});
+		const { title, command, arguments: args } = 'value' in part ? part.value : part;
+		this.buttonParts.push({ title: title ?? '', command, arguments: args });
 		return this;
 	}
 
@@ -40,559 +33,163 @@ class MockChatResponseStream {
 		this.progressParts.push(value);
 	}
 
-	reference(value: vscode.Uri | vscode.Location, iconPath?: vscode.ThemeIcon): void {
-		// Not used in current implementation
-	}
+	// Unused members
+	reference(): void { }
+	push(): void { }
+	anchor(): void { }
+	filetree(): void { }
+	thinkingProgress(): this { return this; }
+	textEdit(): this { return this; }
+	notebookEdit(): this { return this; }
+	externalEdit(): this { return this; }
+	confirmation(): this { return this; }
+	detectedParticipant(): void { }
+	codeblockUri(): void { }
+}
 
-	push(part: vscode.ChatResponsePart): void {
-		// Not used in current implementation
-	}
+class StubSectionRenderer implements IPromptSectionRenderer {
+	public readonly _serviceBrand: undefined;
 
-	anchor(value: vscode.Uri | vscode.Location, title?: string): void {
-		// Not used in current implementation
-	}
+	constructor(private readonly parts: PromptRendererPart[], private readonly throwOnRender = false) { }
 
-	filetree(value: vscode.ChatResponseFileTree[], baseUri: vscode.Uri): void {
-		// Not used in current implementation
-	}
-
-	thinkingProgress(value: string): this {
-		// Not used in current implementation
-		return this;
-	}
-
-	textEdit(target: vscode.Location | vscode.Uri, edits: vscode.TextEdit[] | string): this {
-		// Not used in current implementation
-		return this;
-	}
-
-	notebookEdit(target: vscode.Uri, edits: vscode.NotebookEdit): this {
-		// Not used in current implementation
-		return this;
-	}
-
-	externalEdit(target: vscode.Uri, edits: vscode.WorkspaceEdit): this {
-		// Not used in current implementation
-		return this;
-	}
-
-	confirmation(title: string, message: string, data: any, buttons?: vscode.ChatResponseConfirmationPart[]): this {
-		// Not used in current implementation
-		return this;
-	}
-
-	detectedParticipant(participant: vscode.ChatParticipantDetectionResult, command?: vscode.ChatCommand): void {
-		// Not used in current implementation
-	}
-
-	codeblockUri(uri: vscode.Uri): void {
-		// Not used in current implementation
+	renderSections(_sections: PromptSection[], _options: RenderOptions): AsyncIterable<PromptRendererPart> {
+		const parts = this.parts;
+		const throwOnRender = this.throwOnRender;
+		return (async function* () {
+			if (throwOnRender) {
+				throw new Error('Renderer failure');
+			}
+			for (const part of parts) {
+				yield part;
+			}
+		})();
 	}
 }
 
 describe('NativeChatRenderer', () => {
-	let renderer: NativeChatRenderer;
-	let mockParserService: ISectionParserService;
-	let mockTokenCalculator: ITokenUsageCalculator;
-	let mockContentRenderer: IContentRenderer;
-
-	const createMockSection = (overrides?: Partial<PromptSection>): PromptSection => ({
-		id: 'test-1',
-		tagName: 'context',
-		content: 'Test content',
-		startIndex: 0,
-		endIndex: 12,
-		tokenCount: 10,
-		isEditing: false,
-		isCollapsed: false,
-		hasRenderableElements: false,
-		...overrides
-	});
+	let stream: MockChatResponseStream;
 
 	beforeEach(() => {
-		// Create mock services
-		mockParserService = {} as any;
-		mockTokenCalculator = {} as any;
-		mockContentRenderer = {} as any;
-
-		// Create renderer instance
-		renderer = new NativeChatRenderer(
-			mockParserService,
-			mockTokenCalculator,
-			mockContentRenderer
-		);
+		stream = new MockChatResponseStream();
 	});
 
-	describe('renderSections', () => {
-		it('should render header with total token count', async () => {
-			const sections = [
-				createMockSection({ tokenCount: 50 }),
-				createMockSection({ id: 'test-2', tokenCount: 30 })
-			];
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: true,
-				enableCollapse: true,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
+	const defaultOptions: RenderOptions = {
+		showActions: true,
+		enableCollapse: true,
+		showTokenBreakdown: true,
+		mode: 'inline'
+	};
 
-			await renderer.renderSections(sections, stream as any, options);
+	const headerPart: PromptRendererHeaderPart = {
+		type: 'header',
+		title: 'Prompt Section Visualizer',
+		sectionCount: 1,
+		totalTokens: 42,
+		markdown: '## Header\n\n**Total Tokens:** `42`\n\n- Content: `30` tokens\n- Tags: `12` tokens\n- Overhead: `12` tokens\n\n',
+		tokenBreakdown: { content: 30, tags: 12, overhead: 12 }
+	};
 
-			// Check header was rendered
-			const headerMarkdown = stream.markdownParts.find(part => part.includes('Total Tokens'));
-			expect(headerMarkdown).toBeDefined();
-			expect(headerMarkdown).toContain('80'); // 50 + 30
-		});
+	const sectionPart: PromptRendererSectionPart = {
+		type: 'section',
+		id: 'sec-1',
+		index: 0,
+		tagName: 'context',
+		headerMarkdown: '### Section Header\n\n',
+		isCollapsed: false,
+		tokenCount: 42,
+		tokenBreakdown: { content: 30, tags: 12 },
+		warningLevel: 'warning',
+		hasRenderableElements: false,
+		contentText: 'Body',
+		content: 'Body'
+	};
 
-		it('should render all sections', async () => {
-			const sections = [
-				createMockSection({ id: 'test-1', tagName: 'context' }),
-				createMockSection({ id: 'test-2', tagName: 'instructions' }),
-				createMockSection({ id: 'test-3', tagName: 'examples' })
-			];
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
+	const warningPart: PromptRendererWarningPart = {
+		type: 'warning',
+		sectionId: 'sec-1',
+		level: 'warning',
+		message: 'Warning message',
+		tokenBreakdown: { content: 30, tags: 12 }
+	};
 
-			await renderer.renderSections(sections, stream as any, options);
+	const sectionCommand: PromptRendererCommandButtonPart = {
+		type: 'commandButton',
+		target: 'section',
+		title: 'Edit',
+		command: 'github.copilot.promptVisualizer.editSection',
+		arguments: ['sec-1'],
+		sectionId: 'sec-1'
+	};
 
-			// Check all section headers were rendered
-			expect(stream.markdownParts.filter(part => part.includes('<context>')).length).toBeGreaterThan(0);
-			expect(stream.markdownParts.filter(part => part.includes('<instructions>')).length).toBeGreaterThan(0);
-			expect(stream.markdownParts.filter(part => part.includes('<examples>')).length).toBeGreaterThan(0);
-		});
+	const globalCommand: PromptRendererCommandButtonPart = {
+		type: 'commandButton',
+		target: 'global',
+		title: 'Add Section',
+		command: 'github.copilot.promptVisualizer.addSection'
+	};
 
-		it('should render footer with actions when showActions is true', async () => {
-			const sections = [createMockSection()];
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: true,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
+	const loadMorePart: PromptRendererLoadMorePart = {
+		type: 'loadMore',
+		remainingCount: 2,
+		buttonTitle: 'Load 2 more sections',
+		markdown: '**2 more sections...**',
+		command: 'github.copilot.promptVisualizer.loadMore'
+	};
 
-			await renderer.renderSections(sections, stream as any, options);
+	const progressPart: PromptRendererProgressPart = {
+		type: 'progress',
+		message: 'Rendering...'
+	};
 
-			// Check footer was rendered
-			const footerMarkdown = stream.markdownParts.find(part => part.includes('Actions'));
-			expect(footerMarkdown).toBeDefined();
+	it('maps renderer parts to chat response calls', async () => {
+		const parts: PromptRendererPart[] = [
+			headerPart,
+			sectionPart,
+			warningPart,
+			sectionCommand,
+			{ type: 'divider', scope: 'section', sectionId: 'sec-1' },
+			loadMorePart,
+			progressPart,
+			globalCommand
+		];
+		const renderer = new NativeChatRenderer(new StubSectionRenderer(parts));
 
-			// Check "Add Section" button was rendered
-			const addButton = stream.buttonParts.find(btn => btn.title === 'Add Section');
-			expect(addButton).toBeDefined();
-			expect(addButton?.command).toBe('github.copilot.promptVisualizer.addSection');
-		});
+		await renderer.renderSections([], stream, defaultOptions);
 
-		it('should handle empty sections array', async () => {
-			const sections: PromptSection[] = [];
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections(sections, stream as any, options);
-
-			// Should still render header with 0 tokens
-			const headerMarkdown = stream.markdownParts.find(part => part.includes('Total Tokens'));
-			expect(headerMarkdown).toBeDefined();
-			expect(headerMarkdown).toContain('0');
-		});
-
-		it('should show progress for large prompts', async () => {
-			const sections = Array.from({ length: 15 }, (_, i) =>
-				createMockSection({ id: `test-${i}`, tagName: `section${i}` })
-			);
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections(sections, stream as any, options);
-
-			// Check progress was shown
-			expect(stream.progressParts.length).toBeGreaterThan(0);
-			expect(stream.progressParts[0]).toContain('Rendering');
-		});
-
-		it('should render "Load More" button when maxSections is set', async () => {
-			const sections = Array.from({ length: 10 }, (_, i) =>
-				createMockSection({ id: `test-${i}`, tagName: `section${i}` })
-			);
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline',
-				maxSections: 5
-			};
-
-			await renderer.renderSections(sections, stream as any, options);
-
-			// Check "Load More" button was rendered
-			const loadMoreButton = stream.buttonParts.find(btn => btn.title.includes('Load'));
-			expect(loadMoreButton).toBeDefined();
-			expect(loadMoreButton?.title).toContain('5 more sections');
-		});
-
-		it('should handle rendering errors gracefully', async () => {
-			const sections = [createMockSection()];
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			// Mock markdown to throw error on section rendering
-			const originalMarkdown = stream.markdown.bind(stream);
-			let callCount = 0;
-			stream.markdown = vi.fn((value: string | vscode.MarkdownString) => {
-				callCount++;
-				// Throw error on section header (after main header)
-				if (callCount === 2) {
-					throw new Error('Rendering error');
-				}
-				originalMarkdown(value);
-			});
-
-			// The renderer has a try-catch that catches errors during rendering
-			// It renders an error message and then re-throws
-			// However, the current implementation may not re-throw in all cases
-			// Let's verify the error handling behavior
-			try {
-				await renderer.renderSections(sections, stream as any, options);
-				// If no error is thrown, that's also acceptable behavior
-			} catch (error) {
-				// Error was thrown as expected
-				expect(error).toBeInstanceOf(Error);
-			}
-		});
+		expect(stream.markdownParts[0]).toContain('## Header');
+		expect(stream.markdownParts).toContain('### Section Header\n\n');
+		expect(stream.warningParts).toContain('Warning message');
+		expect(stream.buttonParts.find(btn => btn.title === 'Edit')).toBeDefined();
+		expect(stream.buttonParts.find(btn => btn.title === 'Load 2 more sections')).toBeDefined();
+		expect(stream.progressParts).toContain('Rendering...');
 	});
 
-	describe('section header generation', () => {
-		it('should generate header with correct token count', async () => {
-			const section = createMockSection({ tagName: 'context', tokenCount: 100 });
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: true,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
+	it('renders token breakdown including overhead in header', async () => {
+		const parts: PromptRendererPart[] = [headerPart];
+		const renderer = new NativeChatRenderer(new StubSectionRenderer(parts));
 
-			await renderer.renderSections([section], stream as any, options);
+		await renderer.renderSections([], stream, defaultOptions);
 
-			const header = stream.markdownParts.find(part => part.includes('<context>'));
-			expect(header).toBeDefined();
-			expect(header).toContain('100 tokens');
-		});
-
-		it('should show collapse icon for collapsed sections', async () => {
-			const section = createMockSection({ isCollapsed: true });
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: true,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			const header = stream.markdownParts.find(part => part.includes('<context>'));
-			expect(header).toBeDefined();
-			expect(header).toContain('▶'); // Collapsed icon
-		});
-
-		it('should show expand icon for expanded sections', async () => {
-			const section = createMockSection({ isCollapsed: false });
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: true,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			const header = stream.markdownParts.find(part => part.includes('<context>'));
-			expect(header).toBeDefined();
-			expect(header).toContain('▼'); // Expanded icon
-		});
-
-		it('should include token breakdown when showTokenBreakdown is true', async () => {
-			const section = createMockSection({
-				tokenCount: 100,
-				tokenBreakdown: { content: 80, tags: 20 }
-			});
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: true,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			const header = stream.markdownParts.find(part => part.includes('content:'));
-			expect(header).toBeDefined();
-			expect(header).toContain('80');
-			expect(header).toContain('20');
-		});
+		expect(stream.progressParts.some(p => p.includes('Content: 30 tokens'))).toBe(true);
+		expect(stream.progressParts.some(p => p.includes('Tags: 12 tokens'))).toBe(true);
+		expect(stream.progressParts.some(p => p.includes('Overhead: 12 tokens'))).toBe(true);
+		expect(stream.markdownParts.some(p => p.includes('Overhead: `12` tokens'))).toBe(true);
 	});
 
-	describe('token warning rendering', () => {
-		it('should render warning for warning level sections', async () => {
-			const section = createMockSection({
-				tokenCount: 600,
-				warningLevel: 'warning'
-			});
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
+	it('renders action heading once for multiple global commands', async () => {
+		const parts: PromptRendererPart[] = [globalCommand, { ...globalCommand, title: 'Another' }];
+		const renderer = new NativeChatRenderer(new StubSectionRenderer(parts));
 
-			await renderer.renderSections([section], stream as any, options);
+		await renderer.renderSections([], stream, defaultOptions);
 
-			expect(stream.warningParts.length).toBe(1);
-			expect(stream.warningParts[0]).toContain('Warning');
-			expect(stream.warningParts[0]).toContain('600 tokens');
-		});
-
-		it('should render warning for critical level sections', async () => {
-			const section = createMockSection({
-				tokenCount: 1200,
-				warningLevel: 'critical'
-			});
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			expect(stream.warningParts.length).toBe(1);
-			expect(stream.warningParts[0]).toContain('Critical');
-			expect(stream.warningParts[0]).toContain('1200 tokens');
-		});
-
-		it('should not render warning for normal level sections', async () => {
-			const section = createMockSection({
-				tokenCount: 100,
-				warningLevel: 'normal'
-			});
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			expect(stream.warningParts.length).toBe(0);
-		});
-
-		it('should include token breakdown in warning message', async () => {
-			const section = createMockSection({
-				tokenCount: 600,
-				warningLevel: 'warning',
-				tokenBreakdown: { content: 500, tags: 100 }
-			});
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			expect(stream.warningParts[0]).toContain('500 tokens');
-			expect(stream.warningParts[0]).toContain('100 tokens');
-		});
+		const actionHeadingCount = stream.markdownParts.filter(part => part.includes('### Actions')).length;
+		expect(actionHeadingCount).toBe(1);
 	});
 
-	describe('action button rendering', () => {
-		it('should render Edit, Delete, and Collapse buttons when showActions is true', async () => {
-			const section = createMockSection({ id: 'test-1' });
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: true,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
+	it('propagates renderer errors to the stream', async () => {
+		const renderer = new NativeChatRenderer(new StubSectionRenderer([], true));
 
-			await renderer.renderSections([section], stream as any, options);
-
-			// Check Edit button
-			const editButton = stream.buttonParts.find(btn => btn.title === 'Edit');
-			expect(editButton).toBeDefined();
-			expect(editButton?.command).toBe('github.copilot.promptVisualizer.editSection');
-			expect(editButton?.arguments).toEqual(['test-1']);
-
-			// Check Delete button
-			const deleteButton = stream.buttonParts.find(btn => btn.title === 'Delete');
-			expect(deleteButton).toBeDefined();
-			expect(deleteButton?.command).toBe('github.copilot.promptVisualizer.deleteSection');
-			expect(deleteButton?.arguments).toEqual(['test-1']);
-
-			// Check Collapse button
-			const collapseButton = stream.buttonParts.find(btn => btn.title === 'Collapse');
-			expect(collapseButton).toBeDefined();
-			expect(collapseButton?.command).toBe('github.copilot.promptVisualizer.toggleCollapse');
-			expect(collapseButton?.arguments).toEqual(['test-1']);
-		});
-
-		it('should show "Expand" button for collapsed sections', async () => {
-			const section = createMockSection({ id: 'test-1', isCollapsed: true });
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: true,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			// Collapsed sections don't render action buttons in the current implementation
-			// They only show the header with collapse/expand icon
-			// The expand button would be part of the header interaction, not a separate button
-			const header = stream.markdownParts.find(part => part.includes('▶'));
-			expect(header).toBeDefined();
-		});
-
-		it('should not render action buttons when showActions is false', async () => {
-			const section = createMockSection();
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			// Should only have "Add Section" button in footer (if any)
-			const sectionButtons = stream.buttonParts.filter(btn =>
-				btn.title === 'Edit' || btn.title === 'Delete' || btn.title === 'Collapse'
-			);
-			expect(sectionButtons.length).toBe(0);
-		});
-
-		it('should not render action buttons for collapsed sections', async () => {
-			const section = createMockSection({ isCollapsed: true });
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: true,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections([section], stream as any, options);
-
-			// Collapsed sections should not show Edit/Delete buttons
-			const editButton = stream.buttonParts.find(btn => btn.title === 'Edit');
-			expect(editButton).toBeUndefined();
-		});
-	});
-
-	describe('streaming rendering with progressive batching', () => {
-		it('should render sections in batches', async () => {
-			const sections = Array.from({ length: 12 }, (_, i) =>
-				createMockSection({ id: `test-${i}`, tagName: `section${i}` })
-			);
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections(sections, stream as any, options);
-
-			// All sections should be rendered
-			expect(stream.markdownParts.filter(part => part.includes('section')).length).toBeGreaterThan(0);
-		});
-
-		it('should update progress during batched rendering', async () => {
-			const sections = Array.from({ length: 15 }, (_, i) =>
-				createMockSection({ id: `test-${i}`, tagName: `section${i}` })
-			);
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			await renderer.renderSections(sections, stream as any, options);
-
-			// Progress should be updated multiple times
-			expect(stream.progressParts.length).toBeGreaterThan(1);
-		});
-	});
-
-	describe('error handling and recovery', () => {
-		it('should recover from section rendering errors', async () => {
-			const section = createMockSection({ content: 'Test content' });
-			const stream = new MockChatResponseStream();
-			const options: RenderOptions = {
-				showActions: false,
-				enableCollapse: false,
-				showTokenBreakdown: false,
-				mode: 'inline'
-			};
-
-			// Mock markdown to throw error for section content
-			const originalMarkdown = stream.markdown.bind(stream);
-			let callCount = 0;
-			stream.markdown = vi.fn((value: string | vscode.MarkdownString) => {
-				callCount++;
-				const strValue = typeof value === 'string' ? value : value.value;
-				// Throw error when rendering section content
-				if (callCount > 2 && strValue.includes('Test content')) {
-					throw new Error('Section rendering error');
-				}
-				originalMarkdown(value);
-			});
-
-			// Should not throw, but handle error gracefully
-			await expect(renderer.renderSections([section], stream as any, options)).rejects.toThrow();
-
-			// Error message should be rendered
-			expect(stream.markdownParts.some(part => part.includes('Error rendering'))).toBe(true);
-		});
+		await expect(renderer.renderSections([], stream, defaultOptions)).rejects.toThrow('Renderer failure');
+		expect(stream.markdownParts.some(part => part.includes('Error rendering sections'))).toBe(true);
 	});
 });
-

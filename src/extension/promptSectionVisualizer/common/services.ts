@@ -17,8 +17,23 @@ import {
 	SectionEditorOptions,
 	TokenizationEndpoint,
 	ValidationResult,
-	VisualizerState
+	VisualizerState,
+	PromptStatePatch
 } from './types';
+export {
+	IPromptSectionRenderer,
+	PromptRendererPart,
+	PromptRendererHeaderPart,
+	PromptRendererSectionPart,
+	PromptRendererWarningPart,
+	PromptRendererCommandButtonPart,
+	PromptRendererDividerPart,
+	PromptRendererLoadMorePart,
+	PromptRendererProgressPart,
+	PromptRendererEmptyStatePart,
+	TokenBreakdownSummary,
+	TokenBreakdown
+} from './rendering/promptSectionRenderer';
 
 export type SectionEditorState = Readonly<Record<string, unknown>>;
 
@@ -163,6 +178,11 @@ export interface IPromptStateManager extends IDisposable {
 	 * Event fired when state changes
 	 */
 	readonly onDidChangeState: Event<VisualizerState>;
+
+	/**
+	 * Event fired with granular patches whenever sections are mutated.
+	 */
+	readonly onDidApplyPatch: Event<PromptStatePatch>;
 
 	/**
 	 * Get current state

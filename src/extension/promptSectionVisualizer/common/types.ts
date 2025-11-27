@@ -205,3 +205,15 @@ export interface RenderOptions {
  * Options used by section editors (shape defined by concrete editor implementation).
  */
 export type SectionEditorOptions = Readonly<Record<string, unknown>>;
+
+/**
+ * Granular prompt state changes emitted by the state manager.
+ */
+export type PromptStatePatch =
+	| { type: 'sectionAdded'; section: PromptSection; index: number }
+	| { type: 'sectionUpdated'; section: PromptSection }
+	| { type: 'sectionRemoved'; sectionId: string }
+	| { type: 'sectionsReordered'; order: string[] }
+	| { type: 'sectionCollapseToggled'; sectionId: string; isCollapsed: boolean }
+	| { type: 'sectionModeChanged'; sectionId: string; mode: 'view' | 'edit' }
+	| { type: 'stateReset'; sections: PromptSection[] };

@@ -5,8 +5,10 @@
 
 import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { IFeatureFlagService, INativeChatRenderer, IPromptStateManager, IPromptVisualizerController } from '../common/services';
+import { VisualizerTelemetryService } from '../node/telemetryService';
 import { RenderOptions } from '../common/types';
 import { PromptSectionVisualizerProvider } from './promptSectionVisualizerProvider';
 
@@ -18,14 +20,20 @@ export class PromptVisualizerController extends Disposable implements IPromptVis
 	declare readonly _serviceBrand: undefined;
 	private _currentMode: 'inline' | 'standalone' = 'standalone';
 	private _provider?: PromptSectionVisualizerProvider;
+	private _telemetryService?: VisualizerTelemetryService;
 
 	constructor(
 		@ILogService private readonly _logService: ILogService,
 		@IPromptStateManager private readonly _stateManager: IPromptStateManager,
 		@INativeChatRenderer private readonly _nativeRenderer: INativeChatRenderer,
-		@IFeatureFlagService private readonly _featureFlagService: IFeatureFlagService
+		@IFeatureFlagService private readonly _featureFlagService: IFeatureFlagService,
+		@ITelemetryService telemetryService?: ITelemetryService
 	) {
 		super();
+		if (telemetryService) {
+			this._telemetryService = new VisualizerTelemetryService(telemetryService);
+			this._register(this._telemetryService);
+		}
 		this._initializeMode();
 		this._setupConfigurationListener();
 	}
@@ -116,6 +124,8 @@ export class PromptVisualizerController extends Disposable implements IPromptVis
 		try {
 			this._logService.info(`Switching mode from ${this._currentMode} to ${mode}`);
 
+			const previousMode = this._currentMode;
+
 			// Update current mode
 			this._currentMode = mode;
 
@@ -130,6 +140,8 @@ export class PromptVisualizerController extends Disposable implements IPromptVis
 			vscode.window.showInformationMessage(
 				`Prompt Visualizer mode switched to: ${mode === 'inline' ? 'Inline Chat' : 'Standalone Panel'}`
 			);
+
+			this._telemetryService?.trackModeSwitched(previousMode, mode, persist);
 		} catch (error) {
 			this._logService.error('Failed to switch mode', error);
 			vscode.window.showErrorMessage(
@@ -154,6 +166,14 @@ export class PromptVisualizerController extends Disposable implements IPromptVis
 		try {
 			this._logService.trace('Rendering in standalone mode');
 
+			if (!this._featureFlagService.isVisualizerEnabled()) {
+				this._logService.warn('PromptVisualizerController: Visualizer is disabled, skipping standalone render');
+				vscode.window.showInformationMessage(
+					'Prompt Section Visualizer is disabled. Enable it in settings to open the panel.'
+				);
+				return;
+			}
+
 			if (!this._provider) {
 				this._logService.warn('Provider not set, cannot render in standalone mode');
 				vscode.window.showWarningMessage(
@@ -167,6 +187,12 @@ export class PromptVisualizerController extends Disposable implements IPromptVis
 
 			// Get current state and update the provider
 			const state = this._stateManager.getCurrentState();
+			this._telemetryService?.trackVisualizerShown('standalone', state.sections.length);
+			if (state.sections.length === 0) {
+				vscode.window.showInformationMessage(
+					'No prompt sections found. Paste a prompt with XML-like tags in Copilot Chat, then run `/visualize-prompt`.'
+				);
+			}
 			const prompt = state.sections
 				.map(s => `<${s.tagName}>${s.content}</${s.tagName}>`)
 				.join('\n');
@@ -193,10 +219,19 @@ export class PromptVisualizerController extends Disposable implements IPromptVis
 		options?: Partial<RenderOptions>
 	): Promise<void> {
 		try {
+			if (!this._featureFlagService.isVisualizerEnabled()) {
+				this._logService.warn('PromptVisualizerController: Visualizer is disabled, skipping inline render');
+				stream.markdown(
+					'Prompt Section Visualizer is disabled. Enable it in settings to use `/visualize-prompt`.'
+				);
+				return;
+			}
+
 			this._logService.trace('Rendering in inline chat mode');
 
 			// Get current state
 			const state = this._stateManager.getCurrentState();
+			this._telemetryService?.trackVisualizerShown('inline', state.sections.length);
 
 			if (state.sections.length === 0) {
 				stream.markdown(

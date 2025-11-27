@@ -1,5 +1,7 @@
 # Implementation Plan
 
+> Standalone renderer follow-up docs now live under `.kiro/specs/prompt-section-visualizer/standalone-renderer/` (see `plan.md` for the latest roadmap).
+
 ---
 
 - [x] 1. Set up project structure and core interfaces
