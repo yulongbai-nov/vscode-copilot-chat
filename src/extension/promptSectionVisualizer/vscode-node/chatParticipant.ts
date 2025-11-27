@@ -224,11 +224,9 @@ export class PromptVisualizerChatParticipant extends Disposable {
 
 			// Provide edit button
 			stream.button({
-				value: {
-					title: 'Edit in Editor',
-					command: 'github.copilot.promptVisualizer.editSection',
-					arguments: [section.id]
-				}
+				title: 'Edit in Editor',
+				command: 'github.copilot.promptVisualizer.editSection',
+				arguments: [section.id]
 			});
 
 			stream.markdown('\n\nClick the button above to edit this section in a dedicated editor.');
@@ -283,17 +281,13 @@ export class PromptVisualizerChatParticipant extends Disposable {
 
 			// Provide follow-up actions
 			stream.button({
-				value: {
-					title: 'Visualize Updated Prompt',
-					command: 'github.copilot.promptVisualizer.visualize'
-				}
+				title: 'Visualize Updated Prompt',
+				command: 'github.copilot.promptVisualizer.visualize'
 			});
 
 			stream.button({
-				value: {
-					title: 'Undo Changes',
-					command: 'github.copilot.promptVisualizer.undo'
-				}
+				title: 'Undo Changes',
+				command: 'github.copilot.promptVisualizer.undo'
 			});
 		} catch (error) {
 			stream.markdown(`❌ Failed to update section: ${error instanceof Error ? error.message : String(error)}`);
@@ -324,18 +318,14 @@ export class PromptVisualizerChatParticipant extends Disposable {
 
 			// Provide confirmation buttons
 			stream.button({
-				value: {
-					title: 'Confirm Delete',
-					command: 'github.copilot.promptVisualizer.confirmDelete',
-					arguments: [sectionId]
-				}
+				title: 'Confirm Delete',
+				command: 'github.copilot.promptVisualizer.confirmDelete',
+				arguments: [sectionId]
 			});
 
 			stream.button({
-				value: {
-					title: 'Cancel',
-					command: 'github.copilot.promptVisualizer.cancelDelete'
-				}
+				title: 'Cancel',
+				command: 'github.copilot.promptVisualizer.cancelDelete'
 			});
 
 			// Store state for confirmation
@@ -363,17 +353,13 @@ export class PromptVisualizerChatParticipant extends Disposable {
 
 			// Provide follow-up actions
 			stream.button({
-				value: {
-					title: 'Visualize Updated Prompt',
-					command: 'github.copilot.promptVisualizer.visualize'
-				}
+				title: 'Visualize Updated Prompt',
+				command: 'github.copilot.promptVisualizer.visualize'
 			});
 
 			stream.button({
-				value: {
-					title: 'Add Another Section',
-					command: 'github.copilot.promptVisualizer.addSection'
-				}
+				title: 'Add Another Section',
+				command: 'github.copilot.promptVisualizer.addSection'
 			});
 		} catch (error) {
 			stream.markdown(`❌ Failed to add section: ${error instanceof Error ? error.message : String(error)}`);
@@ -398,24 +384,18 @@ export class PromptVisualizerChatParticipant extends Disposable {
 			stream.markdown('\n\n**What would you like to do next?**\n\n');
 
 			stream.button({
-				value: {
-					title: 'Edit a Section',
-					command: 'github.copilot.promptVisualizer.editSection'
-				}
+				title: 'Edit a Section',
+				command: 'github.copilot.promptVisualizer.editSection'
 			});
 
 			stream.button({
-				value: {
-					title: 'Add New Section',
-					command: 'github.copilot.promptVisualizer.addSection'
-				}
+				title: 'Add New Section',
+				command: 'github.copilot.promptVisualizer.addSection'
 			});
 
 			stream.button({
-				value: {
-					title: 'Delete a Section',
-					command: 'github.copilot.promptVisualizer.deleteSection'
-				}
+				title: 'Delete a Section',
+				command: 'github.copilot.promptVisualizer.deleteSection'
 			});
 		}
 	}
