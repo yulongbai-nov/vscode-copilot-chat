@@ -108,19 +108,14 @@ export class SectionEditorService extends Disposable {
 				language: options.language || 'markdown'
 			});
 
-			// Save the original state
-			this.saveEditorState(section.id, await vscode.window.showTextDocument(doc, {
-				preview: options.preview ?? true,
-				viewColumn: options.viewColumn ?? vscode.ViewColumn.Beside,
-				preserveFocus: false
-			}));
-
-			// Show the document in an editor
 			const editor = await vscode.window.showTextDocument(doc, {
 				preview: options.preview ?? true,
 				viewColumn: options.viewColumn ?? vscode.ViewColumn.Beside,
 				preserveFocus: false
 			});
+
+			// Save the original state
+			this.saveEditorState(section.id, editor);
 
 			// Restore any previous editor state
 			this.restoreEditorState(section.id, editor);
