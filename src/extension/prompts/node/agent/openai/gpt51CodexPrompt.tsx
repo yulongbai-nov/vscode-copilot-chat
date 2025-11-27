@@ -6,11 +6,14 @@
 import { PromptElement, PromptSizing } from '@vscode/prompt-tsx';
 import { IChatEndpoint } from '../../../../../platform/networking/common/networking';
 import { ToolName } from '../../../../tools/common/toolNames';
+import { GPT5CopilotIdentityRule } from '../../base/copilotIdentity';
 import { InstructionMessage } from '../../base/instructionMessage';
+import { Gpt5SafetyRule } from '../../base/safetyRules';
 import { Tag } from '../../base/tag';
 import { MathIntegrationRules } from '../../panel/editorIntegrationRules';
 import { DefaultAgentPromptProps, detectToolCapabilities } from '../defaultAgentInstructions';
-import { IAgentPrompt, PromptConstructor, PromptRegistry } from '../promptRegistry';
+import { FileLinkificationInstructions } from '../fileLinkificationInstructions';
+import { CopilotIdentityRulesConstructor, IAgentPrompt, PromptRegistry, SafetyRulesConstructor, SystemPrompt } from '../promptRegistry';
 
 /**
  * This is inspired by the Codex CLI prompt, with some custom tweaks for VS Code.
@@ -69,7 +72,8 @@ class Gpt51CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- Markdown text. Use structure only when it helps scanability.<br />
 				- Headers: optional; short Title Case (1-3 words) wrapped in **…**; no blank line before the first bullet; add only if they truly help.<br />
 				- Bullets: use - ; merge related points; keep to one line when possible; 4-6 per list ordered by importance; keep phrasing consistent.<br />
-				- Monospace: backticks for commands/paths/env vars/code ids and inline examples; use for literal keyword bullets; never combine with **.<br />
+				- Monospace: backticks for commands, env vars, and code identifiers; never combine with **.<br />
+				- File path and line number formatting rules are defined in the fileLinkification section below.<br />
 				- Code samples or multi-line snippets should be wrapped in fenced code blocks; include an info string as often as possible.<br />
 				- Structure: group related bullets; order sections general → specific → supporting; for subsections, start with a bolded keyword bullet, then items; match complexity to the task.<br />
 				- Tone: collaborative, concise, factual; present tense, active voice; self-contained; no "above/below"; parallel wording.<br />
@@ -77,10 +81,10 @@ class Gpt51CodexPrompt extends PromptElement<DefaultAgentPromptProps> {
 				- Adaptation: code explanations → precise, structured with code refs; simple tasks → lead with outcome; big changes → logical walkthrough + rationale + next actions; casual one-offs → plain sentences, no headers/bullets.
 			</Tag>
 			<Tag name='special_formatting'>
-				When referring to a filename or symbol in the user's workspace, wrap it in backticks.<br />
-				<Tag name='example'>
-					The class `Person` is in `src/models/person.ts`.
-				</Tag>
+				Use proper Markdown formatting:
+				- Wrap symbol names (classes, methods, variables) in backticks: `MyClass`, `handleClick()`<br />
+				- When mentioning files or line numbers, always follow the rules in fileLinkification section below:
+				<FileLinkificationInstructions />
 				<MathIntegrationRules />
 			</Tag>
 		</InstructionMessage>;
@@ -95,8 +99,16 @@ class Gpt51CodexResolver implements IAgentPrompt {
 		return (endpoint.family.startsWith('gpt-5.1') && endpoint.family.includes('-codex')) || (endpoint.family === 'arctic-fox');
 	}
 
-	resolvePrompt(endpoint: IChatEndpoint): PromptConstructor | undefined {
+	resolveSystemPrompt(endpoint: IChatEndpoint): SystemPrompt | undefined {
 		return Gpt51CodexPrompt;
+	}
+
+	resolveCopilotIdentityRules(endpoint: IChatEndpoint): CopilotIdentityRulesConstructor | undefined {
+		return GPT5CopilotIdentityRule;
+	}
+
+	resolveSafetyRules(endpoint: IChatEndpoint): SafetyRulesConstructor | undefined {
+		return Gpt5SafetyRule;
 	}
 }
 PromptRegistry.registerPrompt(Gpt51CodexResolver);
