@@ -13,7 +13,7 @@ import { IVSCodeExtensionContext } from '../../../platform/extContext/common/ext
 import { IGitExtensionService } from '../../../platform/git/common/gitExtensionService';
 import { IGitService } from '../../../platform/git/common/gitService';
 import { PullRequestSearchItem, SessionInfo } from '../../../platform/github/common/githubAPI';
-import { IOctoKitService, JobInfo, RemoteAgentJobPayload, RemoteAgentJobResponse } from '../../../platform/github/common/githubService';
+import { IGithubRepositoryService, IOctoKitService, JobInfo, RemoteAgentJobPayload, RemoteAgentJobResponse } from '../../../platform/github/common/githubService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { retry } from '../../../util/vs/base/common/async';
@@ -157,6 +157,7 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 	private readonly BASE_MESSAGE = vscode.l10n.t('Cloud agent works asynchronously to create a pull request with your requested changes. This chat\'s history will be summarized and appended to the pull request as context.');
 	private readonly AUTHORIZE_MESSAGE = vscode.l10n.t('Cloud agent requires elevated GitHub access to proceed.');
 	private readonly COMMIT_MESSAGE = vscode.l10n.t('This workspace has uncommitted changes. Should these changes be pushed and included in cloud agent\'s work?');
+	private readonly NON_DEFAULT_BRANCH_MESSAGE = (baseBranch: string) => vscode.l10n.t('Cloud agent will start working from the checked out branch \'{0}\'.', baseBranch);
 
 	// Workspace storage keys
 	private readonly WORKSPACE_CONTEXT_PREFIX = 'copilot.cloudAgent';
@@ -172,6 +173,7 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IGithubRepositoryService private readonly _githubRepositoryService: IGithubRepositoryService,
 	) {
 		super();
 		this._summarizer = instantiationService.createInstance(ChatSummarizerProvider);
@@ -288,7 +290,7 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 		try {
 			const customAgents = await this._octoKitService.getCustomAgents(repoId.org, repoId.repo, { excludeInvalidConfig: true });
 			const agentItems: vscode.ChatSessionProviderOptionItem[] = [
-				{ id: DEFAULT_AGENT_ID, name: vscode.l10n.t('Default Agent') },
+				{ id: DEFAULT_AGENT_ID, name: vscode.l10n.t('Agent') },
 				...customAgents.map(agent => ({
 					id: agent.name,
 					name: agent.display_name || agent.name
@@ -653,16 +655,16 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 		let descriptionText: string;
 		switch (pr.state) {
 			case 'failed':
-				descriptionText = vscode.l10n.t('$(git-pull-request) Failed in PR {0}', `#${pr.number}`);
+				descriptionText = vscode.l10n.t('$(git-pull-request) Failed in {0}', `#${pr.number}`);
 				break;
 			case 'in_progress':
-				descriptionText = vscode.l10n.t('$(git-pull-request) In progress in PR {0}', `#${pr.number}`);
+				descriptionText = vscode.l10n.t('$(git-pull-request) In progress in {0}', `#${pr.number}`);
 				break;
 			case 'queued':
-				descriptionText = vscode.l10n.t('$(git-pull-request) Queued in PR {0}', `#${pr.number}`);
+				descriptionText = vscode.l10n.t('$(git-pull-request) Queued in {0}', `#${pr.number}`);
 				break;
 			default:
-				descriptionText = vscode.l10n.t('$(git-pull-request) Finished in PR {0}', `#${pr.number}`);
+				descriptionText = vscode.l10n.t('$(git-pull-request) {0}', `#${pr.number}`);
 				break;
 		}
 
@@ -789,10 +791,8 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 			});
 		} else {
 			// Delegated flow
-			const card = new vscode.ChatResponsePullRequestPart(uri, pullRequest.title, pullRequest.body, getAuthorDisplayName(pullRequest.author), `#${pullRequest.number}`);
-			stream.push(card);
-			stream.markdown(vscode.l10n.t('GitHub Copilot cloud agent has begun working on your request. Follow its progress in the associated chat and pull request.'));
-			await vscode.commands.executeCommand('vscode.open', sessionUri);
+			// NOTE: VS Code will now close the parent/source chat in most cases.
+			stream.markdown(vscode.l10n.t('GitHub Copilot cloud agent has begun working on your request. Follow its progress in the Agents View and associated pull request.'));
 		}
 
 		// Return this for external callers, eg: CLI
@@ -896,6 +896,27 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 	}
 
 	/**
+	 * Returns the base branch name if it differs from the default branch, otherwise returns undefined.
+	 */
+	private async getNonDefaultBranchInfo(): Promise<string | undefined> {
+		try {
+			const repoId = await getRepoId(this._gitService);
+			if (!repoId) {
+				return undefined;
+			}
+			const { baseRef } = await this.gitOperationsManager.repoInfo();
+			const repoInfo = await this._githubRepositoryService.getRepositoryInfo(repoId.org, repoId.repo);
+			if (repoInfo.default_branch && baseRef !== repoInfo.default_branch) {
+				return baseRef;
+			}
+			return undefined;
+		} catch (error) {
+			this.logService.debug(`Failed to check default branch: ${error}`);
+			return undefined;
+		}
+	}
+
+	/**
 	 * Returns either all the data for a confirmation dialog, or undefined if no confirmation is needed.
 	 * */
 	private async buildConfirmation(context: vscode.ChatContext): Promise<{ title: string; message: string; buttons: string[] } | undefined> {
@@ -905,6 +926,7 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 
 		const needsPermissiveAuth = !this._authenticationService.permissiveGitHubSession;
 		const hasUncommittedChanges = await this.detectedUncommittedChanges();
+		const nonDefaultBranch = await this.getNonDefaultBranchInfo();
 
 		if (needsPermissiveAuth && hasUncommittedChanges) {
 			message += '\n\n' + this.AUTHORIZE_MESSAGE;
@@ -926,7 +948,15 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 			);
 		}
 
-		if (buttons.length === 1) {
+		if (nonDefaultBranch) {
+			message += '\n\n' + this.NON_DEFAULT_BRANCH_MESSAGE(nonDefaultBranch);
+		}
+
+		// Check if the message has been modified from the default
+		const messageModified = message !== this.BASE_MESSAGE;
+
+		// Only skip confirmation if neither buttons were modified nor message was modified
+		if (buttons.length === 1 && !messageModified) {
 			if (context.chatSessionContext?.isUntitled) {
 				return; // Don't show the confirmation
 			}
@@ -934,6 +964,9 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 			if (seenDelegationPromptBefore) {
 				return; // Don't show the confirmation
 			}
+		}
+
+		if (buttons.length === 1) {
 			// No other affirmative button added, so add generic one
 			buttons.unshift(this.DELEGATE);
 		}
