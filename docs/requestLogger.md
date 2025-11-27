@@ -324,10 +324,10 @@ flowchart TB
 
     subgraph Virtual Document Scheme
         URI[ccreq: scheme]
-        URI --> |latest.copilotmd| LatestMD[Latest Markdown]
-        URI --> |{id}.copilotmd| SpecificMD[Specific Markdown]
-        URI --> |{id}.json| SpecificJSON[Specific JSON]
-        URI --> |{id}.request.json| RawBody[Raw Request Body]
+        URI --> |"latest.copilotmd"| LatestMD[Latest Markdown]
+        URI --> |"{id}.copilotmd"| SpecificMD[Specific Markdown]
+        URI --> |"{id}.json"| SpecificJSON[Specific JSON]
+        URI --> |"{id}.request.json"| RawBody[Raw Request Body]
     end
 ```
 
