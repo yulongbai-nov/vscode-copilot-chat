@@ -9,7 +9,7 @@ import { IPromptSectionRenderer, PromptRendererCommandButtonPart, PromptRenderer
 import { PromptSection, RenderOptions } from '../../common/types';
 import { NativeChatRenderer } from '../../vscode-node/nativeChatRenderer';
 
-class MockChatResponseStream implements vscode.ChatResponseStream {
+class MockChatResponseStream {
 	public markdownParts: string[] = [];
 	public warningParts: string[] = [];
 	public buttonParts: Array<{ title: string; command: string; arguments?: unknown[] }> = [];
@@ -33,7 +33,7 @@ class MockChatResponseStream implements vscode.ChatResponseStream {
 		this.progressParts.push(value);
 	}
 
-	// Unused members
+	// Unused members for these tests
 	reference(): void { }
 	push(): void { }
 	anchor(): void { }
@@ -154,7 +154,7 @@ describe('NativeChatRenderer', () => {
 		];
 		const renderer = new NativeChatRenderer(new StubSectionRenderer(parts));
 
-		await renderer.renderSections([], stream, defaultOptions);
+		await renderer.renderSections([], stream as unknown as vscode.ChatResponseStream, defaultOptions);
 
 		expect(stream.markdownParts[0]).toContain('## Header');
 		expect(stream.markdownParts).toContain('### Section Header\n\n');
@@ -168,7 +168,7 @@ describe('NativeChatRenderer', () => {
 		const parts: PromptRendererPart[] = [headerPart];
 		const renderer = new NativeChatRenderer(new StubSectionRenderer(parts));
 
-		await renderer.renderSections([], stream, defaultOptions);
+		await renderer.renderSections([], stream as unknown as vscode.ChatResponseStream, defaultOptions);
 
 		expect(stream.progressParts.some(p => p.includes('Content: 30 tokens'))).toBe(true);
 		expect(stream.progressParts.some(p => p.includes('Tags: 12 tokens'))).toBe(true);
@@ -180,7 +180,7 @@ describe('NativeChatRenderer', () => {
 		const parts: PromptRendererPart[] = [globalCommand, { ...globalCommand, title: 'Another' }];
 		const renderer = new NativeChatRenderer(new StubSectionRenderer(parts));
 
-		await renderer.renderSections([], stream, defaultOptions);
+		await renderer.renderSections([], stream as unknown as vscode.ChatResponseStream, defaultOptions);
 
 		const actionHeadingCount = stream.markdownParts.filter(part => part.includes('### Actions')).length;
 		expect(actionHeadingCount).toBe(1);
@@ -189,7 +189,7 @@ describe('NativeChatRenderer', () => {
 	it('propagates renderer errors to the stream', async () => {
 		const renderer = new NativeChatRenderer(new StubSectionRenderer([], true));
 
-		await expect(renderer.renderSections([], stream, defaultOptions)).rejects.toThrow('Renderer failure');
+		await expect(renderer.renderSections([], stream as unknown as vscode.ChatResponseStream, defaultOptions)).rejects.toThrow('Renderer failure');
 		expect(stream.markdownParts.some(part => part.includes('Error rendering sections'))).toBe(true);
 	});
 });
