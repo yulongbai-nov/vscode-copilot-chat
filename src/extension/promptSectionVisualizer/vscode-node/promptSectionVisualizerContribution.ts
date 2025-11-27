@@ -220,12 +220,32 @@ export class PromptSectionVisualizerContribution implements IExtensionContributi
 			}
 		);
 
+		const showCommand = vscode.commands.registerCommand(
+			'github.copilot.promptSectionVisualizer.show',
+			async () => {
+				try {
+					await vscode.commands.executeCommand('github.copilot.promptSectionVisualizer.focus');
+					if (this._controller) {
+						await this._controller.renderStandalone();
+					} else {
+						this._logService.warn('Prompt Visualizer controller not initialized.');
+					}
+				} catch (error) {
+					this._logService.error('Failed to show Prompt Section Visualizer', error);
+					vscode.window.showErrorMessage(
+						`Failed to show Prompt Section Visualizer: ${error instanceof Error ? error.message : String(error)}`
+					);
+				}
+			}
+		);
+
 		// Register section action commands
 		this._registerSectionActionCommands();
 
 		this._disposables.add(switchModeCommand);
 		this._disposables.add(toggleCommand);
 		this._disposables.add(refreshCommand);
+		this._disposables.add(showCommand);
 
 		// Initialize context based on current configuration
 		const config = vscode.workspace.getConfiguration('github.copilot.chat');
