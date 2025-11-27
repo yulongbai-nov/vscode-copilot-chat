@@ -7,7 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../../platform/log/common/logService';
-import { Emitter } from '../../../../util/vs/base/common/event';
+import { Emitter, Event } from '../../../../util/vs/base/common/event';
+import { IChatMLFetcher } from '../../../../platform/chat/common/chatMLFetcher';
+import { Raw } from '@vscode/prompt-tsx';
 import { IContentRenderer, ISectionParserService, ITokenUsageCalculator } from '../../common/services';
 import { ParseResult, PromptSection, TokenizationEndpoint } from '../../common/types';
 import { PromptStateManager } from '../../node/promptStateManager';
@@ -23,6 +25,8 @@ describe('PromptStateManager', () => {
 	let workspaceState: Map<string, any>;
 	let configValues: Map<string, any>;
 	let onLanguageModelChangeEmitter: Emitter<TokenizationEndpoint>;
+	let onDidMakeChatMLRequestEmitter: Emitter<{ messages?: Raw.ChatMessage[] }>;
+	let mockChatMLFetcher: IChatMLFetcher;
 
 	const createMockSection = (id: string, tagName: string, content: string): PromptSection => ({
 		id,
@@ -99,6 +103,15 @@ describe('PromptStateManager', () => {
 			onLanguageModelChange: onLanguageModelChangeEmitter.event
 		} as any;
 
+		// Create mock chat ML fetcher
+		onDidMakeChatMLRequestEmitter = new Emitter<{ messages?: Raw.ChatMessage[] }>();
+		mockChatMLFetcher = {
+			_serviceBrand: undefined as any,
+			onDidMakeChatMLRequest: onDidMakeChatMLRequestEmitter.event as Event<{ model: string; source?: any; tokenCount?: number }>,
+			fetchOne: vi.fn(),
+			fetchMany: vi.fn()
+		};
+
 		// Create mock content renderer
 		mockContentRenderer = {
 			detectRenderableElements: vi.fn().mockReturnValue([]),
@@ -127,6 +140,7 @@ describe('PromptStateManager', () => {
 			mockContentRenderer,
 			mockExtensionContext,
 			mockConfigurationService,
+			mockChatMLFetcher,
 			mockLogService
 		);
 	});
@@ -146,6 +160,7 @@ describe('PromptStateManager', () => {
 				mockContentRenderer,
 				mockExtensionContext,
 				mockConfigurationService,
+				mockChatMLFetcher,
 				mockLogService
 			);
 

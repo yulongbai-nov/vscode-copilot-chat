@@ -7,6 +7,8 @@ import { ConfigKey, IConfigurationService } from '../../../platform/configuratio
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
+import { IChatMLFetcher } from '../../../platform/chat/common/chatMLFetcher';
+import { getTextPart } from '../../../platform/chat/common/globalStringUtils';
 import { TokenizerType } from '../../../util/common/tokenizer';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
@@ -14,6 +16,7 @@ import { IContentRenderer, IPromptStateManager, ISectionParserService, ITokenUsa
 import { PromptSection, PromptStatePatch, TokenizationEndpoint, VisualizerState } from '../common/types';
 import { ErrorHandler } from './errorHandler';
 import { VisualizerTelemetryService } from './telemetryService';
+import { Raw } from '@vscode/prompt-tsx';
 
 // Storage keys for workspace state
 const COLLAPSE_STATE_KEY = 'promptSectionVisualizer.collapseState';
@@ -53,6 +56,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 		@IContentRenderer private readonly _contentRenderer: IContentRenderer,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
+		@IChatMLFetcher chatMLFetcher: IChatMLFetcher,
 		@ILogService logService: ILogService,
 		@ITelemetryService telemetryService?: ITelemetryService
 	) {
@@ -71,6 +75,11 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 		// Listen to token calculator changes
 		this._register(this._tokenCalculator.onLanguageModelChange(endpoint => {
 			this._recalculateTokens(endpoint);
+		}));
+
+		// Listen to ChatML requests to use the actual LLM prompt as the visualizer source.
+		this._register(chatMLFetcher.onDidMakeChatMLRequest(event => {
+			this._updateFromChatRequest(event as unknown as { messages?: Raw.ChatMessage[] });
 		}));
 
 		// Listen to configuration changes
@@ -525,5 +534,33 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 	 */
 	isEnabled(): boolean {
 		return this._state.isEnabled;
+	}
+
+	private async _updateFromChatRequest(event: { messages?: Raw.ChatMessage[] } | undefined): Promise<void> {
+		if (!event || !Array.isArray(event.messages) || event.messages.length === 0) {
+			return;
+		}
+
+		if (!this._state.isEnabled) {
+			return;
+		}
+
+		try {
+			const userMessages = event.messages.filter(message => message.role === Raw.ChatRole.User);
+			const lastUserMessage = userMessages[userMessages.length - 1];
+
+			if (!lastUserMessage) {
+				return;
+			}
+
+			const promptText = getTextPart(lastUserMessage.content);
+			if (!promptText || !promptText.trim()) {
+				return;
+			}
+
+			await this.updatePrompt(promptText);
+		} catch (error) {
+			this._errorHandler.handleStateSyncError(error as Error, 'updateFromChatRequest');
+		}
 	}
 }
