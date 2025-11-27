@@ -24,6 +24,13 @@ This guide walks through the hands-on verification steps for the Prompt Section 
    </examples>
    ```
 
+## Quick usage (inline chat)
+
+1. Open Copilot Chat (`View › GitHub Copilot › Chat`).
+2. Paste or type the structured prompt (the XML block above or any prompt that uses `<tag>...</tag>` sections). The visualizer only works when at least one tagged section is present.
+3. Run `/visualize-prompt` in the same message. You can either keep the XML in the box when you send the command or type `/visualize-prompt` and immediately paste the XML on the next line.
+4. The inline visualizer streams the sections with token counts, warnings, and action buttons. Use `/edit-section <tag>` for follow-up edits or re-run `/visualize-prompt` after changing the prompt text.
+
 ## Standalone mode checklist
 
 1. From the Command Palette, run `Prompt Visualizer: Show` (or open the dedicated view).

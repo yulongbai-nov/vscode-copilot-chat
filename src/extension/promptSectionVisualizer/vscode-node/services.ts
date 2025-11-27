@@ -10,6 +10,7 @@ import {
 	IFeatureFlagService,
 	INativeChatRenderer,
 	IPromptStateManager,
+	IPromptVisualizerController,
 	IPromptVisualizerChatParticipant,
 	ISectionEditorService,
 	ISectionParserService,
@@ -23,6 +24,7 @@ import { PromptVisualizerChatParticipant } from './chatParticipant';
 import { FeatureFlagService } from './featureFlagService';
 import { NativeChatRenderer } from './nativeChatRenderer';
 import { SectionEditorService } from './sectionEditorService';
+import { PromptVisualizerController } from './controller';
 
 /**
  * Register all prompt section visualizer services
@@ -37,4 +39,5 @@ export function registerPromptSectionVisualizerServices(builder: IInstantiationS
 	builder.define(INativeChatRenderer, new SyncDescriptor(NativeChatRenderer));
 	builder.define(IPromptVisualizerChatParticipant, new SyncDescriptor(PromptVisualizerChatParticipant));
 	builder.define(ISectionEditorService, new SyncDescriptor(SectionEditorService));
+	builder.define(IPromptVisualizerController, new SyncDescriptor(PromptVisualizerController));
 }

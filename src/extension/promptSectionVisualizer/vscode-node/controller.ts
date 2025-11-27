@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
-import { IFeatureFlagService, INativeChatRenderer, IPromptStateManager } from '../common/services';
+import { IFeatureFlagService, INativeChatRenderer, IPromptStateManager, IPromptVisualizerController } from '../common/services';
 import { RenderOptions } from '../common/types';
 import { PromptSectionVisualizerProvider } from './promptSectionVisualizerProvider';
 
@@ -14,7 +14,8 @@ import { PromptSectionVisualizerProvider } from './promptSectionVisualizerProvid
  * Controller that manages hybrid mode support for the Prompt Section Visualizer
  * Handles mode detection and switching between inline chat and standalone webview modes
  */
-export class PromptVisualizerController extends Disposable {
+export class PromptVisualizerController extends Disposable implements IPromptVisualizerController {
+	declare readonly _serviceBrand: undefined;
 	private _currentMode: 'inline' | 'standalone' = 'standalone';
 	private _provider?: PromptSectionVisualizerProvider;
 
@@ -120,7 +121,7 @@ export class PromptVisualizerController extends Disposable {
 
 			// Persist to configuration if requested
 			if (persist) {
-				const config = vscode.workspace.getConfiguration('github.copilot.promptVisualizer');
+				const config = vscode.workspace.getConfiguration('github.copilot.chat.promptSectionVisualizer');
 				await config.update('renderMode', mode, vscode.ConfigurationTarget.Global);
 				this._logService.info(`Mode persisted to configuration: ${mode}`);
 			}

@@ -1429,6 +1429,30 @@
 				]
 			},
 			{
+				"id": "github.copilot.promptVisualizer",
+				"name": "PromptVisualizer",
+				"fullName": "Prompt Section Visualizer",
+				"description": "Visualize and edit structured prompt sections inline in chat or in the Prompt Section Visualizer panel.",
+				"locations": [
+					"panel"
+				],
+				"modes": [
+					"ask"
+				],
+				"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled",
+				"isDefault": false,
+				"commands": [
+					{
+						"name": "visualize-prompt",
+						"description": "Render XML-tagged prompt sections with token counts."
+					},
+					{
+						"name": "edit-section",
+						"description": "Edit a specific prompt section by tag name or index."
+					}
+				]
+			},
+			{
 				"id": "github.copilot.editor",
 				"name": "Copilot",
 				"fullName": "GitHub Copilot",
@@ -4918,6 +4942,14 @@
 					"name": "GitHub Copilot Agents",
 					"when": "chatEntitlementSignedOut || !chatIsEnabled",
 					"icon": "$(copilot)"
+				}
+			],
+			"workbench.panel.chat": [
+				{
+					"id": "github.copilot.promptSectionVisualizer",
+					"name": "Prompt Section Visualizer",
+					"type": "webview",
+					"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled"
 				}
 			]
 		},
