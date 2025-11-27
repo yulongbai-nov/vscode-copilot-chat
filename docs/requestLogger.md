@@ -116,7 +116,7 @@ classDiagram
     class LoggedInfo {
         <<union>>
     }
-    
+
     class ILoggedElementInfo {
         +kind: LoggedInfoKind.Element
         +id: string
@@ -222,12 +222,12 @@ sequenceDiagram
     ChatMLFetcher->>IRequestLogger: logChatRequest(debugName, endpoint, params)
     IRequestLogger->>PendingLoggedChatRequest: Create pending request
     IRequestLogger-->>ChatMLFetcher: Return PendingLoggedChatRequest
-    
+
     ChatMLFetcher->>AI Model: Fetch response (streaming)
     AI Model-->>ChatMLFetcher: First token
     ChatMLFetcher->>PendingLoggedChatRequest: markTimeToFirstToken(time)
     AI Model-->>ChatMLFetcher: Response complete
-    
+
     ChatMLFetcher->>PendingLoggedChatRequest: resolve(result, deltas)
     PendingLoggedChatRequest->>IRequestLogger: addEntry(LoggedRequest)
     IRequestLogger->>IRequestLogger: Fire onDidChangeRequests
@@ -247,13 +247,13 @@ sequenceDiagram
     ToolCallingLoop->>IRequestLogger: enableWorkspaceEditTracing()
     ToolCallingLoop->>Tool: Execute tool(args)
     Tool-->>ToolCallingLoop: Return result
-    
+
     ToolCallingLoop->>IRequestLogger: logToolCall(id, name, args, response, thinking)
     IRequestLogger->>WorkspaceEditRecorder: getEditsAndReset()
     WorkspaceEditRecorder-->>IRequestLogger: Return recorded edits
     IRequestLogger->>IRequestLogger: Create LoggedToolCall entry
     IRequestLogger->>IRequestLogger: Fire onDidChangeRequests
-    
+
     ToolCallingLoop->>IRequestLogger: disableWorkspaceEditTracing()
 ```
 
@@ -269,9 +269,9 @@ sequenceDiagram
 
     Intent->>IRequestLogger: captureInvocation(CapturingToken, async function)
     IRequestLogger->>AsyncLocalStorage: run(token, function)
-    
+
     Note over AsyncLocalStorage: Context set for this async call tree
-    
+
     AsyncLocalStorage->>ChatMLFetcher: Execute fetch operations
     ChatMLFetcher->>IRequestLogger: logChatRequest()
     IRequestLogger->>AsyncLocalStorage: getStore()
@@ -309,7 +309,7 @@ flowchart TB
     subgraph Output Consumers
         Event --> TDP[TreeDataProvider]
         Event --> VDP[TextDocumentContentProvider]
-        
+
         TDP --> TV[Tree View UI]
         VDP --> MD[Markdown View]
         VDP --> JSON[JSON View]
@@ -398,7 +398,7 @@ export interface IRequestLogger {
     /**
      * Captures an invocation context, allowing all nested requests
      * to be associated with a single user action.
-     * 
+     *
      * @param request - Token identifying the user action
      * @param fn - Async function to execute within this context
      */
@@ -408,10 +408,10 @@ export interface IRequestLogger {
      * Logs a tool call with its arguments and response.
      */
     logToolCall(
-        id: string, 
-        name: string, 
-        args: unknown, 
-        response: LanguageModelToolResult2, 
+        id: string,
+        name: string,
+        args: unknown,
+        response: LanguageModelToolResult2,
         thinking?: ThinkingData
     ): void;
 
@@ -419,8 +419,8 @@ export interface IRequestLogger {
      * Logs a model list API call.
      */
     logModelListCall(
-        requestId: string, 
-        requestMetadata: RequestMetadata, 
+        requestId: string,
+        requestMetadata: RequestMetadata,
         models: IModelAPIResponse[]
     ): void;
 
@@ -428,8 +428,8 @@ export interface IRequestLogger {
      * Logs a chat request and returns a pending request handle.
      */
     logChatRequest(
-        debugName: string, 
-        chatEndpoint: IChatEndpointLogInfo, 
+        debugName: string,
+        chatEndpoint: IChatEndpointLogInfo,
         chatParams: ILoggedPendingRequest
     ): PendingLoggedChatRequest;
 
@@ -437,9 +437,9 @@ export interface IRequestLogger {
      * Adds a prompt rendering trace (HTML visualization).
      */
     addPromptTrace(
-        elementName: string, 
-        endpoint: IChatEndpointInfo, 
-        result: RenderPromptResult, 
+        elementName: string,
+        endpoint: IChatEndpointInfo,
+        result: RenderPromptResult,
         trace: HTMLTracer
     ): void;
 
@@ -585,7 +585,7 @@ class MyFeature {
 
     async handleUserRequest(userQuery: string) {
         const token = new CapturingToken(userQuery, 'comment');
-        
+
         return this._requestLogger.captureInvocation(token, async () => {
             // All requests made within this function will be grouped
             // under this capturing token in the debug tree view
