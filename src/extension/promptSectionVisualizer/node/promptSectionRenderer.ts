@@ -168,7 +168,7 @@ export class PromptSectionRenderer implements IPromptSectionRenderer {
 			type: 'commandButton',
 			target: 'section',
 			title: 'Edit',
-			command: 'github.copilot.promptVisualizer.editSection',
+			command: 'github.copilot.promptSectionVisualizer.editSection',
 			arguments: [sectionId],
 			sectionId
 		};
@@ -177,7 +177,7 @@ export class PromptSectionRenderer implements IPromptSectionRenderer {
 			type: 'commandButton',
 			target: 'section',
 			title: 'Delete',
-			command: 'github.copilot.promptVisualizer.deleteSection',
+			command: 'github.copilot.promptSectionVisualizer.deleteSection',
 			arguments: [sectionId],
 			sectionId
 		};
@@ -186,7 +186,7 @@ export class PromptSectionRenderer implements IPromptSectionRenderer {
 			type: 'commandButton',
 			target: 'section',
 			title: isCollapsed ? 'Expand' : 'Collapse',
-			command: 'github.copilot.promptVisualizer.toggleCollapse',
+			command: 'github.copilot.promptSectionVisualizer.toggleCollapse',
 			arguments: [sectionId],
 			sectionId
 		};
@@ -206,7 +206,7 @@ export class PromptSectionRenderer implements IPromptSectionRenderer {
 			remainingCount,
 			buttonTitle: `Load ${remainingCount} more sections`,
 			markdown: `**${remainingCount} more sections...**`,
-			command: 'github.copilot.promptVisualizer.loadMore'
+			command: 'github.copilot.promptSectionVisualizer.loadMore'
 		};
 	}
 
@@ -215,7 +215,7 @@ export class PromptSectionRenderer implements IPromptSectionRenderer {
 			type: 'commandButton',
 			target: 'global',
 			title: 'Add Section',
-			command: 'github.copilot.promptVisualizer.addSection'
+			command: 'github.copilot.promptSectionVisualizer.addSection'
 		};
 	}
 

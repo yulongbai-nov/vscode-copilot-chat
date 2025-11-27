@@ -116,7 +116,7 @@ describe('NativeChatRenderer', () => {
 		type: 'commandButton',
 		target: 'section',
 		title: 'Edit',
-		command: 'github.copilot.promptVisualizer.editSection',
+		command: 'github.copilot.promptSectionVisualizer.editSection',
 		arguments: ['sec-1'],
 		sectionId: 'sec-1'
 	};
@@ -125,7 +125,7 @@ describe('NativeChatRenderer', () => {
 		type: 'commandButton',
 		target: 'global',
 		title: 'Add Section',
-		command: 'github.copilot.promptVisualizer.addSection'
+		command: 'github.copilot.promptSectionVisualizer.addSection'
 	};
 
 	const loadMorePart: PromptRendererLoadMorePart = {
@@ -133,7 +133,7 @@ describe('NativeChatRenderer', () => {
 		remainingCount: 2,
 		buttonTitle: 'Load 2 more sections',
 		markdown: '**2 more sections...**',
-		command: 'github.copilot.promptVisualizer.loadMore'
+		command: 'github.copilot.promptSectionVisualizer.loadMore'
 	};
 
 	const progressPart: PromptRendererProgressPart = {

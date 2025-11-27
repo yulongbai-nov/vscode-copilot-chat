@@ -282,7 +282,7 @@ export class PromptVisualizerChatParticipant extends Disposable {
 			// Provide follow-up actions
 			stream.button({
 				title: 'Visualize Updated Prompt',
-				command: 'github.copilot.promptVisualizer.visualize'
+				command: 'github.copilot.promptSectionVisualizer.show'
 			});
 
 			stream.button({
@@ -319,7 +319,7 @@ export class PromptVisualizerChatParticipant extends Disposable {
 			// Provide confirmation buttons
 			stream.button({
 				title: 'Confirm Delete',
-				command: 'github.copilot.promptVisualizer.confirmDelete',
+				command: 'github.copilot.promptSectionVisualizer.deleteSection',
 				arguments: [sectionId]
 			});
 
@@ -354,12 +354,12 @@ export class PromptVisualizerChatParticipant extends Disposable {
 			// Provide follow-up actions
 			stream.button({
 				title: 'Visualize Updated Prompt',
-				command: 'github.copilot.promptVisualizer.visualize'
+				command: 'github.copilot.promptSectionVisualizer.show'
 			});
 
 			stream.button({
 				title: 'Add Another Section',
-				command: 'github.copilot.promptVisualizer.addSection'
+				command: 'github.copilot.promptSectionVisualizer.addSection'
 			});
 		} catch (error) {
 			stream.markdown(`❌ Failed to add section: ${error instanceof Error ? error.message : String(error)}`);
@@ -385,17 +385,17 @@ export class PromptVisualizerChatParticipant extends Disposable {
 
 			stream.button({
 				title: 'Edit a Section',
-				command: 'github.copilot.promptVisualizer.editSection'
+				command: 'github.copilot.promptSectionVisualizer.editSection'
 			});
 
 			stream.button({
 				title: 'Add New Section',
-				command: 'github.copilot.promptVisualizer.addSection'
+				command: 'github.copilot.promptSectionVisualizer.addSection'
 			});
 
 			stream.button({
 				title: 'Delete a Section',
-				command: 'github.copilot.promptVisualizer.deleteSection'
+				command: 'github.copilot.promptSectionVisualizer.deleteSection'
 			});
 		}
 	}
