@@ -1,15 +1,3 @@
-f390091f remove .lfsconfig
-2ef10235 tests: await snapshot matchers (#49)
-f210d7c2 prompt-visualizer: tighten typing (#48)
-8435119b docs: document disabled LFS hydration
-386ae095 config: fix prompt visualizer settings
-4f56fc99 tools: remove runSubagent import
-ffb00319 docs: record pointer-only cache workflow
-c2e0553b chore(cache): stop tracking simulation cache blobs
-5125bc05 fix: Document pointer-only workflow for Git LFS in simulation cache guide and sync script
-050b52cb promptSectionVisualizer: accept vscode.Command in mock stream; add render mode configs
-053cc5ee endpoint: fix responses api typings
-02cbc40c endpoint: fix responses api typings
 2e2b7e5d docs: clarify simulation cache prune helper usage and add fallback tsx invocation; remove handoff.md
 279b1d36 docs: capture simulation cache maintenance plan
 dd07b90d chore: add simulation cache pruning helper

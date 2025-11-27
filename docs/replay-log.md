@@ -16,6 +16,15 @@
 | `0edde636` | docs: add chat-api-migration spec documents | merged | Replayed on feature/replay-prompt-visualizer as `ba6950bf` |
 | `e77f3755` | build: improve vscode compatibility detection | merged | Replayed on feature/replay-prompt-visualizer as `ddf2ac3b` |
 | `2178f6bd` | promptSectionVisualizer: add core feature implementation | merged | Replayed on feature/replay-prompt-visualizer as `def18722` |
+| `2ef10235` | tests: await snapshot matchers (#49) | merged | Replayed as `d424a6f3` |
+| `f210d7c2` | prompt-visualizer: tighten typing (#48) | merged | Replayed as `fb428d66` |
+| `8435119b` | docs: document disabled LFS hydration | merged | Replayed as `986cb4d9` |
+| `386ae095` | config: fix prompt visualizer settings | merged | Replayed as `d4be7899` |
+| `c2e0553b` | chore(cache): stop tracking simulation cache blobs | merged | Replayed as `0dd783c7` |
+| `5125bc05` | fix: Document pointer-only workflow for Git LFS in simulation cache guide and sync script | merged | Replayed as `05e44aec` (kept script removal) |
+| `050b52cb` | promptSectionVisualizer: accept vscode.Command in mock stream; add render mode configs | merged | Replayed as `ee66412e` |
+| `053cc5ee` | endpoint: fix responses api typings | merged | Replayed as `9f86e14a` |
+| `02cbc40c` | endpoint: fix responses api typings | merged | Replayed as `0042d31e` |
 
 ## Skipped Commits (Workflows & Automation)
 
@@ -72,3 +81,11 @@
 | `1e86d993` | maintenance: bootstrap stack branch in script | skipped | Workflow or automation already merged upstream |
 | `146d478e` | maintenance: schedule upkeep workflow | skipped | Workflow or automation already merged upstream |
 | `2041a6da` | maintenance: add type hierarchy upkeep workflow | skipped | Workflow or automation already merged upstream |
+
+## Other Skipped Commits
+
+| Legacy Commit | Description | Action | Notes |
+| --- | --- | --- | --- |
+| `f390091f` | remove .lfsconfig | skipped | Changes already present on the fork; cherry-pick produced an empty diff |
+| `4f56fc99` | tools: remove runSubagent import | skipped | Code already matches upstream (empty cherry-pick) |
+| `ffb00319` | docs: record pointer-only cache workflow | skipped | Documentation updates already captured in later commits |
