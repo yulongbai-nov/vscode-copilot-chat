@@ -1429,6 +1429,30 @@
 				]
 			},
 			{
+				"id": "github.copilot.promptVisualizer",
+				"name": "PromptVisualizer",
+				"fullName": "Prompt Section Visualizer",
+				"description": "Visualize and edit structured prompt sections inline in chat or in the Prompt Section Visualizer panel.",
+				"locations": [
+					"panel"
+				],
+				"modes": [
+					"ask"
+				],
+				"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled",
+				"isDefault": false,
+				"commands": [
+					{
+						"name": "visualize-prompt",
+						"description": "Render XML-tagged prompt sections with token counts."
+					},
+					{
+						"name": "edit-section",
+						"description": "Edit a specific prompt section by tag name or index."
+					}
+				]
+			},
+			{
 				"id": "github.copilot.editor",
 				"name": "Copilot",
 				"fullName": "GitHub Copilot",
@@ -2158,6 +2182,34 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.promptSectionVisualizer.toggle",
+				"title": "Toggle Prompt Section Visualizer",
+				"icon": "$(list-tree)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.promptSectionVisualizer.refresh",
+				"title": "Refresh Prompt Section Visualizer",
+				"icon": "$(refresh)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.promptSectionVisualizer.switchMode",
+				"title": "Switch Prompt Visualizer Render Mode",
+				"icon": "$(layout)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.promptSectionVisualizer.show",
+				"title": "Prompt Visualizer: Show",
+				"icon": "$(open-preview)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.debug.workbenchState",
 				"title": "%github.copilot.command.logWorkbenchState%",
 				"category": "Developer"
@@ -2548,6 +2600,31 @@
 						"default": false,
 						"markdownDescription": "%github.copilot.config.scopeSelection%"
 					},
+					"github.copilot.chat.promptSectionVisualizer.enabled": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Enable the Prompt Section Visualizer to view and edit XML-tagged prompt sections with token usage information."
+					},
+					"github.copilot.chat.promptSectionVisualizer.renderMode": {
+						"type": "string",
+						"enum": [
+							"inline",
+							"standalone",
+							"auto"
+						],
+						"enumDescriptions": [
+							"Render sections inline in chat responses",
+							"Render sections in a dedicated webview panel",
+							"Automatically choose based on context"
+						],
+						"default": "auto",
+						"markdownDescription": "Choose how to render the Prompt Section Visualizer: inline in chat, in a standalone panel, or automatically based on context."
+					},
+					"github.copilot.chat.promptSectionVisualizer.useNativeRendering": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Use VS Code's native chat rendering APIs for the Prompt Section Visualizer. This provides better visual consistency with Copilot Chat."
+					},
 					"github.copilot.chat.useProjectTemplates": {
 						"type": "boolean",
 						"default": true,
@@ -2629,6 +2706,22 @@
 						"type": "string",
 						"default": "",
 						"markdownDescription": "The currently selected completion model ID. To select from a list of available models, use the __\"Change Completions Model\"__ command or open the model picker (from the Copilot menu in the VS Code title bar, select __\"Configure Code Completions\"__ then __\"Change Completions Model\"__. The value must be a valid model ID. An empty value indicates that the default model will be used."
+					},
+					"github.copilot.chat.promptSectionVisualizer.persistCollapseState": {
+						"type": "boolean",
+						"default": true,
+						"markdownDescription": "Persist the collapse/expand state of prompt sections across VS Code sessions."
+					},
+					"github.copilot.chat.promptSectionVisualizer.autoCollapseLargeSections": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Automatically collapse sections that exceed a certain token count threshold."
+					},
+					"github.copilot.chat.promptSectionVisualizer.largeSectionTokenThreshold": {
+						"type": "number",
+						"default": 500,
+						"minimum": 100,
+						"markdownDescription": "Token count threshold for automatically collapsing large sections (when autoCollapseLargeSections is enabled)."
 					}
 				}
 			},
@@ -4403,6 +4496,16 @@
 					"group": "3_show"
 				},
 				{
+					"command": "github.copilot.promptSectionVisualizer.toggle",
+					"when": "view == workbench.panel.chat.view.copilot && github.copilot-chat.activated",
+					"group": "navigation@10"
+				},
+				{
+					"command": "github.copilot.promptSectionVisualizer.refresh",
+					"when": "view == github.copilot.promptSectionVisualizer && config.github.copilot.chat.promptSectionVisualizer.enabled",
+					"group": "navigation@1"
+				},
+				{
 					"command": "github.copilot.cloud.sessions.refresh",
 					"when": "view == workbench.view.chat.sessions.copilot-cloud-agent",
 					"group": "navigation@1"
@@ -4832,6 +4935,14 @@
 					"name": "GitHub Copilot Agents",
 					"when": "chatEntitlementSignedOut || !chatIsEnabled",
 					"icon": "$(copilot)"
+				}
+			],
+			"workbench.panel.chat": [
+				{
+					"id": "github.copilot.promptSectionVisualizer",
+					"name": "Prompt Section Visualizer",
+					"type": "webview",
+					"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled"
 				}
 			]
 		},
