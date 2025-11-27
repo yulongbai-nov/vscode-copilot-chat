@@ -222,7 +222,7 @@ export interface IPromptStateManager extends IDisposable {
 	/**
 	 * Update the entire prompt
 	 */
-	updatePrompt(prompt: string): void;
+	updatePrompt(prompt: string): Promise<void>;
 
 	/**
 	 * Set visualizer enabled state and persist it to configuration

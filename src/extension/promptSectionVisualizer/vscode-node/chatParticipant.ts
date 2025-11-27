@@ -128,7 +128,7 @@ export class PromptVisualizerChatParticipant extends Disposable {
 			} else {
 				// Parse the provided prompt
 				this._logService.trace('Parsing provided prompt');
-				this._stateManager.updatePrompt(promptToVisualize);
+				await this._stateManager.updatePrompt(promptToVisualize);
 			}
 
 			// Get the current state after parsing

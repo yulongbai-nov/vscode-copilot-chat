@@ -257,7 +257,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 	/**
 	 * Update the entire prompt
 	 */
-	updatePrompt(prompt: string): void {
+	async updatePrompt(prompt: string): Promise<void> {
 		const startTime = Date.now();
 		try {
 			const parseResult = this._parserService.parsePrompt(prompt);
@@ -304,7 +304,7 @@ export class PromptStateManager extends Disposable implements IPromptStateManage
 			// Restore collapse state for the new sections
 			this._restoreCollapseState();
 
-			this._recalculateAllTokens();
+			await this._recalculateAllTokens();
 			this._emitPatch({
 				type: 'stateReset',
 				sections: this._state.sections.map(section => this._cloneSection(section))
