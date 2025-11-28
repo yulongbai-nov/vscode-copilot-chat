@@ -1,19 +1,27 @@
 # Implementation Plan
 
+## Status Snapshot
+
+- ✅ Backend plumbing landed: the feature flag is in `package.json`, the `ILiveRequestEditorService` + builder produce editable sections, and `defaultIntentRequestHandler` now feeds edited messages to the fetcher.
+- ✅ Send/reset helpers exist server-side (`getMessagesForSend`, `resetRequest`, `isDirty`), ensuring the prompt pipeline can already consume edited sections once a UI drives the mutations.
+- 🚧 Next sprint focus flows directly from the open items: (1) build the Prompt Inspector drawer UI (Tasks 4.1–4.10), (2) enforce send blocking/reset UX (Task 5.4 plus associated messaging), (3) add telemetry + accessibility polish + tests (Tasks 6.x/7.x).
+
+---
+
 - [ ] 1. Feature flag and configuration  
-  - [ ] 1.1 Add configuration key `github.copilot.chat.advanced.livePromptEditorEnabled` with appropriate default and description. _Requirements: 1.1, 1.5_  
-  - [ ] 1.2 Gate all Live Chat Request Editor UI and logic behind this flag. _Requirements: 1.5, 5.5_  
+  - [x] 1.1 Add configuration key `github.copilot.chat.advanced.livePromptEditorEnabled` with appropriate default and description. _Requirements: 1.1, 1.5_  
+  - [x] 1.2 Gate all Live Chat Request Editor UI and logic behind this flag. _Requirements: 1.5, 5.5_  
 
 - [ ] 2. Editable request model and section builder  
-  - [ ] 2.1 Define `EditableChatRequest` and `LiveRequestSection` types in a shared chat/prompt module. _Requirements: 2.1, 4.1, 5.1_  
-  - [ ] 2.2 Implement a builder that maps `RenderPromptResult` (`messages`, `tokenCount`, `metadata`, `references`) into an initial `EditableChatRequest`. _Requirements: 2.1, 2.3, 5.2_  
-  - [ ] 2.3 Use message roles, references, and metadata to classify sections as `system`, `user`, `context`, `tool`, `history`, etc. _Requirements: 2.2, 3.7_  
+  - [x] 2.1 Define `EditableChatRequest` and `LiveRequestSection` types in a shared chat/prompt module. _Requirements: 2.1, 4.1, 5.1_  
+  - [x] 2.2 Implement a builder that maps `RenderPromptResult` (`messages`, `tokenCount`, `metadata`, `references`) into an initial `EditableChatRequest`. _Requirements: 2.1, 2.3, 5.2_  
+  - [x] 2.3 Use message roles, references, and metadata to classify sections as `system`, `user`, `context`, `tool`, `history`, etc. _Requirements: 2.2, 3.7_  
   - [ ] 2.4 Integrate optional `HTMLTracer` data (when available) to refine section boundaries and token counts, falling back gracefully when tracing is disabled. _Requirements: 2.5, 5.3_  
-  - [ ] 2.5 Track original messages and content to support reset and diffing. _Requirements: 3.4, 4.4_  
+  - [x] 2.5 Track original messages and content to support reset and diffing. _Requirements: 3.4, 4.4_  
 
 - [ ] 3. Wiring into the chat request pipeline  
-  - [ ] 3.1 Update the intents/prompt-building layer (e.g., `defaultIntentRequestHandler`) to request an `EditableChatRequest` instead of raw `messages` when the feature flag is enabled. _Requirements: 1.2, 4.1, 5.1_  
-  - [ ] 3.2 Ensure `ChatMLFetcher.fetchMany` consumes `EditableChatRequest.messages` when edits are present, and preserves existing behaviour when no edits exist or the feature is disabled. _Requirements: 4.2, 4.3_  
+  - [x] 3.1 Update the intents/prompt-building layer (e.g., `defaultIntentRequestHandler`) to request an `EditableChatRequest` instead of raw `messages` when the feature flag is enabled. _Requirements: 1.2, 4.1, 5.1_  
+  - [x] 3.2 Ensure `ChatMLFetcher.fetchMany` consumes `EditableChatRequest.messages` when edits are present, and preserves existing behaviour when no edits exist or the feature is disabled. _Requirements: 4.2, 4.3_  
   - [ ] 3.3 Confirm that `IRequestLogger.logChatRequest` sees the final, edited request and add tests/diagnostics to verify parity with what the editor displayed. _Requirements: 5.1, 5.4_  
   - [ ] 3.4 Handle error cases where the editor state cannot be mapped back into valid ChatML messages, surfacing clear errors and offering reset. _Requirements: 4.5, 6.4_  
 
@@ -30,9 +38,9 @@
   - [ ] 4.10 Add a conversation selector (e.g., drop-down) that lists other open conversations in the current window and allows switching the inspector’s target session. _Requirements: 7.3, 7.4, 7.5_  
 
 - [ ] 5. Apply, reset, and send integration  
-  - [ ] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _Requirements: 4.1, 4.4_  
-  - [ ] 5.2 Wire the Send action to use edited messages when the request is dirty, and original messages otherwise. _Requirements: 4.2, 4.3_  
-  - [ ] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _Requirements: 4.4_  
+  - [ ] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _(Backend plumbing via `isDirty` is ready; UI indicator still required.)_ _Requirements: 4.1, 4.4_  
+  - [x] 5.2 Wire the Send action to use edited messages when the request is dirty, and original messages otherwise. _Requirements: 4.2, 4.3_  
+  - [ ] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _(Service-level `resetRequest` exists; hook up UI action.)_ _Requirements: 4.4_  
   - [ ] 5.4 Guard against invalid/empty requests (e.g., all sections deleted) by blocking send with explanatory error UI and offering reset. _Requirements: 4.5_  
 
 - [ ] 6. Performance, reliability, and security hardening  
