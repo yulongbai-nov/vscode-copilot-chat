@@ -832,11 +832,14 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					tokensItem.className = 'metadata-item';
 					const maxPrompt = request.metadata?.maxPromptTokens;
 					const tokenValue = totalTokens;
-					const occupancy = maxPrompt ? formatPercent(tokenValue, maxPrompt) : undefined;
-					const tokenText = maxPrompt
-						? formatNumber(tokenValue) + ' / ' + formatNumber(maxPrompt) + ' (' + occupancy + ')'
-						: formatNumber(tokenValue) + ' tokens';
-					tokensItem.innerHTML = '<span class="metadata-label">Prompt Budget:</span><span>' + tokenText + '</span>';
+					let tokenText: string;
+					if (maxPrompt) {
+						const occupancy = formatPercent(tokenValue, maxPrompt);
+						tokenText = formatNumber(tokenValue) + ' tokens (' + occupancy + ')';
+					} else {
+						tokenText = formatNumber(tokenValue) + ' tokens';
+					}
+					tokensItem.innerHTML = '<span class="metadata-label">Prompt Tokens:</span><span>' + tokenText + '</span>';
 					metaRow.appendChild(tokensItem);
 
 		const sectionsItem = document.createElement('div');
