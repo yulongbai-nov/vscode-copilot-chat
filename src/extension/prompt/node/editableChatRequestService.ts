@@ -8,7 +8,7 @@ import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ILogService } from '../../../platform/log/common/logService';
 import { createServiceIdentifier } from '../../../util/common/services';
-import { Disposable, IDisposable } from '../../../util/vs/base/common/lifecycle';
+import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { EditableChatRequest, EditableChatRequestBuilder, EditableChatRequestMetadata } from '../common/editableChatRequest';
 
 /**
@@ -76,7 +76,6 @@ export class EditableChatRequestService extends Disposable implements IEditableC
 	declare readonly _serviceBrand: undefined;
 
 	private readonly _editableRequests = new Map<string, EditableChatRequest>();
-	private readonly _disposables = new Map<string, IDisposable>();
 
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
@@ -125,13 +124,6 @@ export class EditableChatRequestService extends Disposable implements IEditableC
 		);
 
 		this._editableRequests.set(keyStr, editableRequest);
-
-		// Register for disposal
-		const disposable = editableRequest.onDidChange(() => {
-			this._logService.trace(`[EditableChatRequestService] Request ${editableRequest.id} changed, isDirty: ${editableRequest.isDirty}`);
-		});
-		this._disposables.set(keyStr, disposable);
-
 		this._logService.trace(`[EditableChatRequestService] Created editable request for ${keyStr}, sections: ${editableRequest.sections.length}`);
 
 		return editableRequest;
@@ -165,12 +157,6 @@ export class EditableChatRequestService extends Disposable implements IEditableC
 		if (existing) {
 			existing.dispose();
 			this._editableRequests.delete(keyStr);
-		}
-
-		const disposable = this._disposables.get(keyStr);
-		if (disposable) {
-			disposable.dispose();
-			this._disposables.delete(keyStr);
 		}
 	}
 

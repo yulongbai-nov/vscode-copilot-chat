@@ -236,15 +236,22 @@ export class EditableChatRequest extends Disposable {
 
 	/**
 	 * Gets only the active (non-deleted) messages for sending to the LLM.
+	 * Returns all original messages only if no sections have been set up.
+	 * If all sections are deleted, returns an empty array.
 	 */
 	getActiveMessages(): Raw.ChatMessage[] {
+		// If no sections exist, return all messages as-is
+		if (this._sections.length === 0) {
+			return [...this._messages];
+		}
+
 		const activeMessages: Raw.ChatMessage[] = [];
 		for (const section of this._sections) {
 			if (!section.deleted && section.sourceMessageIndex >= 0 && section.sourceMessageIndex < this._messages.length) {
 				activeMessages.push(this._messages[section.sourceMessageIndex]);
 			}
 		}
-		return activeMessages.length > 0 ? activeMessages : [...this._messages];
+		return activeMessages;
 	}
 
 	/**
@@ -494,9 +501,12 @@ export class EditableChatRequestBuilder {
 		const messages = renderResult.messages;
 		const sections = createSectionsFromMessages(messages);
 
-		// Add token counts if available
-		if (renderResult.tokenCount !== undefined) {
-			const avgTokensPerSection = Math.floor(renderResult.tokenCount / Math.max(sections.length, 1));
+		// Add approximate token counts if available.
+		// Note: This is an approximation that distributes the total token count evenly.
+		// For precise per-section token counting, consider using the tokenizer directly
+		// on each section's content when needed.
+		if (renderResult.tokenCount !== undefined && sections.length > 0) {
+			const avgTokensPerSection = Math.floor(renderResult.tokenCount / sections.length);
 			for (const section of sections) {
 				section.tokenCount = avgTokensPerSection;
 			}
