@@ -9,7 +9,7 @@ import * as path from 'path';
 async function copyStaticAssets(srcpaths: string[], dst: string): Promise<void> {
 	await Promise.all(srcpaths.map(async srcpath => {
 		const src = path.join(REPO_ROOT, srcpath);
-		const dest = path.join(REPO_ROOT, dst, path.basename(srcpath));
+		const dest = path.join(CHAT_LIB_ROOT, dst, path.basename(srcpath));
 		await fs.promises.mkdir(path.dirname(dest), { recursive: true });
 		await fs.promises.copyFile(src, dest);
 	}));
@@ -38,18 +38,23 @@ const treeSitterGrammars: string[] = [
 	'tree-sitter-php'
 ];
 
-const REPO_ROOT = path.join(__dirname, '..');
+const CHAT_LIB_ROOT = path.join(__dirname, '..');
+const REPO_ROOT = path.join(CHAT_LIB_ROOT, '..');
 
 async function platformDir(): Promise<string> {
-	const distPath = 'dist/src/_internal/platform';
-	const srcPath = 'src/_internal/platform';
-	if (await fileExists(path.join(REPO_ROOT, distPath))) {
-		return distPath;
-	} else if (await fileExists(path.join(REPO_ROOT, srcPath))) {
-		return srcPath;
-	} else {
-		throw new Error('Could not find the source directory for tokenizer files');
+	const candidateDirs = [
+		'dist/src/_internal/platform',
+		'dist/platform',
+		'src/_internal/platform',
+		'src/platform'
+	];
+	for (const candidate of candidateDirs) {
+		const tokenizerPath = path.join(REPO_ROOT, candidate, 'tokenizer', 'node', 'cl100k_base.tiktoken');
+		if (await fileExists(tokenizerPath)) {
+			return candidate;
+		}
 	}
+	throw new Error('Could not find the source directory for tokenizer files');
 }
 
 function treeSitterWasmDir(): string {
