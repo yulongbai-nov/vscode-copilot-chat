@@ -168,6 +168,7 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - Collapsible header with caret, kind badge, label, optional token count, and hover toolbar.
   - Hover toolbar mirrors the chat code-block mini toolbar: icon-only buttons for `Edit`, `Delete`, `Restore`, with tooltips and keyboard focus affordances.
   - Additional **Stick** action pins a section to the top (beneath the status banner) until unstuck; pinned sections keep their order relative to each other and display a “Pinned” indicator.
+  - Pinned sections are draggable so users can reorder them relative to other pinned sections without affecting the unpinned list.
   - Deleted sections get a dashed border + reduced opacity and expose a single `Restore` button inline.
 - **Editing flow**
   - `Edit` toggles an inline `<textarea>` editor (monospace, chat theme colors). Save posts `editSection` with the new value; cancel just hides the editor and reverts to the previous text.
