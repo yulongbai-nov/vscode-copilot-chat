@@ -659,10 +659,18 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					label.textContent = section.label;
 					title.appendChild(label);
 
-					if (section.tokenCount) {
+					const sectionTokenCount = section.tokenCount ?? 0;
+
+					if (sectionTokenCount) {
 						const tokens = document.createElement('span');
 						tokens.className = 'section-tokens';
-						tokens.textContent = '(' + section.tokenCount + ' tokens)';
+						tokens.textContent = formatNumber(sectionTokenCount) + ' tokens';
+						if (totalTokens) {
+							const pct = document.createElement('span');
+							pct.className = 'section-percentage';
+							pct.textContent = formatPercent(sectionTokenCount, totalTokens);
+							tokens.appendChild(pct);
+						}
 						title.appendChild(tokens);
 					}
 
