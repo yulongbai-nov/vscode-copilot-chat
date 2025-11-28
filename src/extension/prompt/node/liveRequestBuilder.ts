@@ -46,7 +46,7 @@ function createSection(message: Raw.ChatMessage, index: number): LiveRequestSect
 	const kind = inferKind(message);
 	const label = buildLabel(kind, message, index);
 	const content = renderMessageContent(message);
-	const editable = kind !== 'system' && kind !== 'metadata';
+	const editable = kind !== 'metadata';
 	const deletable = kind !== 'system' && kind !== 'metadata';
 
 	const metadata: Record<string, unknown> = {};
