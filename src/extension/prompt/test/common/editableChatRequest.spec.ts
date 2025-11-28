@@ -13,6 +13,7 @@ import {
 	createSectionsFromMessages,
 	LiveRequestSectionKind,
 } from '../../common/editableChatRequest';
+import { nullRenderPromptResult } from '../../node/intents';
 
 describe('EditableChatRequest', () => {
 	const createTestMessages = (): Raw.ChatMessage[] => [
@@ -83,6 +84,7 @@ describe('EditableChatRequest', () => {
 					role: Raw.ChatRole.Tool,
 					content: toTextParts('Tool result'),
 					name: 'my_tool',
+					toolCallId: 'tool-call-123',
 				},
 			];
 			const sections = createSectionsFromMessages(messages);
@@ -253,10 +255,9 @@ describe('EditableChatRequest', () => {
 		test('creates request from RenderPromptResult', () => {
 			const messages = createTestMessages();
 			const renderResult: RenderPromptResult = {
+				...nullRenderPromptResult(),
 				messages,
 				tokenCount: 100,
-				metadatas: new Map(),
-				references: [],
 			};
 
 			const request = EditableChatRequestBuilder.fromRenderPromptResult(
@@ -275,10 +276,9 @@ describe('EditableChatRequest', () => {
 		test('includes metadata in created request', () => {
 			const messages = createTestMessages();
 			const renderResult: RenderPromptResult = {
+				...nullRenderPromptResult(),
 				messages,
 				tokenCount: 100,
-				metadatas: new Map(),
-				references: [],
 			};
 
 			const request = EditableChatRequestBuilder.fromRenderPromptResult(

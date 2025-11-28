@@ -87,6 +87,7 @@ import { DebugCommandToConfigConverter, IDebugCommandToConfigConverter } from '.
 import { DebuggableCommandIdentifier, IDebuggableCommandIdentifier } from '../../onboardDebug/node/debuggableCommandIdentifier';
 import { ILanguageToolsProvider, LanguageToolsProvider } from '../../onboardDebug/node/languageToolsProvider';
 import { ChatMLFetcherImpl } from '../../prompt/node/chatMLFetcher';
+import { EditableChatRequestService, IEditableChatRequestService } from '../../prompt/node/editableChatRequestService';
 import { IFeedbackReporter } from '../../prompt/node/feedbackReporter';
 import { IPromptVariablesService } from '../../prompt/node/promptVariablesService';
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
@@ -128,6 +129,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(ITokenizerProvider, new SyncDescriptor(TokenizerProvider, [true]));
 	builder.define(IToolsService, new SyncDescriptor(ToolsService));
 	builder.define(IRequestLogger, new SyncDescriptor(RequestLogger));
+	builder.define(IEditableChatRequestService, new SyncDescriptor(EditableChatRequestService));
 	builder.define(INativeEnvService, new SyncDescriptor(NativeEnvServiceImpl));
 
 	builder.define(IFetcherService, new SyncDescriptor(FetcherService, [undefined]));
