@@ -210,13 +210,20 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					color: var(--vscode-foreground);
 				}
 				#app { padding: 12px; }
+				.status-banner {
+					position: sticky;
+					top: 0;
+					z-index: 2;
+					background: var(--vscode-editor-background);
+					padding-bottom: 12px;
+					margin-bottom: 12px;
+					border-bottom: 1px solid var(--vscode-panel-border);
+				}
 				.header {
 					display: flex;
 					justify-content: space-between;
 					align-items: center;
 					margin-bottom: 12px;
-					padding-bottom: 8px;
-					border-bottom: 1px solid var(--vscode-panel-border);
 				}
 				.header h2 {
 					margin: 0;
@@ -264,6 +271,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					opacity: 0.5;
 					border-style: dashed;
 				}
+				.section.pinned {
+					box-shadow: 0 0 0 1px var(--vscode-list-activeSelectionBorder);
+				}
 				.section-header {
 					display: flex;
 					justify-content: space-between;
@@ -306,6 +316,14 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				.section-tokens {
 					font-size: 11px;
 					color: var(--vscode-descriptionForeground);
+				}
+				.pinned-indicator {
+					font-size: 10px;
+					text-transform: uppercase;
+					color: var(--vscode-descriptionForeground);
+					border: 1px solid var(--vscode-descriptionForeground);
+					border-radius: 999px;
+					padding: 0 6px;
 				}
 				.section-actions {
 					display: flex;
@@ -407,12 +425,66 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				const app = document.getElementById('app');
 				let editingSection = null;
 				let currentRequest = null;
+				const persistedState = vscode.getState?.() ?? {};
+				let pinnedOrder = Array.isArray(persistedState?.pinned) ? persistedState.pinned : [];
+				let pinnedSectionIds = new Set(pinnedOrder);
 
 				// XSS prevention: escape all HTML special characters
 				const escapeHtml = (value) => {
 					if (!value) return '';
 					const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 					return String(value).replace(/[&<>"']/g, m => map[m]);
+				};
+
+				const persistPinned = () => {
+					vscode.setState?.({ pinned: pinnedOrder });
+				};
+
+				const sanitizePinned = (sections) => {
+					const allowed = new Set(sections.map(section => section.id));
+					let didChange = false;
+					pinnedOrder = pinnedOrder.filter(id => {
+						if (allowed.has(id)) {
+							return true;
+						}
+						didChange = true;
+						return false;
+					});
+					pinnedSectionIds = new Set(pinnedOrder);
+					if (didChange) {
+						persistPinned();
+					}
+				};
+
+				const orderSections = (sections) => {
+					sanitizePinned(sections);
+					const pinned = [];
+					const rest = [];
+					for (const section of sections) {
+						if (pinnedSectionIds.has(section.id)) {
+							pinned.push(section);
+						} else {
+							rest.push(section);
+						}
+					}
+					pinned.sort((a, b) => pinnedOrder.indexOf(a.id) - pinnedOrder.indexOf(b.id));
+					return [...pinned, ...rest];
+				};
+
+				const togglePinned = (sectionId) => {
+					if (!currentRequest) {
+						return;
+					}
+					if (pinnedSectionIds.has(sectionId)) {
+						pinnedSectionIds.delete(sectionId);
+						pinnedOrder = pinnedOrder.filter(id => id !== sectionId);
+					} else {
+						pinnedSectionIds.add(sectionId);
+						pinnedOrder = pinnedOrder.filter(id => id !== sectionId);
+						pinnedOrder.push(sectionId);
+					}
+					persistPinned();
+					render(currentRequest);
 				};
 
 				const sendMessage = (type, data) => {
@@ -423,9 +495,13 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					const isEditing = editingSection === section.id;
 					const isDeleted = section.deleted;
 					const isCollapsed = section.collapsed && !isEditing;
+					const isPinned = pinnedSectionIds.has(section.id);
 
 					const sectionEl = document.createElement('div');
 					sectionEl.className = 'section' + (isCollapsed ? ' collapsed' : '') + (isDeleted ? ' deleted' : '');
+					if (isPinned) {
+						sectionEl.classList.add('pinned');
+					}
 					sectionEl.dataset.sectionId = section.id;
 
 					const header = document.createElement('div');
@@ -456,6 +532,13 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						title.appendChild(tokens);
 					}
 
+					if (isPinned) {
+						const pinnedBadge = document.createElement('span');
+						pinnedBadge.className = 'pinned-indicator';
+						pinnedBadge.textContent = 'Pinned';
+						title.appendChild(pinnedBadge);
+					}
+
 					header.appendChild(title);
 
 					const actions = document.createElement('div');
@@ -470,6 +553,14 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						restoreBtn.title = 'Restore section';
 						actions.appendChild(restoreBtn);
 					} else {
+						const pinBtn = document.createElement('button');
+						pinBtn.className = 'icon-only';
+						pinBtn.dataset.action = 'stick';
+						pinBtn.dataset.section = section.id;
+						pinBtn.textContent = isPinned ? 'Unstick' : 'Stick';
+						pinBtn.title = isPinned ? 'Unstick section' : 'Stick section';
+						actions.appendChild(pinBtn);
+
 						if (section.editable) {
 							const editBtn = document.createElement('button');
 							editBtn.className = 'icon-only';
@@ -572,7 +663,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					}
 
 					header.appendChild(headerActions);
-					app.appendChild(header);
 
 					// Metadata
 					const metadata = document.createElement('div');
@@ -596,11 +686,17 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					metaRow.appendChild(sectionsItem);
 
 					metadata.appendChild(metaRow);
-					app.appendChild(metadata);
+
+					const statusBanner = document.createElement('div');
+					statusBanner.className = 'status-banner';
+					statusBanner.appendChild(header);
+					statusBanner.appendChild(metadata);
+					app.appendChild(statusBanner);
 
 					// Sections
-					for (let i = 0; i < request.sections.length; i++) {
-						app.appendChild(renderSection(request.sections[i], i));
+					const orderedSections = orderSections(request.sections || []);
+					for (let i = 0; i < orderedSections.length; i++) {
+						app.appendChild(renderSection(orderedSections[i], i));
 					}
 
 					// Attach event listeners
@@ -623,6 +719,11 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 							const sectionId = node.dataset.section;
 
 							switch (action) {
+								case 'stick':
+									if (sectionId) {
+										togglePinned(sectionId);
+									}
+									break;
 								case 'edit':
 									editingSection = editingSection === sectionId ? null : sectionId;
 									render(currentRequest);
