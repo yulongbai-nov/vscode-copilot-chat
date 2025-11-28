@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+	<rect x="3.75" y="3.75" width="12.5" height="16.5" rx="1.5" ry="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+	<rect x="6" y="7.25" width="8" height="1.5" rx="0.75" fill="currentColor" opacity="0.85"/>
+	<rect x="6" y="10.25" width="8" height="1.5" rx="0.75" fill="currentColor" opacity="0.65"/>
+	<rect x="6" y="13.25" width="5" height="1.5" rx="0.75" fill="currentColor" opacity="0.45"/>
+	<path d="M14.75 13.65L20.35 19.25C20.4875 19.3875 20.5 19.6125 20.375 19.7625L18.8125 21.625C18.6875 21.775 18.45 21.8 18.3125 21.65L12.7 16.0375C12.5625 15.9 12.55 15.675 12.675 15.525L14.4875 13.5875C14.6125 13.45 14.7625 13.5125 14.75 13.65Z" fill="currentColor"/>
+	<path d="M12.25 17.75L11.5 20.5L14.25 19.75L12.25 17.75Z" fill="currentColor"/>
+</svg>
