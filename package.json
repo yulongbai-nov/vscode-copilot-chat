@@ -2210,6 +2210,27 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.liveRequestEditor.toggle",
+				"title": "Toggle Live Request Editor",
+				"icon": "$(edit)",
+				"enablement": "github.copilot-chat.activated",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.show",
+				"title": "Copilot: Show Prompt Inspector",
+				"icon": "$(open-preview)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.chat.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.reset",
+				"title": "Live Request Editor: Reset",
+				"icon": "$(refresh)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.chat.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.debug.workbenchState",
 				"title": "%github.copilot.command.logWorkbenchState%",
 				"category": "Developer"
@@ -2599,6 +2620,11 @@
 						"type": "boolean",
 						"default": false,
 						"markdownDescription": "%github.copilot.config.scopeSelection%"
+					},
+					"github.copilot.chat.advanced.livePromptEditorEnabled": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Enable the experimental Live Chat Request Editor inside the chat panel to inspect and edit the composed prompt before it is sent."
 					},
 					"github.copilot.chat.promptSectionVisualizer.enabled": {
 						"type": "boolean",
@@ -4943,6 +4969,12 @@
 					"name": "Prompt Section Visualizer",
 					"type": "webview",
 					"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled"
+				},
+				{
+					"id": "github.copilot.liveRequestEditor",
+					"name": "Live Request Editor",
+					"type": "webview",
+					"when": "github.copilot-chat.activated && config.github.copilot.chat.advanced.livePromptEditorEnabled"
 				}
 			]
 		},

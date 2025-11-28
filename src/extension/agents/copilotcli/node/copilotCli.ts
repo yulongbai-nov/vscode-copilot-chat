@@ -250,12 +250,14 @@ export interface ICopilotCLISDK {
 	getRequestId(sdkRequestId: string): RequestDetails['details'] | undefined;
 	setRequestId(sdkRequestId: string, details: { requestId: string; toolIdEditMap: Record<string, string> }): void;
 	getDefaultWorkingDirectory(): Promise<Uri | undefined>;
+	isAvailable(): boolean;
 }
 
 type RequestDetails = { details: { requestId: string; toolIdEditMap: Record<string, string> }; createdDateTime: number };
 export class CopilotCLISDK implements ICopilotCLISDK {
 	declare _serviceBrand: undefined;
 	private requestMap: Record<string, RequestDetails> = {};
+	private _available = true;
 
 	constructor(
 		@IVSCodeExtensionContext private readonly extensionContext: IVSCodeExtensionContext,
@@ -290,6 +292,11 @@ export class CopilotCLISDK implements ICopilotCLISDK {
 			await this.ensureShims();
 			return await import('@github/copilot/sdk');
 		} catch (error) {
+			if (this.isSdkUnavailableError(error)) {
+				this.logService.warn('[CopilotCLISession] Copilot CLI SDK is not available in this build.');
+				this._available = false;
+				throw new CopilotCLINotAvailableError('Copilot CLI SDK is not available.', error);
+			}
 			this.logService.error(`[CopilotCLISession] Failed to load @github/copilot/sdk: ${error}`);
 			throw error;
 		}
@@ -300,6 +307,22 @@ export class CopilotCLISDK implements ICopilotCLISDK {
 			ensureNodePtyShim(this.extensionContext.extensionPath, this.envService.appRoot, this.logService),
 			ensureRipgrepShim(this.extensionContext.extensionPath, this.envService.appRoot, this.logService)
 		]);
+	}
+
+	private isSdkUnavailableError(error: unknown): error is NodeJS.ErrnoException {
+		const err = error as NodeJS.ErrnoException | undefined;
+		if (!err) {
+			return false;
+		}
+		if (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'ERR_UNSUPPORTED_DIR_IMPORT') {
+			return true;
+		}
+		const message = err.message ?? '';
+		return message.includes('Cannot find module') || message.includes('Directory import');
+	}
+
+	public isAvailable(): boolean {
+		return this._available;
 	}
 
 	public async getAuthInfo(): Promise<NonNullable<SessionOptions['authInfo']>> {
@@ -322,4 +345,9 @@ export class CopilotCLISDK implements ICopilotCLISDK {
 		return folder?.uri;
 	}
 }
-
+export class CopilotCLINotAvailableError extends Error {
+	constructor(message: string, public override readonly cause?: unknown) {
+		super(message);
+		this.name = 'CopilotCLINotAvailableError';
+	}
+}
