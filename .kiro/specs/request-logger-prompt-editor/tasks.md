@@ -77,5 +77,5 @@
 
 ## Current Status Summary
 
-- Design and requirements for the Live Chat Request Editor have been drafted and are ready for review.  
-- No implementation has started; tasks may need refinement once specific UI entry points and exact section-kinding rules are agreed.  
+- Feature flag, editable request model, and prompt-pipeline wiring now exist behind the advanced flag; edits propagate through `ChatMLFetcher` even without a UI.  
+- Remaining tracked work is focused on the Prompt Inspector drawer UX, error/dirty/reset surfacing, telemetry/accessibility, and the associated automated/manual tests (Tasks 4.x–7.x).  
