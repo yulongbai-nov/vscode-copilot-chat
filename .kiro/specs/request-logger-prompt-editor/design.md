@@ -165,8 +165,7 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - Metadata strip (model, token count, section count, timestamp) is part of a **sticky status banner** that remains docked to the top while the user scrolls through sections; the section list scrolls underneath it.
   - Section list renders vertically, each wrapped in a bordered card that mimics chat bubbles while still looking like a dev tool.
 - **Entry point & iconography**
-  - The extension contributes a dedicated “Live Request Editor” activity-bar container with the `assets/live-request-editor.svg` glyph so the inspector shows up as a first-class view in the sidebar whenever the feature flag is on.
-  - Within the view header, the same icon is reused so the panel is visually scannable among other Copilot debug tools.
+  - The chat panel’s view tab for the Live Request Editor now uses `assets/live-request-editor.svg`, giving it a recognizable glyph next to Prompt Section Visualizer while remaining co-located with other chat debugging tools.
 - **Section chrome**
   - Collapsible header with caret, kind badge, label, optional token count, and hover toolbar.
   - Hover toolbar mirrors the chat code-block mini toolbar: icon-only buttons for `Edit`, `Delete`, `Restore`, with tooltips and keyboard focus affordances.
