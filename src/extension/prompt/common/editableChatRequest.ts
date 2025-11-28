@@ -8,6 +8,7 @@ import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { getTextPart, toTextParts } from '../../../platform/chat/common/globalStringUtils';
 import { Event, Emitter } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
+import { deepClone } from '../../../util/vs/base/common/objects';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
 
 /**
@@ -201,7 +202,7 @@ export class EditableChatRequest extends Disposable {
 		this.location = location;
 		this.sessionId = sessionId;
 		this._messages = [...messages];
-		this._originalMessages = messages.map(m => structuredClone(m));
+		this._originalMessages = messages.map(m => deepClone(m));
 		this._sections = sections;
 		this.metadata = metadata;
 	}
@@ -322,7 +323,7 @@ export class EditableChatRequest extends Disposable {
 	 * Resets the entire request to its original state.
 	 */
 	reset(): void {
-		this._messages = this._originalMessages.map(m => structuredClone(m));
+		this._messages = this._originalMessages.map(m => deepClone(m));
 		for (const section of this._sections) {
 			section.content = section.originalContent;
 			section.deleted = false;
