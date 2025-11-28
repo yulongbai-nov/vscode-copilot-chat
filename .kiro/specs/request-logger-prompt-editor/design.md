@@ -181,6 +181,7 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - The status banner shows overall token usage (absolute count plus percentage of model budget when available).
   - Each section displays its token count and visualizes its share of the total prompt budget with a mini progress meter (e.g., “42 tokens · 8%” plus a bar).
   - Pinned section heading summarizes the cumulative token share of the pinned subset so users can gauge how much budget is locked.
+  - Large counts are rendered with compact units (`1.2k`, `3.4M`) to keep the header concise even for oversized prompts.
 - **Conversation targeting**
   - The interim webview always listens to `ILiveRequestEditorService.onDidChange`. The last-updated session automatically re-renders in the view.
   - A conversation drop-down is optional in this phase; instead we surface the session id + chat location in metadata and rely on one-active-session behaviour. Future drawer work will introduce the picker.

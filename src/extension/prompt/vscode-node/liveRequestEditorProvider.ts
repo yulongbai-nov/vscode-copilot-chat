@@ -486,11 +486,18 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					return String(value).replace(/[&<>"']/g, m => map[m]);
 				};
 
+				const compactNumberFormatter = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+
 				const formatNumber = (value) => {
 					if (value === undefined || value === null || Number.isNaN(value)) {
-						return '—';
+						return '0';
 					}
-					return Number(value).toLocaleString();
+					const numericValue = Number(value);
+					const absValue = Math.abs(numericValue);
+					if (absValue < 1000) {
+						return numericValue.toLocaleString();
+					}
+					return compactNumberFormatter.format(numericValue);
 				};
 
 				const computeTotalTokens = (request) => {
