@@ -274,6 +274,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				.section.pinned {
 					box-shadow: 0 0 0 1px var(--vscode-list-activeSelectionBorder);
 				}
+				.section.drag-over {
+					outline: 1px dashed var(--vscode-focusBorder);
+				}
 				.section-header {
 					display: flex;
 					justify-content: space-between;
@@ -428,6 +431,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				const persistedState = vscode.getState?.() ?? {};
 				let pinnedOrder = Array.isArray(persistedState?.pinned) ? persistedState.pinned : [];
 				let pinnedSectionIds = new Set(pinnedOrder);
+				let draggingSectionId = null;
 
 				// XSS prevention: escape all HTML special characters
 				const escapeHtml = (value) => {
@@ -487,6 +491,25 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					render(currentRequest);
 				};
 
+				const reorderPinned = (sourceId, targetId) => {
+					if (!sourceId || !targetId || sourceId === targetId) {
+						return;
+					}
+					if (!pinnedSectionIds.has(sourceId) || !pinnedSectionIds.has(targetId)) {
+						return;
+					}
+					const sourceIndex = pinnedOrder.indexOf(sourceId);
+					const targetIndex = pinnedOrder.indexOf(targetId);
+					if (sourceIndex === -1 || targetIndex === -1) {
+						return;
+					}
+					pinnedOrder.splice(sourceIndex, 1);
+					const insertIndex = pinnedOrder.indexOf(targetId);
+					pinnedOrder.splice(insertIndex >= 0 ? insertIndex : pinnedOrder.length, 0, sourceId);
+					persistPinned();
+					render(currentRequest);
+				};
+
 				const sendMessage = (type, data) => {
 					vscode.postMessage({ type, ...data });
 				};
@@ -503,6 +526,44 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						sectionEl.classList.add('pinned');
 					}
 					sectionEl.dataset.sectionId = section.id;
+					sectionEl.draggable = isPinned && !isDeleted;
+					if (sectionEl.draggable) {
+						sectionEl.addEventListener('dragstart', (event) => {
+							draggingSectionId = section.id;
+							event.dataTransfer?.setData('text/plain', section.id);
+							if (event.dataTransfer) {
+								event.dataTransfer.effectAllowed = 'move';
+							}
+						});
+						sectionEl.addEventListener('dragover', (event) => {
+							if (!draggingSectionId || draggingSectionId === section.id) {
+								return;
+							}
+							event.preventDefault();
+							sectionEl.classList.add('drag-over');
+							if (event.dataTransfer) {
+								event.dataTransfer.dropEffect = 'move';
+							}
+						});
+						sectionEl.addEventListener('dragleave', () => {
+							sectionEl.classList.remove('drag-over');
+						});
+						sectionEl.addEventListener('drop', (event) => {
+							if (!draggingSectionId || draggingSectionId === section.id) {
+								sectionEl.classList.remove('drag-over');
+								return;
+							}
+							event.preventDefault();
+							const sourceId = event.dataTransfer?.getData('text/plain') || draggingSectionId;
+							sectionEl.classList.remove('drag-over');
+							reorderPinned(sourceId, section.id);
+							draggingSectionId = null;
+						});
+						sectionEl.addEventListener('dragend', () => {
+							sectionEl.classList.remove('drag-over');
+							draggingSectionId = null;
+						});
+					}
 
 					const header = document.createElement('div');
 					header.className = 'section-header';
