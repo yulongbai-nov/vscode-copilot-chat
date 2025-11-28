@@ -55,8 +55,57 @@ function parseLfsPointer(pointer: string, entry: string): LfsPointerMetadata {
 	return { oid, size };
 }
 
+function resolveGitDir(cwd: string): string {
+	const gitPath = path.join(cwd, '.git');
+	let stats: fs.Stats;
+	try {
+		stats = fs.statSync(gitPath);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(`[hydrateSimulationCache] Unable to stat ${gitPath}: ${message}`);
+	}
+	if (stats.isDirectory()) {
+		return gitPath;
+	}
+
+	if (!stats.isFile()) {
+		throw new Error(`[hydrateSimulationCache] Unable to resolve git dir at ${gitPath}`);
+	}
+
+	let contents: string;
+	try {
+		contents = fs.readFileSync(gitPath, 'utf8');
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(`[hydrateSimulationCache] Unable to read ${gitPath}: ${message}`);
+	}
+	const match = contents.match(/gitdir:\s*(.+)/i);
+	if (!match?.[1]) {
+		throw new Error(`[hydrateSimulationCache] Malformed gitdir file at ${gitPath}`);
+	}
+
+	const resolved = match[1].trim();
+	return path.isAbsolute(resolved) ? resolved : path.resolve(cwd, resolved);
+}
+
+function resolveGitCommonDir(cwd: string): string {
+	const gitDir = resolveGitDir(cwd);
+	const commonDirPath = path.join(gitDir, 'commondir');
+	try {
+		const contents = fs.readFileSync(commonDirPath, 'utf8').trim();
+		if (contents) {
+			const resolved = path.isAbsolute(contents) ? contents : path.resolve(gitDir, contents);
+			return resolved;
+		}
+	} catch {
+		// commondir not present, fall back to gitDir
+	}
+	return gitDir;
+}
+
 function resolveLfsObjectPath(oid: string, cwd: string): string {
-	const objectsDir = path.join(cwd, '.git', 'lfs', 'objects');
+	const gitDir = resolveGitCommonDir(cwd);
+	const objectsDir = path.join(gitDir, 'lfs', 'objects');
 	const first = oid.slice(0, 2);
 	const second = oid.slice(2, 4);
 	return path.join(objectsDir, first, second, oid);
