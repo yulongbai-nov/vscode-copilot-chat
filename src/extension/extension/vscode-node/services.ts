@@ -86,8 +86,10 @@ import { collectFetcherTelemetry } from '../../log/vscode-node/loggingActions';
 import { DebugCommandToConfigConverter, IDebugCommandToConfigConverter } from '../../onboardDebug/node/commandToConfigConverter';
 import { DebuggableCommandIdentifier, IDebuggableCommandIdentifier } from '../../onboardDebug/node/debuggableCommandIdentifier';
 import { ILanguageToolsProvider, LanguageToolsProvider } from '../../onboardDebug/node/languageToolsProvider';
+import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
 import { ChatMLFetcherImpl } from '../../prompt/node/chatMLFetcher';
 import { IFeedbackReporter } from '../../prompt/node/feedbackReporter';
+import { LiveRequestEditorService } from '../../prompt/node/liveRequestEditorService';
 import { IPromptVariablesService } from '../../prompt/node/promptVariablesService';
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
 import { DevContainerConfigurationServiceImpl } from '../../prompt/vscode-node/devContainerConfigurationServiceImpl';
@@ -190,6 +192,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(ISettingsEditorSearchService, new SyncDescriptor(SettingsEditorSearchServiceImpl));
 	builder.define(INewWorkspacePreviewContentManager, new SyncDescriptor(NewWorkspacePreviewContentManagerImpl));
 	builder.define(IPromptVariablesService, new SyncDescriptor(PromptVariablesServiceImpl));
+	builder.define(ILiveRequestEditorService, new SyncDescriptor(LiveRequestEditorService));
 	builder.define(IPromptWorkspaceLabels, new SyncDescriptor(PromptWorkspaceLabels));
 	builder.define(IUserFeedbackService, new SyncDescriptor(UserFeedbackService));
 	builder.define(IDebugCommandToConfigConverter, new SyncDescriptor(DebugCommandToConfigConverter));

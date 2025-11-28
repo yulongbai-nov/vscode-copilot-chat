@@ -52,7 +52,9 @@ import { DebugRecorder } from '../../extension/inlineEdits/node/debugRecorder';
 import { INextEditProvider, NextEditProvider } from '../../extension/inlineEdits/node/nextEditProvider';
 import { LlmNESTelemetryBuilder, NextEditProviderTelemetryBuilder, TelemetrySender } from '../../extension/inlineEdits/node/nextEditProviderTelemetry';
 import { INextEditResult } from '../../extension/inlineEdits/node/nextEditResult';
+import { ILiveRequestEditorService } from '../../extension/prompt/common/liveRequestEditorService';
 import { ChatMLFetcherImpl } from '../../extension/prompt/node/chatMLFetcher';
+import { LiveRequestEditorService } from '../../extension/prompt/node/liveRequestEditorService';
 import { XtabProvider } from '../../extension/xtab/node/xtabProvider';
 import { IAuthenticationService } from '../../platform/authentication/common/authentication';
 import { ICopilotTokenManager } from '../../platform/authentication/common/copilotTokenManager';
@@ -355,6 +357,7 @@ function setupServices(options: INESProviderOptions) {
 	builder.define(IAuthenticationService, new SyncDescriptor(StaticGitHubAuthenticationService, [createStaticGitHubTokenProvider()]));
 	builder.define(ICopilotTokenManager, copilotTokenManager);
 	builder.define(IChatMLFetcher, new SyncDescriptor(ChatMLFetcherImpl));
+	builder.define(ILiveRequestEditorService, new SyncDescriptor(LiveRequestEditorService));
 	builder.define(IChatQuotaService, new SyncDescriptor(ChatQuotaService));
 	builder.define(IInteractionService, new SyncDescriptor(InteractionService));
 	builder.define(IRequestLogger, new SyncDescriptor(NullRequestLogger));

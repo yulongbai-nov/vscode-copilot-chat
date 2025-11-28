@@ -17,6 +17,7 @@ import { HAS_IGNORED_FILES_MESSAGE } from '../../../platform/ignore/common/ignor
 import { ILogService } from '../../../platform/log/common/logService';
 import { IResponseDelta, OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { FilterReason } from '../../../platform/networking/common/openai';
+import { stringifyUrlOrRequestMetadata } from '../../../platform/networking/common/networking';
 import { CapturingToken } from '../../../platform/requestLogger/common/capturingToken';
 import { IRequestLogger } from '../../../platform/requestLogger/node/requestLogger';
 import { ISurveyService } from '../../../platform/survey/common/surveyService';
@@ -46,6 +47,8 @@ import { IToolGrouping, IToolGroupingService } from '../../tools/common/virtualT
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { Conversation, getUniqueReferences, GlobalContextMessageMetadata, IResultMetadata, RenderedUserMessageMetadata, RequestDebugInformation, ResponseStreamParticipant, Turn, TurnStatus } from '../common/conversation';
 import { IBuildPromptContext, IToolCallRound } from '../common/intents';
+import { EditableChatRequestInit, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 import { isToolCallLimitCancellation } from '../common/specialRequestTypes';
 import { ChatTelemetry, ChatTelemetryBuilder } from './chatParticipantTelemetry';
 import { IntentInvocationMetadata } from './conversation';
@@ -525,6 +528,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		@IToolGroupingService private readonly toolGroupingService: IToolGroupingService,
 		@IExperimentationService private readonly _experimentationService: IExperimentationService,
 		@ICopilotTokenStore private readonly _copilotTokenStore: ICopilotTokenStore,
+		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
 	) {
 		super(options, instantiationService, endpointProvider, logService, requestLogger, authenticationChatUpgradeService, telemetryService);
 
@@ -679,9 +683,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 
 	protected override async fetch(opts: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {
 		const messageSourcePrefix = this.options.location === ChatLocation.Editor ? 'inline' : 'chat';
-		const debugName = this.options.request.isSubagent ?
-			`tool/runSubagent` :
-			`${ChatLocation.toStringShorter(this.options.location)}/${this.options.intent?.id}`;
+		const debugName = this.computeDebugName();
 		return this.options.invocation.endpoint.makeChatRequest2({
 			...opts,
 			debugName,
@@ -709,6 +711,28 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			},
 			enableRetryOnFilter: true
 		}, token);
+	}
+
+	protected override prepareLiveRequest(buildPromptResult: IBuildPromptResult, context: IBuildPromptContext, requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+		if (!this._liveRequestEditorService.isEnabled()) {
+			return undefined;
+		}
+		const sessionKey: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
+		const requestId = context.requestId ?? this.options.conversation.getLatestTurn().id;
+		const init: EditableChatRequestInit = {
+			sessionId: sessionKey.sessionId,
+			location: sessionKey.location,
+			debugName: this.computeDebugName(),
+			model: this.options.invocation.endpoint.model,
+			renderResult: buildPromptResult,
+			requestId,
+			intentId: this.options.intent?.id,
+			endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
+			modelFamily: this.options.invocation.endpoint.family,
+			requestOptions,
+		};
+		this._liveRequestEditorService.prepareRequest(init);
+		return this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
 	}
 
 	protected override async getAvailableTools(outputStream: ChatResponseStream | undefined, token: CancellationToken): Promise<LanguageModelToolInformation[]> {
@@ -744,6 +768,13 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 				m.name = undefined;
 			}
 		});
+	}
+
+	private computeDebugName(): string {
+		if (this.options.request.isSubagent) {
+			return 'tool/runSubagent';
+		}
+		return `${ChatLocation.toStringShorter(this.options.location)}/${this.options.intent?.id ?? 'unknown'}`;
 	}
 
 	private calculateTemperature(): number {

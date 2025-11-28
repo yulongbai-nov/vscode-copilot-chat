@@ -19,7 +19,7 @@ import { joinPath } from '../../../../util/vs/base/common/resources';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatSessionStatus } from '../../../../vscodeTypes';
 import { stripReminders } from '../common/copilotCLITools';
-import { CopilotCLISessionOptions, ICopilotCLIAgents, ICopilotCLISDK } from './copilotCli';
+import { CopilotCLINotAvailableError, CopilotCLISessionOptions, ICopilotCLIAgents, ICopilotCLISDK } from './copilotCli';
 import { CopilotCLISession, ICopilotCLISession } from './copilotcliSession';
 import { getCopilotLogger } from './logger';
 import { ICopilotCLIMCPHandler } from './mcpHandler';
@@ -169,6 +169,10 @@ export class CopilotCLISessionService extends Disposable implements ICopilotCLIS
 
 			return allSessions;
 		} catch (error) {
+			if (error instanceof CopilotCLINotAvailableError) {
+				this.logService.info('Copilot CLI SDK unavailable; skipping session enumeration.');
+				return [];
+			}
 			this.logService.error(`Failed to get all sessions: ${error}`);
 			return Array.from(this._newActiveSessions.values());
 		}

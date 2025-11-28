@@ -619,6 +619,8 @@ export namespace ConfigKey {
 	 * Advanced settings that are available for all users to configure.
 	 */
 	export namespace Advanced {
+		/** Enables the live prompt inspector/editor inside the chat panel. */
+		export const LivePromptEditorEnabled = defineSetting<boolean>('chat.advanced.livePromptEditorEnabled', ConfigType.Simple, false);
 		/** Allows forcing a particular model.
 		 * Note: this should not be used while self-hosting because it might lead to
 		 * a fundamental different experience compared to our end-users.
