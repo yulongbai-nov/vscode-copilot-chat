@@ -156,6 +156,35 @@ For this feature, the **Request Logger UI** is a reference only:
 - **VS Code contribution scaffolding**: the `LiveRequestEditorProvider` is registered as an experimental `webviewView`, commands exist for “show/toggle/reset”, and the feature remains fully gated behind the advanced flag.
 - **Still pending**: the Prompt Inspector drawer UI that lives inside the chat panel (section list, hover toolbar, inline editors, conversation selector, reset affordance) along with UX that blocks send when all sections are removed, dirty indicators, telemetry, and accessibility polish. These map directly to Tasks 4.x–7.x in the plan.
 
+### Interim Webview Prompt Inspector (Existing Implementation Surface)
+
+Until the drawer experience lands inside the chat conversation surface, we rely on a dedicated `webviewView` contribution (`github.copilot.liveRequestEditor`). The design intent for this interim UI is:
+
+- **Layout**
+  - Header shows feature title, dirty badge, reset button, and a conversation/session summary (model, location, request id).
+  - Metadata strip directly under the header lists model, token count, section count, and timestamp derived from `EditableChatRequest.metadata.createdAt`.
+  - Section list renders vertically, each wrapped in a bordered card that mimics chat bubbles while still looking like a dev tool.
+- **Section chrome**
+  - Collapsible header with caret, kind badge, label, optional token count, and hover toolbar.
+  - Hover toolbar mirrors the chat code-block mini toolbar: icon-only buttons for `Edit`, `Delete`, `Restore`, with tooltips and keyboard focus affordances.
+  - Deleted sections get a dashed border + reduced opacity and expose a single `Restore` button inline.
+- **Editing flow**
+  - `Edit` toggles an inline `<textarea>` editor (monospace, chat theme colors). Save posts `editSection` with the new value; cancel just hides the editor and reverts to the previous text.
+  - `Delete` soft-deletes the section (marks `section.deleted = true`). Subsequent sends omit the message until restored.
+  - `Reset` issues `resetRequest` to restore original messages/sections and clears the dirty badge. Confirmation can be implicit (no modal) because reset is undoable by editing again.
+- **Conversation targeting**
+  - The interim webview always listens to `ILiveRequestEditorService.onDidChange`. The last-updated session automatically re-renders in the view.
+  - A conversation drop-down is optional in this phase; instead we surface the session id + chat location in metadata and rely on one-active-session behaviour. Future drawer work will introduce the picker.
+- **Empty/error states**
+  - When no editable request exists, show a centered “Waiting for chat request” message with instructions (“Send a prompt with the feature flag enabled…”).
+  - When the service is disabled via settings, the view collapses to a short explanation plus a settings gear link.
+- **Accessibility**
+  - Header buttons and section actions must be keyboard focusable (`tabindex=0`, `role=button`).
+  - Collapse/expand uses `aria-expanded` on the header button; deleted sections announce “deleted”.
+  - Dirty badge needs `aria-live="polite"` update when it toggles on/off.
+
+This interim design keeps parity with the backend model and lets early adopters validate editing semantics before the full chat-panel drawer ships. The drawer implementation should inherit these interaction contracts to avoid two divergent Prompt Inspector behaviours.
+
 ## Proposed Architecture
 
 ### High-Level Design
