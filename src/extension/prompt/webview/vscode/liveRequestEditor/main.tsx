@@ -183,12 +183,17 @@ const SectionCard: React.FC<SectionCardProps> = ({
 			return;
 		}
 		event.preventDefault();
-		const rect = event.currentTarget.getBoundingClientRect();
-		const placeAfter = (event.clientY - rect.top) > rect.height / 2;
+		let placeAfter: boolean;
+		if (dragPosition === 'none') {
+			const rect = event.currentTarget.getBoundingClientRect();
+			placeAfter = (event.clientY - rect.top) > rect.height / 2;
+		} else {
+			placeAfter = dragPosition === 'below';
+		}
 		onReorderPinned(draggingRef.current, section.id, placeAfter);
 		draggingRef.current = null;
 		setDragPosition('none');
-	}, [section.id, draggingRef, onReorderPinned]);
+	}, [section.id, draggingRef, onReorderPinned, dragPosition]);
 
 	const handleDragLeave = React.useCallback(() => {
 		setDragPosition('none');
