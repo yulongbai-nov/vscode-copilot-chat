@@ -56,9 +56,11 @@ export class AzureInsightReporter implements TelemetrySender {
 		this.client.trackEvent({
 			name: this.massageEventName(eventName),
 			properties,
-			measurements,
-			tagOverrides: trackingId ? { 'ai.user.id': trackingId } : undefined
+			measurements
 		});
+		if (trackingId) {
+			this.client.context.tags['ai.user.id'] = trackingId;
+		}
 	}
 
 	sendErrorData(error: Error, data?: Record<string, any> | undefined): void {
@@ -72,11 +74,8 @@ export class AzureInsightReporter implements TelemetrySender {
 
 	flush(): void | Thenable<void> {
 		return new Promise(resolve => {
-			this.client.flush({
-				callback: () => {
-					resolve(undefined);
-				},
-			});
+			this.client.flush();
+			resolve(undefined);
 		});
 	}
 
