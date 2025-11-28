@@ -149,6 +149,13 @@ For this feature, the **Request Logger UI** is a reference only:
 - We do not extend the tree with an editor.
 - Instead, we rely on the **same data model** (`LoggedRequest`, `RenderPromptResult`, `HTMLTracer`) to power the live editor embedded in the chat panel.
 
+## Current Implementation Status (May 2024)
+
+- **Feature flag + service plumbing**: `github.copilot.chat.advanced.livePromptEditorEnabled` is live in `package.json`, and the new `ILiveRequestEditorService` / builder produce editable section models keyed by session + location. The service already tracks dirty state, soft-delete, restore, and reset to original messages.
+- **Prompt pipeline wiring**: `defaultIntentRequestHandler` now asks the service to prepare the editable request and feeds `getMessagesForSend` back into the `ToolCallingLoop`, so edited sections flow through the existing `ChatMLFetcher`/`IRequestLogger` path with no extra fetch-layer changes.
+- **VS Code contribution scaffolding**: the `LiveRequestEditorProvider` is registered as an experimental `webviewView`, commands exist for “show/toggle/reset”, and the feature remains fully gated behind the advanced flag.
+- **Still pending**: the Prompt Inspector drawer UI that lives inside the chat panel (section list, hover toolbar, inline editors, conversation selector, reset affordance) along with UX that blocks send when all sections are removed, dirty indicators, telemetry, and accessibility polish. These map directly to Tasks 4.x–7.x in the plan.
+
 ## Proposed Architecture
 
 ### High-Level Design
