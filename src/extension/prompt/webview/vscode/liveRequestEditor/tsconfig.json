@@ -6,6 +6,7 @@
 		"sourceMap": true,
 		"rootDir": ".",
 		"lib": ["ES2021", "dom"],
+		"jsx": "react",
 		"strict": true,
 		"noUnusedLocals": true,
 		"noImplicitOverride": true,
