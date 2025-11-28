@@ -175,6 +175,10 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - `Delete` soft-deletes the section (marks `section.deleted = true`). Subsequent sends omit the message until restored.
   - `Reset` issues `resetRequest` to restore original messages/sections and clears the dirty badge. Confirmation can be implicit (no modal) because reset is undoable by editing again.
   - `Stick` toggles a `section.pinned` flag exposed via `updateSectionPinState`; pinned sections float to the top group, and pressing the button again “unsticks” them, returning them to their natural order.
+- **Token visibility / occupancy**
+  - The status banner shows overall token usage (absolute count plus percentage of model budget when available).
+  - Each section displays its token count and visualizes its share of the total prompt budget with a mini progress meter (e.g., “42 tokens · 8%” plus a bar).
+  - Pinned section heading summarizes the cumulative token share of the pinned subset so users can gauge how much budget is locked.
 - **Conversation targeting**
   - The interim webview always listens to `ILiveRequestEditorService.onDidChange`. The last-updated session automatically re-renders in the view.
   - A conversation drop-down is optional in this phase; instead we surface the session id + chat location in metadata and rely on one-active-session behaviour. Future drawer work will introduce the picker.
