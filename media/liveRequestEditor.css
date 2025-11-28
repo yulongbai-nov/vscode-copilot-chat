@@ -1,0 +1,336 @@
+:root {
+	color-scheme: light dark;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+	background: var(--vscode-editor-background);
+	color: var(--vscode-foreground);
+}
+
+#app {
+	padding: 12px;
+}
+
+.status-banner {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background: var(--vscode-editor-background);
+	padding-bottom: 12px;
+	margin-bottom: 12px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.pinned-container {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--vscode-panel-border);
+}
+
+.pinned-container h3 {
+	margin: 0 0 4px 0;
+	font-size: 11px;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+	letter-spacing: 0.05em;
+}
+
+.pinned-summary {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	margin-bottom: 4px;
+}
+
+.sections-wrapper {
+	display: flex;
+	flex-direction: column;
+}
+
+.header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 12px;
+}
+
+.header h2 {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.header-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.metadata {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	margin-bottom: 12px;
+}
+
+.metadata-row {
+	display: flex;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+.metadata-item {
+	display: flex;
+	gap: 4px;
+}
+
+.metadata-label {
+	font-weight: 500;
+}
+
+.dirty-badge {
+	background: var(--vscode-editorWarning-foreground);
+	color: var(--vscode-editor-background);
+	padding: 2px 6px;
+	border-radius: 4px;
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.section {
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 6px;
+	margin-bottom: 8px;
+	background: var(--vscode-sideBar-background);
+	overflow: hidden;
+}
+
+.section.deleted {
+	opacity: 0.5;
+	border-style: dashed;
+}
+
+.section.pinned {
+	box-shadow: 0 0 0 1px var(--vscode-list-activeSelectionBorder);
+}
+
+.section.drag-over {
+	outline: 1px dashed var(--vscode-focusBorder);
+}
+
+.section-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 12px;
+	cursor: pointer;
+	background: var(--vscode-sideBarSectionHeader-background);
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.section-header:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.section-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 500;
+}
+
+.section-title .icon {
+	font-size: 10px;
+	transition: transform 0.15s;
+}
+
+.section.collapsed .section-title .icon {
+	transform: rotate(-90deg);
+}
+
+.section-kind {
+	font-size: 11px;
+	padding: 2px 6px;
+	border-radius: 4px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	text-transform: uppercase;
+}
+
+.section-kind.system {
+	background: var(--vscode-debugIcon-breakpointForeground);
+}
+
+.section-kind.user {
+	background: var(--vscode-charts-blue);
+}
+
+.section-kind.assistant {
+	background: var(--vscode-charts-green);
+}
+
+.section-kind.tool {
+	background: var(--vscode-charts-orange);
+}
+
+.section-kind.context {
+	background: var(--vscode-charts-purple);
+}
+
+.section-kind.history {
+	background: var(--vscode-charts-yellow);
+	color: #000;
+}
+
+.section-tokens {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.section-percentage {
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.token-meter {
+	width: 100%;
+	height: 4px;
+	background: var(--vscode-editorLineNumber-foreground);
+	border-radius: 999px;
+	margin-top: 6px;
+	overflow: hidden;
+}
+
+.token-meter-fill {
+	height: 100%;
+	background: var(--vscode-editorWarning-foreground);
+	border-radius: 999px;
+	transition: width 0.2s ease;
+	width: 0%;
+}
+
+.pinned-indicator {
+	font-size: 10px;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+	border: 1px solid var(--vscode-descriptionForeground);
+	border-radius: 999px;
+	padding: 0 6px;
+}
+
+.section-actions {
+	display: flex;
+	gap: 4px;
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+
+.section:hover .section-actions,
+.section:focus-within .section-actions {
+	opacity: 1;
+}
+
+.section-content {
+	padding: 12px;
+	max-height: 300px;
+	overflow: auto;
+}
+
+.section.collapsed .section-content {
+	display: none;
+}
+
+.section-content pre {
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.section-editor {
+	width: 100%;
+	min-height: 150px;
+	padding: 8px;
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 4px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	font-family: var(--vscode-editor-font-family);
+	font-size: 12px;
+	line-height: 1.5;
+	resize: vertical;
+}
+
+.section-editor:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
+.editor-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+button {
+	border: none;
+	padding: 4px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+button.primary {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+button.primary:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+button.secondary {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}
+
+button.secondary:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+button.icon-only {
+	background: transparent;
+	padding: 4px;
+	border-radius: 4px;
+}
+
+button.icon-only:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+.empty-state {
+	text-align: center;
+	padding: 32px 16px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.empty-state p {
+	margin: 8px 0;
+}
