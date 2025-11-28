@@ -219,6 +219,25 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					margin-bottom: 12px;
 					border-bottom: 1px solid var(--vscode-panel-border);
 				}
+				.pinned-container {
+					display: flex;
+					flex-direction: column;
+					gap: 8px;
+					margin-top: 8px;
+					padding-top: 8px;
+					border-top: 1px solid var(--vscode-panel-border);
+				}
+				.pinned-container h3 {
+					margin: 0 0 4px 0;
+					font-size: 11px;
+					text-transform: uppercase;
+					color: var(--vscode-descriptionForeground);
+					letter-spacing: 0.05em;
+				}
+				.sections-wrapper {
+					display: flex;
+					flex-direction: column;
+				}
 				.header {
 					display: flex;
 					justify-content: space-between;
@@ -491,21 +510,24 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					render(currentRequest);
 				};
 
-				const reorderPinned = (sourceId, targetId) => {
+				const reorderPinned = (sourceId, targetId, placeAfter) => {
 					if (!sourceId || !targetId || sourceId === targetId) {
 						return;
 					}
 					if (!pinnedSectionIds.has(sourceId) || !pinnedSectionIds.has(targetId)) {
 						return;
 					}
-					const sourceIndex = pinnedOrder.indexOf(sourceId);
-					const targetIndex = pinnedOrder.indexOf(targetId);
+					const originalOrder = Array.from(pinnedOrder);
+					const sourceIndex = originalOrder.indexOf(sourceId);
+					const targetIndex = originalOrder.indexOf(targetId);
 					if (sourceIndex === -1 || targetIndex === -1) {
 						return;
 					}
-					pinnedOrder.splice(sourceIndex, 1);
-					const insertIndex = pinnedOrder.indexOf(targetId);
-					pinnedOrder.splice(insertIndex >= 0 ? insertIndex : pinnedOrder.length, 0, sourceId);
+					const newOrder = originalOrder.filter(id => id !== sourceId);
+					const targetPos = newOrder.indexOf(targetId);
+					const insertIndex = targetPos + (placeAfter ? 1 : 0);
+					newOrder.splice(insertIndex, 0, sourceId);
+					pinnedOrder = newOrder;
 					persistPinned();
 					render(currentRequest);
 				};
@@ -555,8 +577,10 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 							}
 							event.preventDefault();
 							const sourceId = event.dataTransfer?.getData('text/plain') || draggingSectionId;
+							const rect = sectionEl.getBoundingClientRect();
+							const dropAfter = (event.clientY - rect.top) > rect.height / 2;
 							sectionEl.classList.remove('drag-over');
-							reorderPinned(sourceId, section.id);
+							reorderPinned(sourceId, section.id, dropAfter);
 							draggingSectionId = null;
 						});
 						sectionEl.addEventListener('dragend', () => {
@@ -752,13 +776,31 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					statusBanner.className = 'status-banner';
 					statusBanner.appendChild(header);
 					statusBanner.appendChild(metadata);
+
+					const orderedSections = orderSections(request.sections || []);
+					const pinnedSections = orderedSections.filter(section => pinnedSectionIds.has(section.id));
+					const unpinnedSections = orderedSections.filter(section => !pinnedSectionIds.has(section.id));
+
+					if (pinnedSections.length) {
+						const pinnedContainer = document.createElement('div');
+						pinnedContainer.className = 'pinned-container';
+						const pinnedTitle = document.createElement('h3');
+						pinnedTitle.textContent = 'Pinned Sections';
+						pinnedContainer.appendChild(pinnedTitle);
+						pinnedSections.forEach((section, idx) => {
+							pinnedContainer.appendChild(renderSection(section, idx));
+						});
+						statusBanner.appendChild(pinnedContainer);
+					}
+
 					app.appendChild(statusBanner);
 
-					// Sections
-					const orderedSections = orderSections(request.sections || []);
-					for (let i = 0; i < orderedSections.length; i++) {
-						app.appendChild(renderSection(orderedSections[i], i));
+					const sectionsWrapper = document.createElement('div');
+					sectionsWrapper.className = 'sections-wrapper';
+					for (let i = 0; i < unpinnedSections.length; i++) {
+						sectionsWrapper.appendChild(renderSection(unpinnedSections[i], i));
 					}
+					app.appendChild(sectionsWrapper);
 
 					// Attach event listeners
 					attachEventListeners();
