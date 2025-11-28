@@ -4941,6 +4941,15 @@
 					"when": "github.copilot.chat.showLogView"
 				}
 			],
+			"live-request-editor": [
+				{
+					"id": "github.copilot.liveRequestEditor",
+					"name": "Live Request Editor",
+					"type": "webview",
+					"icon": "assets/live-request-editor.svg",
+					"when": "github.copilot-chat.activated && config.github.copilot.chat.advanced.livePromptEditorEnabled"
+				}
+			],
 			"context-inspector": [
 				{
 					"id": "context-inspector",
@@ -4969,12 +4978,6 @@
 					"name": "Prompt Section Visualizer",
 					"type": "webview",
 					"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled"
-				},
-				{
-					"id": "github.copilot.liveRequestEditor",
-					"name": "Live Request Editor",
-					"type": "webview",
-					"when": "github.copilot-chat.activated && config.github.copilot.chat.advanced.livePromptEditorEnabled"
 				}
 			]
 		},
@@ -4989,6 +4992,12 @@
 					"id": "context-inspector",
 					"title": "Language Context Inspector",
 					"icon": "$(inspect)"
+				},
+				{
+					"id": "live-request-editor",
+					"title": "Live Request Editor",
+					"icon": "assets/live-request-editor.svg",
+					"when": "github.copilot-chat.activated && config.github.copilot.chat.advanced.livePromptEditorEnabled"
 				}
 			]
 		},
