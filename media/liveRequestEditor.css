@@ -232,7 +232,7 @@ body {
 
 .section-actions {
 	display: flex;
-	gap: 4px;
+	gap: 6px;
 	opacity: 0;
 	transition: opacity 0.15s;
 }
@@ -286,43 +286,21 @@ body {
 	margin-top: 8px;
 }
 
-button {
-	border: none;
-	padding: 4px 8px;
-	border-radius: 4px;
-	cursor: pointer;
+.section-actions vscode-button,
+.editor-actions vscode-button,
+.header-actions vscode-button {
+	min-width: auto;
+}
+
+.section-actions vscode-button::part(control),
+.editor-actions vscode-button::part(control),
+.header-actions vscode-button::part(control) {
 	font-size: 12px;
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
+	padding: 4px 10px;
 }
 
-button.primary {
-	background: var(--vscode-button-background);
-	color: var(--vscode-button-foreground);
-}
-
-button.primary:hover {
-	background: var(--vscode-button-hoverBackground);
-}
-
-button.secondary {
-	background: var(--vscode-button-secondaryBackground);
-	color: var(--vscode-button-secondaryForeground);
-}
-
-button.secondary:hover {
-	background: var(--vscode-button-secondaryHoverBackground);
-}
-
-button.icon-only {
-	background: transparent;
-	padding: 4px;
-	border-radius: 4px;
-}
-
-button.icon-only:hover {
-	background: var(--vscode-toolbar-hoverBackground);
+.section-actions vscode-button.inline-button::part(control) {
+	padding: 2px 8px;
 }
 
 .empty-state {
