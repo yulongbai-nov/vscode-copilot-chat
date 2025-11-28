@@ -195,7 +195,11 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		setDragPosition('none');
 	}, [section.id, draggingRef, onReorderPinned, dragPosition]);
 
-	const handleDragLeave = React.useCallback(() => {
+	const handleDragLeave = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
+		const nextTarget = event.relatedTarget as Node | null;
+		if (nextTarget && event.currentTarget.contains(nextTarget)) {
+			return;
+		}
 		setDragPosition('none');
 	}, []);
 
