@@ -162,16 +162,18 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
 
 - **Layout**
   - Header shows feature title, dirty badge, reset button, and a conversation/session summary (model, location, request id).
-  - Metadata strip directly under the header lists model, token count, section count, and timestamp derived from `EditableChatRequest.metadata.createdAt`.
+  - Metadata strip (model, token count, section count, timestamp) is part of a **sticky status banner** that remains docked to the top while the user scrolls through sections; the section list scrolls underneath it.
   - Section list renders vertically, each wrapped in a bordered card that mimics chat bubbles while still looking like a dev tool.
 - **Section chrome**
   - Collapsible header with caret, kind badge, label, optional token count, and hover toolbar.
   - Hover toolbar mirrors the chat code-block mini toolbar: icon-only buttons for `Edit`, `Delete`, `Restore`, with tooltips and keyboard focus affordances.
+  - Additional **Stick** action pins a section to the top (beneath the status banner) until unstuck; pinned sections keep their order relative to each other and display a “Pinned” indicator.
   - Deleted sections get a dashed border + reduced opacity and expose a single `Restore` button inline.
 - **Editing flow**
   - `Edit` toggles an inline `<textarea>` editor (monospace, chat theme colors). Save posts `editSection` with the new value; cancel just hides the editor and reverts to the previous text.
   - `Delete` soft-deletes the section (marks `section.deleted = true`). Subsequent sends omit the message until restored.
   - `Reset` issues `resetRequest` to restore original messages/sections and clears the dirty badge. Confirmation can be implicit (no modal) because reset is undoable by editing again.
+  - `Stick` toggles a `section.pinned` flag exposed via `updateSectionPinState`; pinned sections float to the top group, and pressing the button again “unsticks” them, returning them to their natural order.
 - **Conversation targeting**
   - The interim webview always listens to `ILiveRequestEditorService.onDidChange`. The last-updated session automatically re-renders in the view.
   - A conversation drop-down is optional in this phase; instead we surface the session id + chat location in metadata and rely on one-active-session behaviour. Future drawer work will introduce the picker.
