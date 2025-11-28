@@ -649,6 +649,8 @@ export namespace ConfigKey {
 		export const CLIMCPServerEnabled = defineAndMigrateSetting<boolean | undefined>('chat.advanced.cli.mcp.enabled', 'chat.cli.mcp.enabled', false);
 		export const EnableClaudeCodeAgent = defineAndMigrateSetting<boolean | string | undefined>('chat.advanced.claudeCode.enabled', 'chat.claudeCode.enabled', false);
 		export const RequestLoggerMaxEntries = defineAndMigrateSetting<number>('chat.advanced.debug.requestLogger.maxEntries', 'chat.debug.requestLogger.maxEntries', 100);
+		/** Enable the Live Prompt Editor for inspecting and editing chat requests before they are sent to the LLM */
+		export const LivePromptEditorEnabled = defineAndMigrateSetting<boolean>('chat.advanced.livePromptEditor.enabled', 'chat.livePromptEditor.enabled', false);
 
 		// Experiment-based settings
 		/** Uses new expanded project labels */
