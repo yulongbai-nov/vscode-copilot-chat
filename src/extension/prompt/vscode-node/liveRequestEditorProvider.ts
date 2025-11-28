@@ -210,44 +210,13 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					color: var(--vscode-foreground);
 				}
 				#app { padding: 12px; }
-				.status-banner {
-					position: sticky;
-					top: 0;
-					z-index: 2;
-					background: var(--vscode-editor-background);
-					padding-bottom: 12px;
-					margin-bottom: 12px;
-					border-bottom: 1px solid var(--vscode-panel-border);
-				}
-				.pinned-container {
-					display: flex;
-					flex-direction: column;
-					gap: 8px;
-					margin-top: 8px;
-					padding-top: 8px;
-					border-top: 1px solid var(--vscode-panel-border);
-				}
-				.pinned-container h3 {
-					margin: 0 0 4px 0;
-					font-size: 11px;
-					text-transform: uppercase;
-					color: var(--vscode-descriptionForeground);
-					letter-spacing: 0.05em;
-				}
-				.pinned-summary {
-					font-size: 11px;
-					color: var(--vscode-descriptionForeground);
-					margin-bottom: 4px;
-				}
-				.sections-wrapper {
-					display: flex;
-					flex-direction: column;
-				}
 				.header {
 					display: flex;
 					justify-content: space-between;
 					align-items: center;
 					margin-bottom: 12px;
+					padding-bottom: 8px;
+					border-bottom: 1px solid var(--vscode-panel-border);
 				}
 				.header h2 {
 					margin: 0;
@@ -295,12 +264,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					opacity: 0.5;
 					border-style: dashed;
 				}
-				.section.pinned {
-					box-shadow: 0 0 0 1px var(--vscode-list-activeSelectionBorder);
-				}
-				.section.drag-over {
-					outline: 1px dashed var(--vscode-focusBorder);
-				}
 				.section-header {
 					display: flex;
 					justify-content: space-between;
@@ -343,36 +306,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				.section-tokens {
 					font-size: 11px;
 					color: var(--vscode-descriptionForeground);
-					display: inline-flex;
-					align-items: center;
-					gap: 4px;
-				}
-				.section-percentage {
-					font-size: 10px;
-					color: var(--vscode-descriptionForeground);
-				}
-				.token-meter {
-					width: 100%;
-					height: 4px;
-					background: var(--vscode-editorLineNumber-foreground);
-					border-radius: 999px;
-					margin-top: 6px;
-					overflow: hidden;
-				}
-				.token-meter-fill {
-					height: 100%;
-					background: var(--vscode-editorWarning-foreground);
-					border-radius: 999px;
-					transition: width 0.2s ease;
-					width: 0%;
-				}
-				.pinned-indicator {
-					font-size: 10px;
-					text-transform: uppercase;
-					color: var(--vscode-descriptionForeground);
-					border: 1px solid var(--vscode-descriptionForeground);
-					border-radius: 999px;
-					padding: 0 6px;
 				}
 				.section-actions {
 					display: flex;
@@ -474,10 +407,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				const app = document.getElementById('app');
 				let editingSection = null;
 				let currentRequest = null;
-				const persistedState = vscode.getState?.() ?? {};
-				let pinnedOrder = Array.isArray(persistedState?.pinned) ? persistedState.pinned : [];
-				let pinnedSectionIds = new Set(pinnedOrder);
-				let draggingSectionId = null;
 
 				// XSS prevention: escape all HTML special characters
 				const escapeHtml = (value) => {
@@ -486,164 +415,18 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					return String(value).replace(/[&<>"']/g, m => map[m]);
 				};
 
-				const compactNumberFormatter = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
-
-				const formatNumber = (value) => {
-					if (value === undefined || value === null || Number.isNaN(value)) {
-						return '0';
-					}
-					const numericValue = Number(value);
-					const absValue = Math.abs(numericValue);
-					if (absValue < 1000) {
-						return numericValue.toLocaleString();
-					}
-					return compactNumberFormatter.format(numericValue);
-				};
-
-				const computeTotalTokens = (request) => {
-					if (request?.metadata?.tokenCount) {
-						return request.metadata.tokenCount;
-					}
-					return (request?.sections ?? []).reduce((sum, section) => sum + (section.tokenCount ?? 0), 0);
-				};
-
-					const formatPercent = (value, total) => {
-						if (!total || !value) {
-							return '0%';
-						}
-						const pct = (value / total) * 100;
-						return pct.toFixed(pct >= 10 ? 0 : 1) + '%';
-					};
-
-				const persistPinned = () => {
-					vscode.setState?.({ pinned: pinnedOrder });
-				};
-
-				const sanitizePinned = (sections) => {
-					const allowed = new Set(sections.map(section => section.id));
-					let didChange = false;
-					pinnedOrder = pinnedOrder.filter(id => {
-						if (allowed.has(id)) {
-							return true;
-						}
-						didChange = true;
-						return false;
-					});
-					pinnedSectionIds = new Set(pinnedOrder);
-					if (didChange) {
-						persistPinned();
-					}
-				};
-
-				const orderSections = (sections) => {
-					sanitizePinned(sections);
-					const pinned = [];
-					const rest = [];
-					for (const section of sections) {
-						if (pinnedSectionIds.has(section.id)) {
-							pinned.push(section);
-						} else {
-							rest.push(section);
-						}
-					}
-					pinned.sort((a, b) => pinnedOrder.indexOf(a.id) - pinnedOrder.indexOf(b.id));
-					return [...pinned, ...rest];
-				};
-
-				const togglePinned = (sectionId) => {
-					if (!currentRequest) {
-						return;
-					}
-					if (pinnedSectionIds.has(sectionId)) {
-						pinnedSectionIds.delete(sectionId);
-						pinnedOrder = pinnedOrder.filter(id => id !== sectionId);
-					} else {
-						pinnedSectionIds.add(sectionId);
-						pinnedOrder = pinnedOrder.filter(id => id !== sectionId);
-						pinnedOrder.push(sectionId);
-					}
-					persistPinned();
-					render(currentRequest);
-				};
-
-				const reorderPinned = (sourceId, targetId, placeAfter) => {
-					if (!sourceId || !targetId || sourceId === targetId) {
-						return;
-					}
-					if (!pinnedSectionIds.has(sourceId) || !pinnedSectionIds.has(targetId)) {
-						return;
-					}
-					const originalOrder = Array.from(pinnedOrder);
-					const sourceIndex = originalOrder.indexOf(sourceId);
-					const targetIndex = originalOrder.indexOf(targetId);
-					if (sourceIndex === -1 || targetIndex === -1) {
-						return;
-					}
-					const newOrder = originalOrder.filter(id => id !== sourceId);
-					const targetPos = newOrder.indexOf(targetId);
-					const insertIndex = targetPos + (placeAfter ? 1 : 0);
-					newOrder.splice(insertIndex, 0, sourceId);
-					pinnedOrder = newOrder;
-					persistPinned();
-					render(currentRequest);
-				};
-
 				const sendMessage = (type, data) => {
 					vscode.postMessage({ type, ...data });
 				};
 
-				const renderSection = (section, index, totalTokens = 0) => {
+				const renderSection = (section, index) => {
 					const isEditing = editingSection === section.id;
 					const isDeleted = section.deleted;
 					const isCollapsed = section.collapsed && !isEditing;
-					const isPinned = pinnedSectionIds.has(section.id);
 
 					const sectionEl = document.createElement('div');
 					sectionEl.className = 'section' + (isCollapsed ? ' collapsed' : '') + (isDeleted ? ' deleted' : '');
-					if (isPinned) {
-						sectionEl.classList.add('pinned');
-					}
 					sectionEl.dataset.sectionId = section.id;
-					sectionEl.draggable = isPinned && !isDeleted;
-					if (sectionEl.draggable) {
-						sectionEl.addEventListener('dragstart', (event) => {
-							draggingSectionId = section.id;
-							event.dataTransfer?.setData('text/plain', section.id);
-							if (event.dataTransfer) {
-								event.dataTransfer.effectAllowed = 'move';
-							}
-						});
-						sectionEl.addEventListener('dragover', (event) => {
-							if (!draggingSectionId || draggingSectionId === section.id) {
-								return;
-							}
-							event.preventDefault();
-							sectionEl.classList.add('drag-over');
-							if (event.dataTransfer) {
-								event.dataTransfer.dropEffect = 'move';
-							}
-						});
-						sectionEl.addEventListener('dragleave', () => {
-							sectionEl.classList.remove('drag-over');
-						});
-						sectionEl.addEventListener('drop', (event) => {
-							if (!draggingSectionId || draggingSectionId === section.id) {
-								sectionEl.classList.remove('drag-over');
-								return;
-							}
-							event.preventDefault();
-							const sourceId = event.dataTransfer?.getData('text/plain') || draggingSectionId;
-							const rect = sectionEl.getBoundingClientRect();
-							const dropAfter = (event.clientY - rect.top) > rect.height / 2;
-							sectionEl.classList.remove('drag-over');
-							reorderPinned(sourceId, section.id, dropAfter);
-							draggingSectionId = null;
-						});
-						sectionEl.addEventListener('dragend', () => {
-							sectionEl.classList.remove('drag-over');
-							draggingSectionId = null;
-						});
-					}
 
 					const header = document.createElement('div');
 					header.className = 'section-header';
@@ -666,26 +449,11 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					label.textContent = section.label;
 					title.appendChild(label);
 
-					const sectionTokenCount = section.tokenCount ?? 0;
-
-					if (sectionTokenCount) {
+					if (section.tokenCount) {
 						const tokens = document.createElement('span');
 						tokens.className = 'section-tokens';
-						tokens.textContent = formatNumber(sectionTokenCount) + ' tokens';
-						if (totalTokens) {
-							const pct = document.createElement('span');
-							pct.className = 'section-percentage';
-							pct.textContent = formatPercent(sectionTokenCount, totalTokens);
-							tokens.appendChild(pct);
-						}
+						tokens.textContent = '(' + section.tokenCount + ' tokens)';
 						title.appendChild(tokens);
-					}
-
-					if (isPinned) {
-						const pinnedBadge = document.createElement('span');
-						pinnedBadge.className = 'pinned-indicator';
-						pinnedBadge.textContent = 'Pinned';
-						title.appendChild(pinnedBadge);
 					}
 
 					header.appendChild(title);
@@ -702,14 +470,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						restoreBtn.title = 'Restore section';
 						actions.appendChild(restoreBtn);
 					} else {
-						const pinBtn = document.createElement('button');
-						pinBtn.className = 'icon-only';
-						pinBtn.dataset.action = 'stick';
-						pinBtn.dataset.section = section.id;
-						pinBtn.textContent = isPinned ? 'Unstick' : 'Stick';
-						pinBtn.title = isPinned ? 'Unstick section' : 'Stick section';
-						actions.appendChild(pinBtn);
-
 						if (section.editable) {
 							const editBtn = document.createElement('button');
 							editBtn.className = 'icon-only';
@@ -767,16 +527,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						content.appendChild(pre);
 					}
 
-					if (totalTokens && sectionTokenCount) {
-						const meter = document.createElement('div');
-						meter.className = 'token-meter';
-						const fill = document.createElement('div');
-						fill.className = 'token-meter-fill';
-						fill.style.width = formatPercent(sectionTokenCount, totalTokens);
-						meter.appendChild(fill);
-						content.appendChild(meter);
-					}
-
 					sectionEl.appendChild(content);
 					return sectionEl;
 				};
@@ -794,7 +544,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					}
 
 					app.textContent = '';
-					const totalTokens = computeTotalTokens(request);
 
 					// Header
 					const header = document.createElement('div');
@@ -823,6 +572,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					}
 
 					header.appendChild(headerActions);
+					app.appendChild(header);
 
 					// Metadata
 					const metadata = document.createElement('div');
@@ -837,124 +587,78 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 					const tokensItem = document.createElement('div');
 					tokensItem.className = 'metadata-item';
-					const maxPrompt = request.metadata?.maxPromptTokens;
-					const tokenValue = totalTokens;
-					let tokenText: string;
-					if (maxPrompt) {
-						const occupancy = formatPercent(tokenValue, maxPrompt);
-						tokenText = formatNumber(tokenValue) + ' tokens (' + occupancy + ')';
-					} else {
-						tokenText = formatNumber(tokenValue) + ' tokens';
-					}
-					tokensItem.innerHTML = '<span class="metadata-label">Prompt Tokens:</span><span>' + tokenText + '</span>';
+					tokensItem.innerHTML = '<span class="metadata-label">Tokens:</span><span>' + (request.metadata?.tokenCount || 0) + '</span>';
 					metaRow.appendChild(tokensItem);
 
-		const sectionsItem = document.createElement('div');
-		sectionsItem.className = 'metadata-item';
-		sectionsItem.innerHTML = '<span class="metadata-label">Sections:</span><span>' + request.sections.length + '</span>';
-		metaRow.appendChild(sectionsItem);
+					const sectionsItem = document.createElement('div');
+					sectionsItem.className = 'metadata-item';
+					sectionsItem.innerHTML = '<span class="metadata-label">Sections:</span><span>' + request.sections.length + '</span>';
+					metaRow.appendChild(sectionsItem);
 
-		metadata.appendChild(metaRow);
+					metadata.appendChild(metaRow);
+					app.appendChild(metadata);
 
-		const statusBanner = document.createElement('div');
-		statusBanner.className = 'status-banner';
-		statusBanner.appendChild(header);
-		statusBanner.appendChild(metadata);
+					// Sections
+					for (let i = 0; i < request.sections.length; i++) {
+						app.appendChild(renderSection(request.sections[i], i));
+					}
 
-		const orderedSections = orderSections(request.sections || []);
-		const pinnedSections = orderedSections.filter(section => pinnedSectionIds.has(section.id));
-		const unpinnedSections = orderedSections.filter(section => !pinnedSectionIds.has(section.id));
+					// Attach event listeners
+					attachEventListeners();
+				};
 
-		if (pinnedSections.length) {
-			const pinnedContainer = document.createElement('div');
-			pinnedContainer.className = 'pinned-container';
-			const pinnedTitle = document.createElement('h3');
-			pinnedTitle.textContent = 'Pinned Sections';
-			pinnedContainer.appendChild(pinnedTitle);
-			const pinnedTokens = pinnedSections.reduce((sum, section) => sum + (section.tokenCount ?? 0), 0);
-			const pinnedSummary = document.createElement('div');
-			pinnedSummary.className = 'pinned-summary';
-					const pinnedText = totalTokens
-						? formatNumber(pinnedTokens) + ' tokens (' + formatPercent(pinnedTokens, totalTokens) + ')'
-						: formatNumber(pinnedTokens) + ' tokens';
-			pinnedSummary.textContent = pinnedText;
-			pinnedContainer.appendChild(pinnedSummary);
-			pinnedSections.forEach((section, idx) => {
-				pinnedContainer.appendChild(renderSection(section, idx, totalTokens));
-			});
-			statusBanner.appendChild(pinnedContainer);
-		}
+				const attachEventListeners = () => {
+					app.querySelectorAll('[data-toggle]').forEach(node => {
+						node.addEventListener('click', (e) => {
+							if (e.target.closest('[data-action]')) return;
+							const sectionId = node.dataset.toggle;
+							sendMessage('toggleCollapse', { sectionId });
+						});
+					});
 
-		app.appendChild(statusBanner);
+					app.querySelectorAll('[data-action]').forEach(node => {
+						node.addEventListener('click', (e) => {
+							e.stopPropagation();
+							const action = node.dataset.action;
+							const sectionId = node.dataset.section;
 
-		const sectionsWrapper = document.createElement('div');
-		sectionsWrapper.className = 'sections-wrapper';
-		for (let i = 0; i < unpinnedSections.length; i++) {
-			sectionsWrapper.appendChild(renderSection(unpinnedSections[i], i, totalTokens));
-		}
-		app.appendChild(sectionsWrapper);
-
-		// Attach event listeners
-		attachEventListeners();
-	};
-
-	const attachEventListeners = () => {
-		app.querySelectorAll('[data-toggle]').forEach(node => {
-			node.addEventListener('click', (e) => {
-				if (e.target.closest('[data-action]')) return;
-				const sectionId = node.dataset.toggle;
-				sendMessage('toggleCollapse', { sectionId });
-			});
-		});
-
-		app.querySelectorAll('[data-action]').forEach(node => {
-			node.addEventListener('click', (e) => {
-				e.stopPropagation();
-				const action = node.dataset.action;
-				const sectionId = node.dataset.section;
-
-				switch (action) {
-					case 'stick':
-						if (sectionId) {
-							togglePinned(sectionId);
-						}
-						break;
-					case 'edit':
-						editingSection = editingSection === sectionId ? null : sectionId;
-						render(currentRequest);
-						break;
-					case 'cancel-edit':
-						editingSection = null;
-						render(currentRequest);
-						break;
-					case 'save-edit':
-						const textarea = app.querySelector('textarea[data-section="' + sectionId + '"]');
-						if (textarea) {
-							sendMessage('editSection', { sectionId, content: textarea.value });
-							editingSection = null;
-						}
-						break;
-					case 'delete':
-						sendMessage('deleteSection', { sectionId });
-						break;
-					case 'restore':
-						sendMessage('restoreSection', { sectionId });
-						break;
-					case 'reset':
-						sendMessage('resetRequest', {});
-						break;
-				}
-			});
-		});
-	};
+							switch (action) {
+								case 'edit':
+									editingSection = editingSection === sectionId ? null : sectionId;
+									render(currentRequest);
+									break;
+								case 'cancel-edit':
+									editingSection = null;
+									render(currentRequest);
+									break;
+								case 'save-edit':
+									const textarea = app.querySelector('textarea[data-section="' + sectionId + '"]');
+									if (textarea) {
+										sendMessage('editSection', { sectionId, content: textarea.value });
+										editingSection = null;
+									}
+									break;
+								case 'delete':
+									sendMessage('deleteSection', { sectionId });
+									break;
+								case 'restore':
+									sendMessage('restoreSection', { sectionId });
+									break;
+								case 'reset':
+									sendMessage('resetRequest', {});
+									break;
+							}
+						});
+					});
+				};
 
 				window.addEventListener('message', event => {
-		if (event.data?.type === 'stateUpdate') {
-	render(event.data.request);
-}
+					if (event.data?.type === 'stateUpdate') {
+						render(event.data.request);
+					}
 				});
 			}());
-`;
+		`;
 	}
 
 	private _postStateToWebview(): void {
