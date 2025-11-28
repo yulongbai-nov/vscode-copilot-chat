@@ -112,6 +112,7 @@ body {
 	margin-bottom: 8px;
 	background: var(--vscode-sideBar-background);
 	overflow: hidden;
+	position: relative;
 }
 
 .section.deleted {
@@ -230,11 +231,32 @@ body {
 	padding: 0 6px;
 }
 
+.section.drag-over-above::before,
+.section.drag-over-below::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: var(--vscode-focusBorder);
+}
+
+.section.drag-over-above::before {
+	top: 0;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.section.drag-over-below::after {
+	bottom: 0;
+	box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.2);
+}
+
 .section-actions {
 	display: flex;
 	gap: 6px;
 	opacity: 0;
 	transition: opacity 0.15s;
+	align-items: center;
 }
 
 .section:hover .section-actions,
