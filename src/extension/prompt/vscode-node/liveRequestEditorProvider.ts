@@ -585,7 +585,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					vscode.postMessage({ type, ...data });
 				};
 
-				const renderSection = (section, index) => {
+				const renderSection = (section, index, totalTokens = 0) => {
 					const isEditing = editingSection === section.id;
 					const isDeleted = section.deleted;
 					const isCollapsed = section.collapsed && !isEditing;
