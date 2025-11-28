@@ -128,7 +128,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	onReorderPinned,
 }) => {
 	const [draftContent, setDraftContent] = React.useState(section.content ?? '');
-	const [isDragOver, setIsDragOver] = React.useState(false);
+	const [dragPosition, setDragPosition] = React.useState<'none' | 'above' | 'below'>('none');
 	const collapsed = !!section.collapsed && !isEditing;
 	const deleted = !!section.deleted;
 	const sectionTokens = section.tokenCount ?? 0;
@@ -145,18 +145,23 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		collapsed ? 'collapsed' : '',
 		deleted ? 'deleted' : '',
 		isPinned ? 'pinned' : '',
-		isDragOver ? 'drag-over' : ''
+		dragPosition === 'above' ? 'drag-over-above' : '',
+		dragPosition === 'below' ? 'drag-over-below' : ''
 	].filter(Boolean).join(' ');
 
 	const handleDragStart = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
 		if (!canDrag) {
 			return;
 		}
+		const node = event.currentTarget;
+		const rect = node.getBoundingClientRect();
 		draggingRef.current = section.id;
 		event.dataTransfer?.setData('text/plain', section.id);
 		if (event.dataTransfer) {
 			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setDragImage(node, event.clientX - rect.left, event.clientY - rect.top);
 		}
+		setDragPosition('none');
 	}, [canDrag, section.id, draggingRef]);
 
 	const handleDragOver = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -164,15 +169,17 @@ const SectionCard: React.FC<SectionCardProps> = ({
 			return;
 		}
 		event.preventDefault();
+		const rect = event.currentTarget.getBoundingClientRect();
+		const placeAfter = (event.clientY - rect.top) > rect.height / 2;
 		if (event.dataTransfer) {
 			event.dataTransfer.dropEffect = 'move';
 		}
-		setIsDragOver(true);
+		setDragPosition(placeAfter ? 'below' : 'above');
 	}, [canDrag, section.id, draggingRef]);
 
 	const handleDrop = React.useCallback((event: React.DragEvent<HTMLDivElement>) => {
 		if (!draggingRef.current || draggingRef.current === section.id) {
-			setIsDragOver(false);
+			setDragPosition('none');
 			return;
 		}
 		event.preventDefault();
@@ -180,16 +187,16 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		const placeAfter = (event.clientY - rect.top) > rect.height / 2;
 		onReorderPinned(draggingRef.current, section.id, placeAfter);
 		draggingRef.current = null;
-		setIsDragOver(false);
+		setDragPosition('none');
 	}, [section.id, draggingRef, onReorderPinned]);
 
 	const handleDragLeave = React.useCallback(() => {
-		setIsDragOver(false);
+		setDragPosition('none');
 	}, []);
 
 	const handleDragEnd = React.useCallback(() => {
 		draggingRef.current = null;
-		setIsDragOver(false);
+		setDragPosition('none');
 	}, [draggingRef]);
 
 	const handleSaveClick = React.useCallback(() => {
