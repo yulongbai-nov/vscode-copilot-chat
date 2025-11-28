@@ -234,6 +234,11 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					color: var(--vscode-descriptionForeground);
 					letter-spacing: 0.05em;
 				}
+				.pinned-summary {
+					font-size: 11px;
+					color: var(--vscode-descriptionForeground);
+					margin-bottom: 4px;
+				}
 				.sections-wrapper {
 					display: flex;
 					flex-direction: column;
@@ -338,6 +343,28 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				.section-tokens {
 					font-size: 11px;
 					color: var(--vscode-descriptionForeground);
+					display: inline-flex;
+					align-items: center;
+					gap: 4px;
+				}
+				.section-percentage {
+					font-size: 10px;
+					color: var(--vscode-descriptionForeground);
+				}
+				.token-meter {
+					width: 100%;
+					height: 4px;
+					background: var(--vscode-editorLineNumber-foreground);
+					border-radius: 999px;
+					margin-top: 6px;
+					overflow: hidden;
+				}
+				.token-meter-fill {
+					height: 100%;
+					background: var(--vscode-editorWarning-foreground);
+					border-radius: 999px;
+					transition: width 0.2s ease;
+					width: 0%;
 				}
 				.pinned-indicator {
 					font-size: 10px;
@@ -458,6 +485,28 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 					return String(value).replace(/[&<>"']/g, m => map[m]);
 				};
+
+				const formatNumber = (value) => {
+					if (value === undefined || value === null || Number.isNaN(value)) {
+						return '—';
+					}
+					return Number(value).toLocaleString();
+				};
+
+				const computeTotalTokens = (request) => {
+					if (request?.metadata?.tokenCount) {
+						return request.metadata.tokenCount;
+					}
+					return (request?.sections ?? []).reduce((sum, section) => sum + (section.tokenCount ?? 0), 0);
+				};
+
+					const formatPercent = (value, total) => {
+						if (!total || !value) {
+							return '0%';
+						}
+						const pct = (value / total) * 100;
+						return pct.toFixed(pct >= 10 ? 0 : 1) + '%';
+					};
 
 				const persistPinned = () => {
 					vscode.setState?.({ pinned: pinnedOrder });
@@ -703,6 +752,16 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						content.appendChild(pre);
 					}
 
+					if (totalTokens && sectionTokenCount) {
+						const meter = document.createElement('div');
+						meter.className = 'token-meter';
+						const fill = document.createElement('div');
+						fill.className = 'token-meter-fill';
+						fill.style.width = formatPercent(sectionTokenCount, totalTokens);
+						meter.appendChild(fill);
+						content.appendChild(meter);
+					}
+
 					sectionEl.appendChild(content);
 					return sectionEl;
 				};
@@ -720,6 +779,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					}
 
 					app.textContent = '';
+					const totalTokens = computeTotalTokens(request);
 
 					// Header
 					const header = document.createElement('div');
@@ -762,107 +822,121 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 					const tokensItem = document.createElement('div');
 					tokensItem.className = 'metadata-item';
-					tokensItem.innerHTML = '<span class="metadata-label">Tokens:</span><span>' + (request.metadata?.tokenCount || 0) + '</span>';
+					const maxPrompt = request.metadata?.maxPromptTokens;
+					const tokenValue = totalTokens;
+					const occupancy = maxPrompt ? formatPercent(tokenValue, maxPrompt) : undefined;
+					const tokenText = maxPrompt
+						? formatNumber(tokenValue) + ' / ' + formatNumber(maxPrompt) + ' (' + occupancy + ')'
+						: formatNumber(tokenValue) + ' tokens';
+					tokensItem.innerHTML = '<span class="metadata-label">Prompt Budget:</span><span>' + tokenText + '</span>';
 					metaRow.appendChild(tokensItem);
 
-					const sectionsItem = document.createElement('div');
-					sectionsItem.className = 'metadata-item';
-					sectionsItem.innerHTML = '<span class="metadata-label">Sections:</span><span>' + request.sections.length + '</span>';
-					metaRow.appendChild(sectionsItem);
+		const sectionsItem = document.createElement('div');
+		sectionsItem.className = 'metadata-item';
+		sectionsItem.innerHTML = '<span class="metadata-label">Sections:</span><span>' + request.sections.length + '</span>';
+		metaRow.appendChild(sectionsItem);
 
-					metadata.appendChild(metaRow);
+		metadata.appendChild(metaRow);
 
-					const statusBanner = document.createElement('div');
-					statusBanner.className = 'status-banner';
-					statusBanner.appendChild(header);
-					statusBanner.appendChild(metadata);
+		const statusBanner = document.createElement('div');
+		statusBanner.className = 'status-banner';
+		statusBanner.appendChild(header);
+		statusBanner.appendChild(metadata);
 
-					const orderedSections = orderSections(request.sections || []);
-					const pinnedSections = orderedSections.filter(section => pinnedSectionIds.has(section.id));
-					const unpinnedSections = orderedSections.filter(section => !pinnedSectionIds.has(section.id));
+		const orderedSections = orderSections(request.sections || []);
+		const pinnedSections = orderedSections.filter(section => pinnedSectionIds.has(section.id));
+		const unpinnedSections = orderedSections.filter(section => !pinnedSectionIds.has(section.id));
 
-					if (pinnedSections.length) {
-						const pinnedContainer = document.createElement('div');
-						pinnedContainer.className = 'pinned-container';
-						const pinnedTitle = document.createElement('h3');
-						pinnedTitle.textContent = 'Pinned Sections';
-						pinnedContainer.appendChild(pinnedTitle);
-						pinnedSections.forEach((section, idx) => {
-							pinnedContainer.appendChild(renderSection(section, idx));
-						});
-						statusBanner.appendChild(pinnedContainer);
-					}
+		if (pinnedSections.length) {
+			const pinnedContainer = document.createElement('div');
+			pinnedContainer.className = 'pinned-container';
+			const pinnedTitle = document.createElement('h3');
+			pinnedTitle.textContent = 'Pinned Sections';
+			pinnedContainer.appendChild(pinnedTitle);
+			const pinnedTokens = pinnedSections.reduce((sum, section) => sum + (section.tokenCount ?? 0), 0);
+			const pinnedSummary = document.createElement('div');
+			pinnedSummary.className = 'pinned-summary';
+					const pinnedText = totalTokens
+						? formatNumber(pinnedTokens) + ' tokens (' + formatPercent(pinnedTokens, totalTokens) + ')'
+						: formatNumber(pinnedTokens) + ' tokens';
+			pinnedSummary.textContent = pinnedText;
+			pinnedContainer.appendChild(pinnedSummary);
+			pinnedSections.forEach((section, idx) => {
+				pinnedContainer.appendChild(renderSection(section, idx, totalTokens));
+			});
+			statusBanner.appendChild(pinnedContainer);
+		}
 
-					app.appendChild(statusBanner);
+		app.appendChild(statusBanner);
 
-					const sectionsWrapper = document.createElement('div');
-					sectionsWrapper.className = 'sections-wrapper';
-					for (let i = 0; i < unpinnedSections.length; i++) {
-						sectionsWrapper.appendChild(renderSection(unpinnedSections[i], i));
-					}
-					app.appendChild(sectionsWrapper);
+		const sectionsWrapper = document.createElement('div');
+		sectionsWrapper.className = 'sections-wrapper';
+		for (let i = 0; i < unpinnedSections.length; i++) {
+			sectionsWrapper.appendChild(renderSection(unpinnedSections[i], i, totalTokens));
+		}
+		app.appendChild(sectionsWrapper);
 
-					// Attach event listeners
-					attachEventListeners();
-				};
+		// Attach event listeners
+		attachEventListeners();
+	};
 
-				const attachEventListeners = () => {
-					app.querySelectorAll('[data-toggle]').forEach(node => {
-						node.addEventListener('click', (e) => {
-							if (e.target.closest('[data-action]')) return;
-							const sectionId = node.dataset.toggle;
-							sendMessage('toggleCollapse', { sectionId });
-						});
-					});
+	const attachEventListeners = () => {
+		app.querySelectorAll('[data-toggle]').forEach(node => {
+			node.addEventListener('click', (e) => {
+				if (e.target.closest('[data-action]')) return;
+				const sectionId = node.dataset.toggle;
+				sendMessage('toggleCollapse', { sectionId });
+			});
+		});
 
-					app.querySelectorAll('[data-action]').forEach(node => {
-						node.addEventListener('click', (e) => {
-							e.stopPropagation();
-							const action = node.dataset.action;
-							const sectionId = node.dataset.section;
+		app.querySelectorAll('[data-action]').forEach(node => {
+			node.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const action = node.dataset.action;
+				const sectionId = node.dataset.section;
 
-							switch (action) {
-								case 'stick':
-									if (sectionId) {
-										togglePinned(sectionId);
-									}
-									break;
-								case 'edit':
-									editingSection = editingSection === sectionId ? null : sectionId;
-									render(currentRequest);
-									break;
-								case 'cancel-edit':
-									editingSection = null;
-									render(currentRequest);
-									break;
-								case 'save-edit':
-									const textarea = app.querySelector('textarea[data-section="' + sectionId + '"]');
-									if (textarea) {
-										sendMessage('editSection', { sectionId, content: textarea.value });
-										editingSection = null;
-									}
-									break;
-								case 'delete':
-									sendMessage('deleteSection', { sectionId });
-									break;
-								case 'restore':
-									sendMessage('restoreSection', { sectionId });
-									break;
-								case 'reset':
-									sendMessage('resetRequest', {});
-									break;
-							}
-						});
-					});
-				};
+				switch (action) {
+					case 'stick':
+						if (sectionId) {
+							togglePinned(sectionId);
+						}
+						break;
+					case 'edit':
+						editingSection = editingSection === sectionId ? null : sectionId;
+						render(currentRequest);
+						break;
+					case 'cancel-edit':
+						editingSection = null;
+						render(currentRequest);
+						break;
+					case 'save-edit':
+						const textarea = app.querySelector('textarea[data-section="' + sectionId + '"]');
+						if (textarea) {
+							sendMessage('editSection', { sectionId, content: textarea.value });
+							editingSection = null;
+						}
+						break;
+					case 'delete':
+						sendMessage('deleteSection', { sectionId });
+						break;
+					case 'restore':
+						sendMessage('restoreSection', { sectionId });
+						break;
+					case 'reset':
+						sendMessage('resetRequest', {});
+						break;
+				}
+			});
+		});
+	};
 
 				window.addEventListener('message', event => {
-					if (event.data?.type === 'stateUpdate') {
-						render(event.data.request);
-					}
+		if (event.data?.type === 'stateUpdate') {
+	render(event.data.request);
+}
 				});
 			}());
-		`;
+`;
 	}
 
 	private _postStateToWebview(): void {
