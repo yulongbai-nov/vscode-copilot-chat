@@ -5,6 +5,7 @@
 
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
+import { provideVSCodeDesignSystem, vsCodeButton } from '@vscode/webview-ui-toolkit';
 
 interface VSCodeAPI<TState = unknown> {
 	postMessage(message: unknown): void;
@@ -13,6 +14,16 @@ interface VSCodeAPI<TState = unknown> {
 }
 
 declare function acquireVsCodeApi<TState = unknown>(): VSCodeAPI<TState>;
+
+declare global {
+	namespace JSX {
+		interface IntrinsicElements {
+			'vscode-button': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+				appearance?: 'primary' | 'secondary';
+			};
+		}
+	}
+}
 
 interface EditableChatRequest {
 	id: string;
@@ -47,6 +58,8 @@ interface PersistedState {
 }
 
 const vscode = acquireVsCodeApi<PersistedState>();
+
+provideVSCodeDesignSystem().register(vsCodeButton());
 
 function formatNumber(value?: number): string {
 	if (value === undefined || value === null || Number.isNaN(value)) {
@@ -211,23 +224,35 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				</div>
 				<div className="section-actions" onClick={event => event.stopPropagation()}>
 					{deleted ? (
-						<button className="secondary" type="button" onClick={() => onRestore(section.id)}>
+						<vscode-button appearance="secondary" className="inline-button" onClick={() => onRestore(section.id)}>
 							Restore
-						</button>
+						</vscode-button>
 					) : (
 						<>
-							<button className="icon-only" type="button" onClick={() => onTogglePinned(section.id)}>
-								{isPinned ? 'Unstick' : 'Stick'}
-							</button>
+							<vscode-button
+								appearance="secondary"
+								className="inline-button"
+								onClick={() => onTogglePinned(section.id)}
+							>
+								{isPinned ? 'Unpin' : 'Pin'}
+							</vscode-button>
 							{section.editable && (
-								<button className="icon-only" type="button" onClick={() => onEditToggle(section.id)}>
-									{isEditing ? 'Cancel' : 'Edit'}
-								</button>
+								<vscode-button
+									appearance="secondary"
+									className="inline-button"
+									onClick={() => onEditToggle(section.id)}
+								>
+									{isEditing ? 'Cancel Edit' : 'Edit'}
+								</vscode-button>
 							)}
 							{section.deletable && (
-								<button className="icon-only" type="button" onClick={() => onDelete(section.id)}>
+								<vscode-button
+									appearance="secondary"
+									className="inline-button"
+									onClick={() => onDelete(section.id)}
+								>
 									Delete
-								</button>
+								</vscode-button>
 							)}
 						</>
 					)}
@@ -243,12 +268,12 @@ const SectionCard: React.FC<SectionCardProps> = ({
 							data-section={section.id}
 						/>
 						<div className="editor-actions">
-							<button className="secondary" type="button" onClick={onCancelEdit}>
+							<vscode-button appearance="secondary" onClick={onCancelEdit}>
 								Cancel
-							</button>
-							<button className="primary" type="button" onClick={handleSaveClick}>
+							</vscode-button>
+							<vscode-button appearance="primary" onClick={handleSaveClick}>
 								Save
-							</button>
+							</vscode-button>
 						</div>
 					</>
 				) : (
@@ -408,9 +433,9 @@ const App: React.FC = () => {
 						{request.isDirty && (
 							<>
 								<span className="dirty-badge">Modified</span>
-								<button className="secondary" type="button" onClick={handleResetRequest}>
+								<vscode-button appearance="secondary" onClick={handleResetRequest}>
 									Reset
-								</button>
+								</vscode-button>
 							</>
 						)}
 					</div>
