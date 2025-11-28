@@ -6,6 +6,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+const CHAT_LIB_ROOT = path.join(__dirname, '..');
+const REPO_ROOT = path.join(CHAT_LIB_ROOT, '..');
+
 async function copyStaticAssets(srcpaths: string[], dst: string): Promise<void> {
 	await Promise.all(srcpaths.map(async srcpath => {
 		const src = path.join(REPO_ROOT, srcpath);
@@ -37,9 +40,6 @@ const treeSitterGrammars: string[] = [
 	'tree-sitter-rust',
 	'tree-sitter-php'
 ];
-
-const CHAT_LIB_ROOT = path.join(__dirname, '..');
-const REPO_ROOT = path.join(CHAT_LIB_ROOT, '..');
 
 async function platformDir(): Promise<string> {
 	const candidateDirs = [
