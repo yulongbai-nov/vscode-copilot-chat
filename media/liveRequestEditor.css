@@ -152,6 +152,12 @@ body {
 	flex-wrap: wrap;
 }
 
+.metadata-row-subtle {
+	margin-top: 6px;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
 .metadata-item {
 	display: flex;
 	gap: 4px;
@@ -159,6 +165,12 @@ body {
 
 .metadata-label {
 	font-weight: 500;
+}
+
+.metadata-mono {
+	font-family: var(--vscode-editor-font-family);
+	font-size: 11px;
+	word-break: break-all;
 }
 
 .status-meter {

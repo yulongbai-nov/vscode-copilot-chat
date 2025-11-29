@@ -185,16 +185,6 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					}
 					break;
 
-				case 'toggleCollapse':
-					if (payload.sectionId && this._currentRequest) {
-						const section = this._currentRequest.sections.find(s => s.id === payload.sectionId);
-						if (section) {
-							section.collapsed = !section.collapsed;
-							this._postStateToWebview();
-						}
-					}
-					break;
-
 				case 'resumeSend':
 					this._resolvePendingIntercept('resume');
 					break;

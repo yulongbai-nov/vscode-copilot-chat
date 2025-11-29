@@ -36,16 +36,24 @@ declare global {
 
 type LiveRequestValidationErrorCode = 'empty' | string;
 
+interface EditableChatRequestMetadata {
+	requestId?: string;
+	tokenCount?: number;
+	maxPromptTokens?: number;
+	maxResponseTokens?: number;
+	createdAt?: number;
+	lastValidationErrorCode?: LiveRequestValidationErrorCode;
+}
+
 interface EditableChatRequest {
 	id: string;
+	sessionId: string;
+	location: number;
+	debugName?: string;
 	model: string;
 	isDirty: boolean;
 	sections: LiveRequestSection[];
-	metadata?: {
-		tokenCount?: number;
-		maxPromptTokens?: number;
-		lastValidationErrorCode?: LiveRequestValidationErrorCode;
-	};
+	metadata?: EditableChatRequestMetadata;
 }
 
 interface LiveRequestSection {
@@ -81,6 +89,7 @@ interface SessionSummary {
 
 interface PersistedState {
 	pinned?: Record<string, string[]>;
+	collapsed?: Record<string, string[]>;
 }
 
 interface InterceptionState {
@@ -125,11 +134,38 @@ function formatPercent(value: number, total: number): string {
 	return pct.toFixed(pct >= 10 ? 0 : 1) + '%';
 }
 
+function describeLocation(location?: number): string {
+	switch (location) {
+		case 1:
+			return 'Panel';
+		case 2:
+			return 'Terminal';
+		case 3:
+			return 'Notebook';
+		case 4:
+			return 'Editor';
+		case 5:
+			return 'Editing Session';
+		case 6:
+			return 'Other';
+		case 7:
+			return 'Agent';
+		case 8:
+			return 'Responses Proxy';
+		default:
+			return 'Unknown';
+	}
+}
+
 function arraysEqual<T>(a: readonly T[], b: readonly T[]): boolean {
 	if (a.length !== b.length) {
 		return false;
 	}
 	return a.every((value, index) => value === b[index]);
+}
+
+function hasOwn<T extends object>(target: T, key: PropertyKey): boolean {
+	return Object.prototype.hasOwnProperty.call(target, key);
 }
 
 function describeValidationError(code: LiveRequestValidationErrorCode | undefined): string {
@@ -156,6 +192,7 @@ interface SectionCardProps {
 	totalTokens: number;
 	isPinned: boolean;
 	isEditing: boolean;
+	isCollapsed: boolean;
 	onToggleCollapse: (sectionId: string) => void;
 	onTogglePinned: (sectionId: string) => void;
 	onEditToggle: (sectionId: string) => void;
@@ -172,6 +209,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	totalTokens,
 	isPinned,
 	isEditing,
+	isCollapsed,
 	onToggleCollapse,
 	onTogglePinned,
 	onEditToggle,
@@ -184,7 +222,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 }) => {
 	const [draftContent, setDraftContent] = React.useState(section.content ?? '');
 	const [dragPosition, setDragPosition] = React.useState<'none' | 'above' | 'below'>('none');
-	const collapsed = !!section.collapsed && !isEditing;
+	const collapsed = isCollapsed && !isEditing;
 	const deleted = !!section.deleted;
 	const sectionTokens = section.tokenCount ?? 0;
 	const canDrag = isPinned && !deleted;
@@ -421,8 +459,10 @@ const App: React.FC = () => {
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
-		const stored = vscode.getState?.() ?? {};
-		if (Array.isArray((stored as PersistedState).pinned)) {
+		const stored = (vscode.getState?.() ?? {}) as PersistedState;
+		const pinned = (stored as { pinned?: unknown }).pinned;
+		const collapsed = (stored as { collapsed?: unknown }).collapsed;
+		if (Array.isArray(pinned) || Array.isArray(collapsed)) {
 			return {};
 		}
 		return stored;
@@ -440,6 +480,10 @@ const App: React.FC = () => {
 
 	const pinnedOrderMap = persistedState.pinned ?? {};
 	const pinnedOrder = activeSessionKey ? (pinnedOrderMap[activeSessionKey] ?? []) : [];
+	const collapsedOrderMap = persistedState.collapsed ?? {};
+	const collapsedOrder = activeSessionKey ? collapsedOrderMap[activeSessionKey] : undefined;
+	const hasCollapsedState = !!(activeSessionKey && hasOwn(collapsedOrderMap, activeSessionKey));
+	const collapsedIdSet = React.useMemo(() => new Set(collapsedOrder ?? []), [collapsedOrder]);
 
 	const setPinnedForActiveSession = React.useCallback((updater: (prev: string[]) => string[]) => {
 		if (!activeSessionKey) {
@@ -461,6 +505,29 @@ const App: React.FC = () => {
 			return {
 				...prev,
 				pinned: Object.keys(nextPinned).length ? nextPinned : undefined
+			};
+		});
+	}, [activeSessionKey, updatePersistedState]);
+
+	const setCollapsedForActiveSession = React.useCallback((updater: (prev: string[]) => string[]) => {
+		if (!activeSessionKey) {
+			return;
+		}
+		updatePersistedState(prev => {
+			const prevCollapsed = prev.collapsed ?? {};
+			const hadEntry = hasOwn(prevCollapsed, activeSessionKey);
+			const current = hadEntry ? (prevCollapsed[activeSessionKey] ?? []) : [];
+			const nextList = updater(current);
+			if (hadEntry && arraysEqual(current, nextList)) {
+				return prev;
+			}
+			if (!hadEntry && nextList.length === 0) {
+				return prev;
+			}
+			const nextCollapsed = { ...prevCollapsed, [activeSessionKey]: nextList };
+			return {
+				...prev,
+				collapsed: nextCollapsed
 			};
 		});
 	}, [activeSessionKey, updatePersistedState]);
@@ -504,7 +571,28 @@ const App: React.FC = () => {
 		}
 		const allowed = new Set(request.sections.map(section => section.id));
 		setPinnedForActiveSession(prev => prev.filter(id => allowed.has(id)));
-	}, [request, editingSectionId, activeSessionKey, setPinnedForActiveSession]);
+		setCollapsedForActiveSession(prev => prev.filter(id => allowed.has(id)));
+		if (!hasCollapsedState) {
+			const defaults = request.sections
+				.filter(section => section.collapsed)
+				.map(section => section.id);
+			if (defaults.length) {
+				updatePersistedState(prev => {
+					const prevCollapsed = prev.collapsed ?? {};
+					if (hasOwn(prevCollapsed, activeSessionKey)) {
+						return prev;
+					}
+					return {
+						...prev,
+						collapsed: {
+							...prevCollapsed,
+							[activeSessionKey]: defaults
+						}
+					};
+				});
+			}
+		}
+	}, [request, editingSectionId, activeSessionKey, setPinnedForActiveSession, setCollapsedForActiveSession, hasCollapsedState, updatePersistedState]);
 
 	const validationErrorCode = request?.metadata?.lastValidationErrorCode;
 	const validationMessage = validationErrorCode ? describeValidationError(validationErrorCode) : undefined;
@@ -564,8 +652,13 @@ const App: React.FC = () => {
 	}, [activeSessionKey, setPinnedForActiveSession]);
 
 	const handleToggleCollapse = React.useCallback((sectionId: string) => {
-		sendMessage('toggleCollapse', { sectionId });
-	}, [sendMessage]);
+		setCollapsedForActiveSession(prev => {
+			if (prev.includes(sectionId)) {
+				return prev.filter(id => id !== sectionId);
+			}
+			return [...prev, sectionId];
+		});
+	}, [setCollapsedForActiveSession]);
 
 	const handleEditToggle = React.useCallback((sectionId: string) => {
 		setEditingSectionId(current => (current === sectionId ? null : sectionId));
@@ -649,7 +742,7 @@ const App: React.FC = () => {
 					<div className="header-actions">
 						{request.isDirty && (
 							<>
-								<span className="dirty-badge">Modified</span>
+								<span className="dirty-badge" role="status" aria-live="polite">Modified</span>
 								<vscode-button appearance="secondary" onClick={handleResetRequest}>
 									Reset
 								</vscode-button>
@@ -664,6 +757,10 @@ const App: React.FC = () => {
 							<span>{request.model}</span>
 						</div>
 						<div className="metadata-item">
+							<span className="metadata-label">Location:</span>
+							<span>{describeLocation(request.location)}</span>
+						</div>
+						<div className="metadata-item">
 							<span className="metadata-label">Prompt Budget:</span>
 							<span>{promptText}</span>
 						</div>
@@ -672,6 +769,22 @@ const App: React.FC = () => {
 							<span>{request.sections.length}</span>
 						</div>
 					</div>
+					{(request.debugName || request.metadata?.requestId) ? (
+						<div className="metadata-row metadata-row-subtle">
+							{request.debugName ? (
+								<div className="metadata-item">
+									<span className="metadata-label">Conversation:</span>
+									<span>{request.debugName}</span>
+								</div>
+							) : null}
+							{request.metadata?.requestId ? (
+								<div className="metadata-item">
+									<span className="metadata-label">Request ID:</span>
+									<span className="metadata-mono">{request.metadata.requestId}</span>
+								</div>
+							) : null}
+						</div>
+					) : null}
 					{totalTokens > 0 && request.metadata?.maxPromptTokens ? (
 						<div className="status-meter">
 							<div className="status-meter-fill" style={{ width: formatPercent(totalTokens, request.metadata.maxPromptTokens) }} />
@@ -738,6 +851,7 @@ const App: React.FC = () => {
 								totalTokens={totalTokens}
 								isPinned
 								isEditing={editingSectionId === section.id}
+								isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
 								onToggleCollapse={handleToggleCollapse}
 								onTogglePinned={handleTogglePinned}
 								onEditToggle={handleEditToggle}
@@ -761,6 +875,7 @@ const App: React.FC = () => {
 						totalTokens={totalTokens}
 						isPinned={false}
 						isEditing={editingSectionId === section.id}
+						isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
 						onToggleCollapse={handleToggleCollapse}
 						onTogglePinned={handleTogglePinned}
 						onEditToggle={handleEditToggle}

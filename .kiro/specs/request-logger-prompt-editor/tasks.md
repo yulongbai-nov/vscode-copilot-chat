@@ -25,17 +25,17 @@
   - [x] 3.3 Confirm that `IRequestLogger.logChatRequest` sees the final, edited request and add tests/diagnostics to verify parity with what the editor displayed. _Requirements: 5.1, 5.4_  
   - [x] 3.4 Handle error cases where the editor state cannot be mapped back into valid ChatML messages, surfacing clear errors and offering reset. _Requirements: 4.5, 6.4_  
 
-- [ ] 4. Prompt Inspector UI (webview-first while native drawer is unavailable)  
+- [x] 4. Prompt Inspector UI (webview-first while native drawer is unavailable)  
   - [x] 4.1 Add a “View Prompt” / Prompt Inspector toggle to the chat panel UI when the feature flag is enabled. _Requirements: 1.2, 1.3_  
-  - [ ] 4.2 Implement the next-generation Prompt Inspector inside the existing webview (drawer-style layout, sticky metadata, section stack) while wiring it to the live `EditableChatRequest` model. _Requirements: 1.3, 2.1_  
-  - [ ] 4.3 Render Prompt Sections in the webview using components that visually match the chat panel (chat bubbles, markdown, code blocks) and section headers with labels + token counts. _Requirements: 2.2, 2.3, 2.5_  
-  - [ ] 4.4 Implement per-section collapse/expand controls with persistent state for the current editor session (stored in the webview state). _Requirements: 2.4_  
-  - [ ] 4.5 Implement the Section Action Menu that appears on hover/focus with `Edit` / `Delete` actions, visually matching the **chat code block hover toolbar** even though it runs inside the webview. _Requirements: 3.1, 3.2_  
-  - [ ] 4.6 Implement inline edit mode per section (textarea/editor embedded in the webview) and update both section content and the underlying `EditableChatRequest.messages`. _Requirements: 3.3, 3.4, 4.1_  
-  - [ ] 4.7 Implement delete/restore semantics per section (soft delete with clear visual treatment and “Restore” affordance). _Requirements: 3.5, 3.6_  
-  - [ ] 4.8 Add a metadata area showing model, location, and token limits derived from the request. _Requirements: 2.6_  
-  - [ ] 4.9 Ensure keyboard accessibility and ARIA labelling for sections, menus, and actions within the webview DOM. _Requirements: 6.1, 6.2_  
-  - [ ] 4.10 Add a conversation selector (drop-down) inside the webview that lists other open conversations in the current window and allows switching the inspector’s target session. _Requirements: 7.3, 7.4, 7.5_  
+  - [x] 4.2 Implement the next-generation Prompt Inspector inside the existing webview (drawer-style layout, sticky metadata, section stack) while wiring it to the live `EditableChatRequest` model. _Requirements: 1.3, 2.1_  
+  - [x] 4.3 Render Prompt Sections in the webview using components that visually match the chat panel (chat bubbles, markdown, code blocks) and section headers with labels + token counts. _Requirements: 2.2, 2.3, 2.5_  
+  - [x] 4.4 Implement per-section collapse/expand controls with persistent state for the current editor session (stored in the webview state). _Requirements: 2.4_  
+  - [x] 4.5 Implement the Section Action Menu that appears on hover/focus with `Edit` / `Delete` actions, visually matching the **chat code block hover toolbar** even though it runs inside the webview. _Requirements: 3.1, 3.2_  
+  - [x] 4.6 Implement inline edit mode per section (textarea/editor embedded in the webview) and update both section content and the underlying `EditableChatRequest.messages`. _Requirements: 3.3, 3.4, 4.1_  
+  - [x] 4.7 Implement delete/restore semantics per section (soft delete with clear visual treatment and “Restore” affordance). _Requirements: 3.5, 3.6_  
+  - [x] 4.8 Add a metadata area showing model, location, and token limits derived from the request. _Requirements: 2.6_  
+  - [x] 4.9 Ensure keyboard accessibility and ARIA labelling for sections, menus, and actions within the webview DOM. _Requirements: 6.1, 6.2_  
+  - [x] 4.10 Add a conversation selector (drop-down) inside the webview that lists other open conversations in the current window and allows switching the inspector’s target session. _Requirements: 7.3, 7.4, 7.5_  
 
 - [ ] 5. Apply, reset, and send integration  
   - [ ] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _(Backend plumbing via `isDirty` is ready; UI indicator still required.)_ _Requirements: 4.1, 4.4_  
