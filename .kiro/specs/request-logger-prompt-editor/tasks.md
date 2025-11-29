@@ -22,7 +22,7 @@
 - [ ] 3. Wiring into the chat request pipeline  
   - [x] 3.1 Update the intents/prompt-building layer (e.g., `defaultIntentRequestHandler`) to request an `EditableChatRequest` instead of raw `messages` when the feature flag is enabled. _Requirements: 1.2, 4.1, 5.1_  
   - [x] 3.2 Ensure `ChatMLFetcher.fetchMany` consumes `EditableChatRequest.messages` when edits are present, and preserves existing behaviour when no edits exist or the feature is disabled. _Requirements: 4.2, 4.3_  
-  - [ ] 3.3 Confirm that `IRequestLogger.logChatRequest` sees the final, edited request and add tests/diagnostics to verify parity with what the editor displayed. _Requirements: 5.1, 5.4_  
+  - [x] 3.3 Confirm that `IRequestLogger.logChatRequest` sees the final, edited request and add tests/diagnostics to verify parity with what the editor displayed. _Requirements: 5.1, 5.4_  
   - [ ] 3.4 Handle error cases where the editor state cannot be mapped back into valid ChatML messages, surfacing clear errors and offering reset. _Requirements: 4.5, 6.4_  
 
 - [ ] 4. Chat panel Prompt Inspector UI  
