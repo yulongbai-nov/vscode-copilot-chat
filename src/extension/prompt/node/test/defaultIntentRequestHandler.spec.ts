@@ -29,7 +29,7 @@ import { IInstantiationService } from '../../../../util/vs/platform/instantiatio
 import { ChatLocation, ChatResponseConfirmationPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { ToolCallingLoop } from '../../../intents/node/toolCallingLoop';
 import { ToolResultMetadata } from '../../../prompts/node/panel/toolCalling';
-import { TestingServiceCollection, createExtensionUnitTestingServices } from '../../../test/node/services';
+import { createExtensionUnitTestingServices, type TestingServiceCollection } from '../../../test/node/services';
 import { Conversation, Turn } from '../../common/conversation';
 import { IBuildPromptContext } from '../../common/intents';
 import { ToolCallRound } from '../../common/toolCallRound';

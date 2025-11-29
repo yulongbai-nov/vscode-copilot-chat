@@ -226,13 +226,18 @@ export class CopilotCLIAgents implements ICopilotCLIAgents {
 		if (!this.configurationService.getConfig(ConfigKey.Advanced.CLICustomAgentsEnabled)) {
 			return [];
 		}
-		const [auth, { getCustomAgents }, workingDirectory] = await Promise.all([this.copilotCLISDK.getAuthInfo(), this.copilotCLISDK.getPackage(), this.copilotCLISDK.getDefaultWorkingDirectory()]);
+		const [auth, sdkPackage, workingDirectory] = await Promise.all([this.copilotCLISDK.getAuthInfo(), this.copilotCLISDK.getPackage(), this.copilotCLISDK.getDefaultWorkingDirectory()]);
 		if (!auth) {
 			this.logService.warn('[CopilotCLISession] No authentication info available, cannot fetch custom agents');
 			return [];
 		}
 		if (!workingDirectory) {
 			this.logService.trace('[CopilotCLISession] No working directory available, cannot fetch custom agents');
+			return [];
+		}
+		const { getCustomAgents } = sdkPackage as CopilotSDKCustomAgentsExports;
+		if (typeof getCustomAgents !== 'function') {
+			this.logService.warn('[CopilotCLISession] Copilot CLI SDK does not expose getCustomAgents, skipping custom agent discovery');
 			return [];
 		}
 		return getCustomAgents(auth, workingDirectory.fsPath, undefined, getCopilotLogger(this.logService));
@@ -252,6 +257,10 @@ export interface ICopilotCLISDK {
 	getDefaultWorkingDirectory(): Promise<Uri | undefined>;
 	isAvailable(): boolean;
 }
+
+type CopilotSDKCustomAgentsExports = {
+	getCustomAgents?: (auth: NonNullable<SessionOptions['authInfo']>, workspacePath: string, repository?: unknown, logger?: ReturnType<typeof getCopilotLogger>) => Promise<SweCustomAgent[]>;
+};
 
 type RequestDetails = { details: { requestId: string; toolIdEditMap: Record<string, string> }; createdDateTime: number };
 export class CopilotCLISDK implements ICopilotCLISDK {

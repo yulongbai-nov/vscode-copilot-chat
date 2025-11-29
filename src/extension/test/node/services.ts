@@ -30,7 +30,7 @@ import { AdoCodeSearchService, IAdoCodeSearchService } from '../../../platform/r
 import { GithubCodeSearchService, IGithubCodeSearchService } from '../../../platform/remoteCodeSearch/common/githubCodeSearchService';
 import { ISimulationTestContext, NulSimulationTestContext } from '../../../platform/simulationTestContext/common/simulationTestContext';
 import { ITerminalService, NullTerminalService } from '../../../platform/terminal/common/terminalService';
-import { TestingServiceCollection, createPlatformServices } from '../../../platform/test/node/services';
+import { createPlatformServices, type TestingServiceCollection } from '../../../platform/test/node/services';
 import { SimulationAlternativeNotebookContentService, SimulationNotebookService, SimulationNotebookSummaryTracker } from '../../../platform/test/node/simulationWorkspaceServices';
 import { NullTestProvider } from '../../../platform/testing/common/nullTestProvider';
 import { TestLogService } from '../../../platform/testing/common/testLogService';
@@ -117,3 +117,5 @@ export function createExtensionUnitTestingServices(disposables: Pick<DisposableS
 	testingServiceCollection.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(MockGithubAvailableEmbeddingTypesService));
 	return testingServiceCollection;
 }
+
+export type { TestingServiceCollection } from '../../../platform/test/node/services';

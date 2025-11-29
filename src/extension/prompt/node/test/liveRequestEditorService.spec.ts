@@ -15,15 +15,16 @@ import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { nullRenderPromptResult } from '../intents';
 
 function createRenderResult(text: string): RenderPromptResult {
-	const result = nullRenderPromptResult();
-	result.messages = [{
-		role: Raw.ChatRole.User,
-		content: [{
-			type: Raw.ChatCompletionContentPartKind.Text,
-			text
+	return {
+		...nullRenderPromptResult(),
+		messages: [{
+			role: Raw.ChatRole.User,
+			content: [{
+				type: Raw.ChatCompletionContentPartKind.Text,
+				text
+			}]
 		}]
-	}];
-	return result;
+	};
 }
 
 async function createService() {
@@ -61,7 +62,11 @@ describe('LiveRequestEditorService interception', () => {
 		expect(decision).toEqual({ action: 'resume', messages: editedMessages });
 
 		const events = telemetry.getEvents().telemetryServiceEvents;
-		expect(events.some(evt => evt.eventName === 'liveRequestEditor.promptInterception.outcome' && evt.properties?.action === 'resume')).toBe(true);
+		const hasResumeEvent = events.some(evt => {
+			const properties = evt.properties as Record<string, unknown> | undefined;
+			return evt.eventName === 'liveRequestEditor.promptInterception.outcome' && properties?.['action'] === 'resume';
+		});
+		expect(hasResumeEvent).toBe(true);
 	});
 
 	test('resolves cancel when interception is discarded', async () => {
@@ -83,6 +88,10 @@ describe('LiveRequestEditorService interception', () => {
 		expect(decision).toEqual({ action: 'cancel', reason: 'user' });
 
 		const events = telemetry.getEvents().telemetryServiceEvents;
-		expect(events.some(evt => evt.eventName === 'liveRequestEditor.promptInterception.outcome' && evt.properties?.reason === 'user')).toBe(true);
+		const hasCancelEvent = events.some(evt => {
+			const properties = evt.properties as Record<string, unknown> | undefined;
+			return evt.eventName === 'liveRequestEditor.promptInterception.outcome' && properties?.['reason'] === 'user';
+		});
+		expect(hasCancelEvent).toBe(true);
 	});
 });
