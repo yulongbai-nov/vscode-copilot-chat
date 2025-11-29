@@ -105,6 +105,13 @@ body {
 	margin-bottom: 12px;
 }
 
+.header-left {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	align-items: flex-start;
+}
+
 .header h2 {
 	margin: 0;
 	font-size: 14px;
@@ -115,6 +122,22 @@ body {
 	display: flex;
 	gap: 8px;
 	align-items: center;
+}
+
+.session-selector {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 220px;
+}
+
+.session-selector-label {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.session-selector-dropdown {
+	width: 100%;
 }
 
 .metadata {
@@ -322,17 +345,46 @@ body {
 	box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.section-actions {
+.section-toolbar {
 	display: flex;
-	gap: 6px;
+	gap: 4px;
 	opacity: 0;
-	transition: opacity 0.15s;
+	transition: opacity 0.15s ease;
 	align-items: center;
 }
 
-.section:hover .section-actions,
-.section:focus-within .section-actions {
+.section:hover .section-toolbar,
+.section:focus-within .section-toolbar {
 	opacity: 1;
+}
+
+.section-toolbar-button {
+	width: 26px;
+	height: 26px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--vscode-foreground);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.section-toolbar-button:hover,
+.section-toolbar-button:focus-visible {
+	background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+	color: var(--vscode-toolbar-hoverForeground, var(--vscode-foreground));
+	outline: none;
+}
+
+.section-toolbar-button:focus-visible {
+	box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.section-toolbar-button:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 .section-content {
@@ -343,15 +395,6 @@ body {
 
 .section.collapsed .section-content {
 	display: none;
-}
-
-.section-content pre {
-	margin: 0;
-	white-space: pre-wrap;
-	word-break: break-word;
-	font-family: var(--vscode-editor-font-family);
-	font-size: 12px;
-	line-height: 1.5;
 }
 
 .section-editor {
@@ -392,8 +435,57 @@ body {
 	padding: 4px 10px;
 }
 
-.section-actions vscode-button.inline-button::part(control) {
-	padding: 2px 8px;
+.section-rendered {
+	font-size: 12px;
+	line-height: 1.5;
+	font-family: var(--vscode-font-family);
+	white-space: normal;
+}
+
+.section-rendered code {
+	font-family: var(--vscode-editor-font-family);
+	background: var(--vscode-textPreformat-background);
+	padding: 1px 4px;
+	border-radius: 4px;
+}
+
+.section-rendered pre {
+	background: var(--vscode-textPreformat-background);
+	padding: 8px;
+	border-radius: 6px;
+	overflow: auto;
+}
+
+.section-rendered pre code {
+	background: transparent;
+	padding: 0;
+}
+
+.section-empty {
+	font-style: italic;
+	color: var(--vscode-descriptionForeground);
+}
+
+.validation-banner {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin: 8px 0;
+	padding: 8px 12px;
+	border-radius: 6px;
+	border: 1px solid var(--vscode-statusBarItem-errorBorder, var(--vscode-inputValidation-errorBorder));
+	background: var(--vscode-statusBarItem-errorBackground, var(--vscode-inputValidation-errorBackground));
+	color: var(--vscode-statusBarItem-errorForeground, var(--vscode-inputValidation-errorForeground));
+}
+
+.validation-text {
+	font-size: 12px;
+}
+
+.validation-actions {
+	display: flex;
+	gap: 8px;
 }
 
 .empty-state {

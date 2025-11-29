@@ -73,22 +73,6 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 	}
 
 	private _registerCommands(): void {
-		const toggleCommand = vscode.commands.registerCommand(
-			'github.copilot.liveRequestEditor.toggle',
-			async () => {
-				const current = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
-				try {
-					await this._configurationService.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, !current);
-					if (!current) {
-						await vscode.commands.executeCommand('github.copilot.liveRequestEditor.show');
-					}
-				} catch (error) {
-					this._logService.error('Failed to toggle Live Request Editor', error);
-					vscode.window.showErrorMessage('Failed to toggle the Live Request Editor. See output for details.');
-				}
-			}
-		);
-
 		const showCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestEditor.show',
 			async () => {

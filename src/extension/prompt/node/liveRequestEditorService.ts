@@ -163,8 +163,11 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		this.recomputeMessages(request);
 		const validationError = this.validateRequestForSend(request);
-		request.metadata.lastValidationErrorCode = validationError?.code;
+		const validationChanged = this.updateValidationMetadata(request, validationError);
 		const messages = request.messages.length ? request.messages : fallback;
+		if (validationChanged) {
+			this._onDidChange.fire(request);
+		}
 		return {
 			messages,
 			error: validationError
@@ -300,6 +303,8 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		} else {
 			request.isDirty = !equals(request.messages, request.originalMessages);
 		}
+		const validationError = this.validateRequestForSend(request);
+		this.updateValidationMetadata(request, validationError);
 		this._onDidChange.fire(request);
 		return request;
 	}
@@ -355,6 +360,12 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return { code: 'empty' };
 		}
 		return undefined;
+	}
+
+	private updateValidationMetadata(request: EditableChatRequest, validationError: LiveRequestValidationError | undefined): boolean {
+		const previous = request.metadata.lastValidationErrorCode;
+		request.metadata.lastValidationErrorCode = validationError?.code;
+		return previous !== request.metadata.lastValidationErrorCode;
 	}
 
 	private computeMessagesHash(messages: Raw.ChatMessage[]): number {

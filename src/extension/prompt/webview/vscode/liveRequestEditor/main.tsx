@@ -5,7 +5,9 @@
 
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import { provideVSCodeDesignSystem, vsCodeButton } from '@vscode/webview-ui-toolkit';
+import DOMPurify from 'dompurify';
+import MarkdownIt from 'markdown-it';
+import { provideVSCodeDesignSystem, vsCodeButton, vsCodeDropdown, vsCodeOption } from '@vscode/webview-ui-toolkit';
 
 interface VSCodeAPI<TState = unknown> {
 	postMessage(message: unknown): void;
@@ -21,9 +23,18 @@ declare global {
 			'vscode-button': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				appearance?: 'primary' | 'secondary';
 			};
+			'vscode-dropdown': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+				value?: string;
+				disabled?: boolean;
+			};
+			'vscode-option': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+				value?: string;
+			};
 		}
 	}
 }
+
+type LiveRequestValidationErrorCode = 'empty' | string;
 
 interface EditableChatRequest {
 	id: string;
@@ -33,6 +44,7 @@ interface EditableChatRequest {
 	metadata?: {
 		tokenCount?: number;
 		maxPromptTokens?: number;
+		lastValidationErrorCode?: LiveRequestValidationErrorCode;
 	};
 }
 
@@ -52,10 +64,23 @@ interface StateUpdateMessage {
 	type: 'stateUpdate';
 	request?: EditableChatRequest;
 	interception?: InterceptionState;
+	sessions?: SessionSummary[];
+	activeSessionKey?: string;
+}
+
+interface SessionSummary {
+	key: string;
+	sessionId: string;
+	location: number;
+	label: string;
+	model: string;
+	isDirty: boolean;
+	lastUpdated?: number;
+	debugName: string;
 }
 
 interface PersistedState {
-	pinned?: string[];
+	pinned?: Record<string, string[]>;
 }
 
 interface InterceptionState {
@@ -68,7 +93,12 @@ interface InterceptionState {
 
 const vscode = acquireVsCodeApi<PersistedState>();
 
-provideVSCodeDesignSystem().register(vsCodeButton());
+provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeDropdown(), vsCodeOption());
+const markdown = new MarkdownIt({
+	linkify: true,
+	breaks: true,
+	html: false
+});
 
 function formatNumber(value?: number): string {
 	if (value === undefined || value === null || Number.isNaN(value)) {
@@ -93,6 +123,22 @@ function formatPercent(value: number, total: number): string {
 	}
 	const pct = (value / total) * 100;
 	return pct.toFixed(pct >= 10 ? 0 : 1) + '%';
+}
+
+function arraysEqual<T>(a: readonly T[], b: readonly T[]): boolean {
+	if (a.length !== b.length) {
+		return false;
+	}
+	return a.every((value, index) => value === b[index]);
+}
+
+function describeValidationError(code: LiveRequestValidationErrorCode | undefined): string {
+	switch (code) {
+		case 'empty':
+			return 'Prompt cannot be sent because all sections were removed. Reset the prompt to restore the original content.';
+		default:
+			return 'Prompt cannot be sent due to an invalid edit. Reset the prompt to continue.';
+	}
 }
 
 const EmptyState: React.FC = () => (
@@ -142,6 +188,14 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	const deleted = !!section.deleted;
 	const sectionTokens = section.tokenCount ?? 0;
 	const canDrag = isPinned && !deleted;
+	const sectionBodyId = React.useMemo(() => `section-body-${section.id}`, [section.id]);
+	const renderedContent = React.useMemo(() => {
+		const value = (section.content ?? '').trim();
+		if (!value.length) {
+			return DOMPurify.sanitize('<p class="section-empty">No content provided.</p>');
+		}
+		return DOMPurify.sanitize(markdown.render(section.content ?? ''));
+	}, [section.content]);
 
 	React.useEffect(() => {
 		if (isEditing) {
@@ -151,6 +205,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 
 	const className = [
 		'section',
+		`section-kind-${section.kind}`,
 		collapsed ? 'collapsed' : '',
 		deleted ? 'deleted' : '',
 		isPinned ? 'pinned' : '',
@@ -221,6 +276,18 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		onSaveEdit(section.id, draftContent);
 	}, [section.id, draftContent, onSaveEdit]);
 
+	const handleHeaderKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			onToggleCollapse(section.id);
+		}
+	}, [onToggleCollapse, section.id]);
+
+	const handleToolbarAction = React.useCallback((handler: () => void) => (event: React.MouseEvent) => {
+		event.stopPropagation();
+		handler();
+	}, []);
+
 	return (
 		<div
 			className={className}
@@ -232,11 +299,19 @@ const SectionCard: React.FC<SectionCardProps> = ({
 			onDragLeave={handleDragLeave}
 			onDragEnd={handleDragEnd}
 		>
-			<div className="section-header" role="button" onClick={() => onToggleCollapse(section.id)}>
+			<div
+				className="section-header"
+				role="button"
+				tabIndex={0}
+				aria-expanded={!collapsed}
+				aria-controls={sectionBodyId}
+				onClick={() => onToggleCollapse(section.id)}
+				onKeyDown={handleHeaderKeyDown}
+			>
 				<div className="section-title">
-					<span className="icon">{collapsed ? '\u25B6' : '\u25BC'}</span>
+					<span className="icon" aria-hidden="true">{collapsed ? '\u25B6' : '\u25BC'}</span>
 					<span className={`section-kind ${section.kind}`}>{section.kind}</span>
-					<span>{section.label}</span>
+					<span className="section-label">{section.label}</span>
 					{sectionTokens > 0 && (
 						<span className="section-tokens">
 							{formatNumber(sectionTokens)} tokens
@@ -245,45 +320,70 @@ const SectionCard: React.FC<SectionCardProps> = ({
 							)}
 						</span>
 					)}
-					{isPinned && <span className="pinned-indicator">Pinned</span>}
+					{isPinned && (
+						<span className="pinned-indicator" title="Pinned section" aria-label="Pinned section">
+							<span className="codicon codicon-pin" aria-hidden="true" />
+						</span>
+					)}
 				</div>
-				<div className="section-actions" onClick={event => event.stopPropagation()}>
+				<div className="section-toolbar" role="toolbar" aria-label={`Actions for ${section.label}`}>
 					{deleted ? (
-						<vscode-button appearance="secondary" className="inline-button" onClick={() => onRestore(section.id)}>
-							Restore
-						</vscode-button>
+						<button
+							type="button"
+							className="section-toolbar-button"
+							onClick={handleToolbarAction(() => onRestore(section.id))}
+							title="Restore section"
+							aria-label="Restore section"
+						>
+							<span className="codicon codicon-discard" aria-hidden="true" />
+						</button>
 					) : (
 						<>
-							<vscode-button
-								appearance="secondary"
-								className="inline-button"
-								onClick={() => onTogglePinned(section.id)}
-							>
-								{isPinned ? 'Unpin' : 'Pin'}
-							</vscode-button>
 							{section.editable && (
-								<vscode-button
-									appearance="secondary"
-									className="inline-button"
-									onClick={() => onEditToggle(section.id)}
+								<button
+									type="button"
+									className="section-toolbar-button"
+									onClick={handleToolbarAction(() => onEditToggle(section.id))}
+									title={isEditing ? 'Exit edit mode' : 'Edit section'}
+									aria-label={isEditing ? 'Exit edit mode' : 'Edit section'}
+									aria-pressed={isEditing}
 								>
-									{isEditing ? 'Cancel Edit' : 'Edit'}
-								</vscode-button>
+									<span
+										className={`codicon ${isEditing ? 'codicon-close' : 'codicon-edit'}`}
+										aria-hidden="true"
+									/>
+								</button>
 							)}
 							{section.deletable && (
-								<vscode-button
-									appearance="secondary"
-									className="inline-button"
-									onClick={() => onDelete(section.id)}
+								<button
+									type="button"
+									className="section-toolbar-button"
+									onClick={handleToolbarAction(() => onDelete(section.id))}
+									title="Delete section"
+									aria-label="Delete section"
 								>
-									Delete
-								</vscode-button>
+									<span className="codicon codicon-trash" aria-hidden="true" />
+								</button>
 							)}
+							<button
+								type="button"
+								className="section-toolbar-button"
+								onClick={handleToolbarAction(() => onTogglePinned(section.id))}
+								title={isPinned ? 'Unpin section' : 'Pin section'}
+								aria-label={isPinned ? 'Unpin section' : 'Pin section'}
+								aria-pressed={isPinned}
+							>
+								<span className={`codicon ${isPinned ? 'codicon-pin-filled' : 'codicon-pin'}`} aria-hidden="true" />
+							</button>
 						</>
 					)}
 				</div>
 			</div>
-			<div className="section-content">
+			<div
+				className="section-content"
+				id={sectionBodyId}
+				aria-hidden={collapsed && !isEditing}
+			>
 				{isEditing ? (
 					<>
 						<textarea
@@ -302,7 +402,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 						</div>
 					</>
 				) : (
-					<pre>{section.content ?? ''}</pre>
+					<div className="section-rendered" dangerouslySetInnerHTML={{ __html: renderedContent }} />
 				)}
 				{totalTokens > 0 && sectionTokens > 0 && (
 					<div className="token-meter">
@@ -318,22 +418,60 @@ const App: React.FC = () => {
 	const [request, setRequest] = React.useState<EditableChatRequest | undefined>(undefined);
 	const [interception, setInterception] = React.useState<InterceptionState | undefined>(undefined);
 	const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
-	const [pinnedOrder, setPinnedOrder] = React.useState<string[]>(() => {
-		const persisted = vscode.getState?.();
-		return Array.isArray(persisted?.pinned) ? [...persisted.pinned] : [];
+	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
+	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
+	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
+		const stored = vscode.getState?.() ?? {};
+		if (Array.isArray((stored as PersistedState).pinned)) {
+			return {};
+		}
+		return stored;
 	});
 	const draggingSectionRef = React.useRef<string | null>(null);
 	const [bannerPulse, setBannerPulse] = React.useState(false);
 
-	const persistPinned = React.useCallback((order: string[]) => {
-		vscode.setState?.({ pinned: order });
+	const updatePersistedState = React.useCallback((updater: (prev: PersistedState) => PersistedState) => {
+		setPersistedState(prev => {
+			const next = updater(prev);
+			vscode.setState?.(next);
+			return next;
+		});
 	}, []);
+
+	const pinnedOrderMap = persistedState.pinned ?? {};
+	const pinnedOrder = activeSessionKey ? (pinnedOrderMap[activeSessionKey] ?? []) : [];
+
+	const setPinnedForActiveSession = React.useCallback((updater: (prev: string[]) => string[]) => {
+		if (!activeSessionKey) {
+			return;
+		}
+		updatePersistedState(prev => {
+			const prevPinned = prev.pinned ?? {};
+			const current = prevPinned[activeSessionKey] ?? [];
+			const nextList = updater(current);
+			if (arraysEqual(current, nextList)) {
+				return prev;
+			}
+			const nextPinned = { ...prevPinned };
+			if (nextList.length) {
+				nextPinned[activeSessionKey] = nextList;
+			} else {
+				delete nextPinned[activeSessionKey];
+			}
+			return {
+				...prev,
+				pinned: Object.keys(nextPinned).length ? nextPinned : undefined
+			};
+		});
+	}, [activeSessionKey, updatePersistedState]);
 
 	React.useEffect(() => {
 		const handler = (event: MessageEvent<StateUpdateMessage>) => {
 			if (event.data?.type === 'stateUpdate') {
 				setRequest(event.data.request);
 				setInterception(event.data.interception);
+				setSessions(event.data.sessions ?? []);
+				setActiveSessionKey(event.data.activeSessionKey);
 			}
 		};
 		window.addEventListener('message', handler);
@@ -350,24 +488,26 @@ const App: React.FC = () => {
 	}, [interception?.pending?.nonce]);
 
 	React.useEffect(() => {
+		setEditingSectionId(null);
+	}, [activeSessionKey]);
+
+	React.useEffect(() => {
 		if (!request?.sections) {
 			setEditingSectionId(null);
 			return;
 		}
-		const allowed = new Set(request.sections.map(section => section.id));
-		setPinnedOrder(prev => {
-			const filtered = prev.filter(id => allowed.has(id));
-			if (filtered.length === prev.length) {
-				return prev;
-			}
-			persistPinned(filtered);
-			return filtered;
-		});
 		if (editingSectionId && !request.sections.some(section => section.id === editingSectionId)) {
 			setEditingSectionId(null);
 		}
-	}, [request, editingSectionId, persistPinned]);
+		if (!activeSessionKey) {
+			return;
+		}
+		const allowed = new Set(request.sections.map(section => section.id));
+		setPinnedForActiveSession(prev => prev.filter(id => allowed.has(id)));
+	}, [request, editingSectionId, activeSessionKey, setPinnedForActiveSession]);
 
+	const validationErrorCode = request?.metadata?.lastValidationErrorCode;
+	const validationMessage = validationErrorCode ? describeValidationError(validationErrorCode) : undefined;
 	const totalTokens = React.useMemo(() => computeTotalTokens(request), [request]);
 	const pinnedIdSet = React.useMemo(() => new Set(pinnedOrder), [pinnedOrder]);
 
@@ -396,19 +536,22 @@ const App: React.FC = () => {
 	}, []);
 
 	const handleTogglePinned = React.useCallback((sectionId: string) => {
-		setPinnedOrder(prev => {
-			const filtered = prev.filter(id => id !== sectionId);
-			const next = prev.includes(sectionId) ? filtered : [...filtered, sectionId];
-			persistPinned(next);
-			return next;
-		});
-	}, [persistPinned]);
-
-	const handleReorderPinned = React.useCallback((sourceId: string, targetId: string, placeAfter: boolean) => {
-		if (sourceId === targetId) {
+		if (!activeSessionKey) {
 			return;
 		}
-		setPinnedOrder(prev => {
+		setPinnedForActiveSession(prev => {
+			if (prev.includes(sectionId)) {
+				return prev.filter(id => id !== sectionId);
+			}
+			return [...prev, sectionId];
+		});
+	}, [activeSessionKey, setPinnedForActiveSession]);
+
+	const handleReorderPinned = React.useCallback((sourceId: string, targetId: string, placeAfter: boolean) => {
+		if (!activeSessionKey || sourceId === targetId) {
+			return;
+		}
+		setPinnedForActiveSession(prev => {
 			if (!prev.includes(sourceId) || !prev.includes(targetId)) {
 				return prev;
 			}
@@ -416,10 +559,9 @@ const App: React.FC = () => {
 			const targetIndex = filtered.indexOf(targetId);
 			const insertIndex = targetIndex + (placeAfter ? 1 : 0);
 			const next = [...filtered.slice(0, insertIndex), sourceId, ...filtered.slice(insertIndex)];
-			persistPinned(next);
 			return next;
 		});
-	}, [persistPinned]);
+	}, [activeSessionKey, setPinnedForActiveSession]);
 
 	const handleToggleCollapse = React.useCallback((sectionId: string) => {
 		sendMessage('toggleCollapse', { sectionId });
@@ -458,6 +600,16 @@ const App: React.FC = () => {
 		sendMessage('cancelIntercept');
 	}, [sendMessage]);
 
+	const handleSessionChange = React.useCallback<React.FormEventHandler<HTMLElement>>((event) => {
+		const dropdown = event.target as HTMLSelectElement & { value?: string };
+		const value = dropdown?.value;
+		if (typeof value !== 'string' || value.length === 0 || value === activeSessionKey) {
+			return;
+		}
+		setActiveSessionKey(value);
+		sendMessage('selectSession', { sessionKey: value });
+	}, [activeSessionKey, sendMessage]);
+
 	if (!request || !request.sections || request.sections.length === 0) {
 		return <EmptyState />;
 	}
@@ -471,8 +623,28 @@ const App: React.FC = () => {
 		<>
 			<div className="status-banner">
 				<div className="header">
-					<div>
+					<div className="header-left">
 						<h2>Live Request Editor</h2>
+						{sessions.length > 0 && (
+							<div className="session-selector" role="group" aria-label="Conversation selector">
+								<label className="session-selector-label" htmlFor="live-request-session-dropdown">
+									Conversation
+								</label>
+								<vscode-dropdown
+									id="live-request-session-dropdown"
+									className="session-selector-dropdown"
+									value={activeSessionKey ?? ''}
+									onChange={handleSessionChange}
+									disabled={sessions.length <= 1}
+								>
+									{sessions.map(session => (
+										<vscode-option key={session.key} value={session.key}>
+											{session.label}
+										</vscode-option>
+									))}
+								</vscode-dropdown>
+							</div>
+						)}
 					</div>
 					<div className="header-actions">
 						{request.isDirty && (
@@ -507,6 +679,21 @@ const App: React.FC = () => {
 						</div>
 					) : null}
 				</div>
+
+				{validationMessage ? (
+					<div className="validation-banner" role="alert" aria-live="polite">
+						<div className="validation-text">
+							<strong>Send blocked.</strong> {validationMessage}
+						</div>
+						{request.isDirty ? (
+							<div className="validation-actions">
+								<vscode-button appearance="secondary" onClick={handleResetRequest}>
+									Reset prompt
+								</vscode-button>
+							</div>
+						) : null}
+					</div>
+				) : null}
 
 				{interception?.enabled ? (
 					<div className={[

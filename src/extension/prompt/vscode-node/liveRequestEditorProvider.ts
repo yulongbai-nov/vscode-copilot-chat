@@ -6,9 +6,21 @@
 import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
+import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { EditableChatRequest } from '../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
+
+interface SessionSummaryPayload {
+	key: string;
+	sessionId: string;
+	location: ChatLocation;
+	label: string;
+	model: string;
+	isDirty: boolean;
+	lastUpdated?: number;
+	debugName: string;
+}
 
 /**
  * WebView provider for the Live Request Editor / Prompt Inspector panel.
@@ -26,6 +38,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private _currentRequest?: EditableChatRequest;
 	private _interceptionState: PromptInterceptionState;
 	private _lastInterceptNonce?: number;
+	private readonly _requests = new Map<string, EditableChatRequest>();
+	private _activeSessionKey?: string;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -38,8 +52,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 		// Listen for changes to the live request
 		this._register(this._liveRequestEditorService.onDidChange(request => {
-			this._currentRequest = request;
-			this._updateWebview();
+			this._handleRequestUpdated(request);
 		}));
 		this._register(this._liveRequestEditorService.onDidChangeInterception(state => {
 			this._handleInterceptionStateChanged(state);
@@ -69,9 +82,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._updateVisibilityContext();
 
 		// Send initial state if available
-		if (this._currentRequest) {
-			this._postStateToWebview();
-		}
+		this._postStateToWebview();
 	}
 
 	/**
@@ -129,6 +140,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			sectionId?: string;
 			content?: string;
 			args?: unknown[];
+			sessionKey?: string;
 		};
 
 		if (!payload?.type) {
@@ -196,6 +208,11 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						await vscode.commands.executeCommand(payload.command, ...(payload.args ?? []));
 					}
 					break;
+				case 'selectSession':
+					if (typeof payload.sessionKey === 'string') {
+						this._activateSessionByKey(payload.sessionKey);
+					}
+					break;
 
 				default:
 					this._logService.trace(`Live Request Editor: unhandled message type: ${payload.type}`);
@@ -205,6 +222,30 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}
 	}
 
+
+	private _handleRequestUpdated(request: EditableChatRequest): void {
+		const key = this._toCompositeKey(request.sessionId, request.location);
+		this._requests.set(key, request);
+		if (!this._activeSessionKey || this._activeSessionKey === key) {
+			this._activeSessionKey = key;
+			this._currentRequest = request;
+		}
+		this._postStateToWebview();
+	}
+
+	private _activateSessionByKey(compositeKey: string): void {
+		if (!compositeKey) {
+			return;
+		}
+		const next = this._requests.get(compositeKey);
+		if (!next) {
+			this._logService.warn(`Live Request Editor: attempted to select unknown session ${compositeKey}`);
+			return;
+		}
+		this._activeSessionKey = compositeKey;
+		this._currentRequest = next;
+		this._postStateToWebview();
+	}
 
 	private _getHtmlForWebview(webview: vscode.Webview): string {
 		const nonce = getNonce();
@@ -247,8 +288,57 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._view.webview.postMessage({
 			type: 'stateUpdate',
 			request: this._currentRequest,
-			interception: this._toWebviewInterceptionPayload()
+			interception: this._toWebviewInterceptionPayload(),
+			sessions: this._getSessionSummaries(),
+			activeSessionKey: this._activeSessionKey
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
+	}
+
+	private _getSessionSummaries(): SessionSummaryPayload[] {
+		const entries = Array.from(this._requests.values());
+		entries.sort((a, b) => {
+			const aTime = a.metadata?.createdAt ?? 0;
+			const bTime = b.metadata?.createdAt ?? 0;
+			return bTime - aTime;
+		});
+
+		return entries.map(request => {
+			const key = this._toCompositeKey(request.sessionId, request.location);
+			return {
+				key,
+				sessionId: request.sessionId,
+				location: request.location,
+				label: this._describeSession(request),
+				model: request.model,
+				isDirty: request.isDirty,
+				lastUpdated: request.metadata?.createdAt,
+				debugName: request.debugName
+			};
+		});
+	}
+
+	private _toCompositeKey(sessionId: string, location: ChatLocation): string {
+		return `${sessionId}::${location}`;
+	}
+
+	private _describeSession(request: EditableChatRequest): string {
+		const location = this._describeLocation(request.location);
+		const name = request.debugName || request.metadata?.intentId || request.sessionId;
+		return `${location} · ${name}`;
+	}
+
+	private _describeLocation(location: ChatLocation): string {
+		switch (location) {
+			case ChatLocation.Editor:
+				return 'Editor';
+			case ChatLocation.Terminal:
+				return 'Terminal';
+			case ChatLocation.Notebook:
+				return 'Notebook';
+			case ChatLocation.Panel:
+			default:
+				return 'Panel';
+		}
 	}
 
 	private _toWebviewInterceptionPayload() {
