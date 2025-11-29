@@ -11,6 +11,9 @@ import { ITelemetryService } from '../../telemetry/common/telemetry';
 import { PullRequestComment, PullRequestSearchItem, SessionInfo } from './githubAPI';
 import { BaseOctoKitService, CustomAgentDetails, CustomAgentListItem, CustomAgentListOptions, ErrorResponseWithStatusCode, IOctoKitService, IOctoKitUser, JobInfo, PullRequestFile, RemoteAgentJobPayload, RemoteAgentJobResponse } from './githubService';
 
+const DEFAULT_CUSTOM_AGENT_PATH_PREFIX = '.github/copilot/custom-agents';
+const CUSTOM_AGENT_FILE_EXTENSION = '.agent.md';
+
 export class OctoKitService extends BaseOctoKitService implements IOctoKitService {
 	declare readonly _serviceBrand: undefined;
 
@@ -259,30 +262,29 @@ export class OctoKitService extends BaseOctoKitService implements IOctoKitServic
 		}
 	}
 
-	async getCustomAgentDetails(owner: string, repo: string, agentName: string, version?: string): Promise<CustomAgentDetails | undefined> {
+	async getCustomAgentDetails(owner: string, repo: string, agentName: string, version?: string, metadata?: CustomAgentListItem): Promise<CustomAgentDetails | undefined> {
 		try {
+			const baseMetadata = metadata ?? (await this.getCustomAgents(owner, repo)).find(agent => agent.name === agentName);
+			if (!baseMetadata) {
+				this._logService.warn(`Custom agent '${agentName}' metadata not found for ${owner}/${repo}`);
+				return undefined;
+			}
+
 			const authToken = (await this._authService.getPermissiveGitHubSession({ createIfNone: true }))?.accessToken;
 			if (!authToken) {
 				throw new Error('No authentication token available');
 			}
 
-			const response = await this._capiClientService.makeRequest<Response>({
-				method: 'GET',
-				headers: {
-					Authorization: `Bearer ${authToken}`,
-				}
-			}, { type: RequestType.CopilotCustomAgentsDetail, owner, repo, version, customAgentName: agentName });
+			const ref = version ?? baseMetadata.version ?? 'HEAD';
+			const promptPath = baseMetadata.metadata?.prompt_path
+				?? baseMetadata.metadata?.file_path
+				?? `${DEFAULT_CUSTOM_AGENT_PATH_PREFIX}/${agentName}${CUSTOM_AGENT_FILE_EXTENSION}`;
 
-			if (!response.ok) {
-				if (response.status === 404) {
-					this._logService.trace(`Custom agent '${agentName}' not found for ${owner}/${repo}`);
-					return undefined;
-				}
-				throw new Error(`Failed to fetch custom agent details for ${agentName}: ${response.statusText}`);
-			}
-
-			const data = await response.json() as CustomAgentDetails;
-			return data;
+			const prompt = await this.getFileContentWithToken(owner, repo, ref, promptPath, authToken);
+			return {
+				...baseMetadata,
+				prompt
+			};
 		} catch (e) {
 			this._logService.error(e);
 			return undefined;

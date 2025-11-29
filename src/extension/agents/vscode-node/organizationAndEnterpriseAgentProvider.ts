@@ -159,7 +159,8 @@ export class OrganizationAndEnterpriseAgentProvider extends Disposable implement
 					agent.repo_owner,
 					agent.repo_name,
 					agent.name,
-					agent.version
+					agent.version,
+					agent
 				);
 
 				// Generate agent markdown file content

@@ -36,6 +36,7 @@ import { NotebookFollowCommands } from '../../notebook/vscode-node/followActions
 import { CopilotDebugCommandContribution } from '../../onboardDebug/vscode-node/copilotDebugCommandContribution';
 import { OnboardTerminalTestsContribution } from '../../onboardDebug/vscode-node/onboardTerminalTestsContribution';
 import { DebugCommandsContribution } from '../../prompt/vscode-node/debugCommands';
+import { LiveRequestEditorContribution } from '../../prompt/vscode-node/liveRequestEditorContribution';
 import { RenameSuggestionsContrib } from '../../prompt/vscode-node/renameSuggestions';
 import { PromptFileContextContribution } from '../../promptFileContext/vscode-node/promptFileContextService';
 import { PromptSectionVisualizerContribution } from '../../promptSectionVisualizer/vscode-node/promptSectionVisualizerContribution';
@@ -119,5 +120,6 @@ export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(LanguageModelProxyContrib),
 	asContributionFactory(OrganizationAndEnterpriseAgentContribution),
 	asContributionFactory(PromptSectionVisualizerContribution),
+	asContributionFactory(LiveRequestEditorContribution),
 	newWorkspaceContribution,
 ];

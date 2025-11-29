@@ -55,6 +55,7 @@ const webviewBuildOptions = {
 	target: 'es2024', // Electron 34 -> Chrome 132 -> ES2024
 	entryPoints: [
 		{ in: 'src/extension/completions-core/vscode-node/extension/src/copilotPanel/webView/suggestionsPanelWebview.ts', out: 'suggestionsPanelWebview' },
+		{ in: 'src/extension/prompt/webview/vscode/liveRequestEditor/main.tsx', out: 'liveRequestEditorWebview' },
 	],
 } satisfies esbuild.BuildOptions;
 

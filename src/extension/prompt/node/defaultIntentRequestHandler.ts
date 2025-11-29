@@ -17,6 +17,7 @@ import { HAS_IGNORED_FILES_MESSAGE } from '../../../platform/ignore/common/ignor
 import { ILogService } from '../../../platform/log/common/logService';
 import { IResponseDelta, OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { FilterReason } from '../../../platform/networking/common/openai';
+import { stringifyUrlOrRequestMetadata } from '../../../platform/networking/common/networking';
 import { CapturingToken } from '../../../platform/requestLogger/common/capturingToken';
 import { IRequestLogger } from '../../../platform/requestLogger/node/requestLogger';
 import { ISurveyService } from '../../../platform/survey/common/surveyService';
@@ -24,7 +25,7 @@ import { IExperimentationService } from '../../../platform/telemetry/common/null
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { ChatResponseStreamImpl } from '../../../util/common/chatResponseStreamImpl';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
-import { isCancellationError } from '../../../util/vs/base/common/errors';
+import { CancellationError, isCancellationError } from '../../../util/vs/base/common/errors';
 import { Event } from '../../../util/vs/base/common/event';
 import { Iterable } from '../../../util/vs/base/common/iterator';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
@@ -46,6 +47,8 @@ import { IToolGrouping, IToolGroupingService } from '../../tools/common/virtualT
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { Conversation, getUniqueReferences, GlobalContextMessageMetadata, IResultMetadata, RenderedUserMessageMetadata, RequestDebugInformation, ResponseStreamParticipant, Turn, TurnStatus } from '../common/conversation';
 import { IBuildPromptContext, IToolCallRound } from '../common/intents';
+import { EditableChatRequestInit, LiveRequestEditorValidationError, LiveRequestSessionKey, LiveRequestValidationErrorCode } from '../common/liveRequestEditorModel';
+import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 import { isToolCallLimitCancellation } from '../common/specialRequestTypes';
 import { ChatTelemetry, ChatTelemetryBuilder } from './chatParticipantTelemetry';
 import { IntentInvocationMetadata } from './conversation';
@@ -150,6 +153,16 @@ export class DefaultIntentRequestHandler {
 		} catch (err) {
 			if (err instanceof ToolCallCancelledError) {
 				this.turn.setResponse(TurnStatus.Cancelled, { message: err.message, type: 'meta' }, undefined, {});
+				return {};
+			} else if (err instanceof PromptInterceptionCancelledError) {
+				const message = this.describePromptInterceptionCancel(err.reason);
+				this.stream.markdown(message);
+				this.turn.setResponse(TurnStatus.Cancelled, { message, type: 'meta' }, undefined, {});
+				return {};
+			} else if (err instanceof LiveRequestEditorValidationError) {
+				const message = this.describeLiveRequestValidationError(err.validationError.code);
+				this.stream.markdown(message);
+				this.turn.setResponse(TurnStatus.Cancelled, { message, type: 'meta' }, undefined, {});
 				return {};
 			} else if (isCancellationError(err)) {
 				return CanceledResult;
@@ -415,6 +428,30 @@ export class DefaultIntentRequestHandler {
 		return {};
 	}
 
+	private describePromptInterceptionCancel(reason?: string): string {
+		switch (reason) {
+			case 'user':
+			case 'token':
+				return l10n.t('Request canceled before sending.');
+			case 'modeDisabled':
+			case 'editorDisabled':
+				return l10n.t('Prompt Interception Mode was disabled. Pending request discarded.');
+			case 'superseded':
+				return l10n.t('Previous pending request was discarded before sending.');
+			default:
+				return l10n.t('Pending request was discarded before sending.');
+		}
+	}
+
+	private describeLiveRequestValidationError(code: LiveRequestValidationErrorCode): string {
+		switch (code) {
+			case 'empty':
+				return l10n.t('Prompt cannot be sent because all sections were removed. Reset the prompt to restore the original content.');
+			default:
+				return l10n.t('Prompt cannot be sent due to an invalid edit. Reset the prompt to continue.');
+		}
+	}
+
 	private async processResult(fetchResult: ChatResponse, responseMessage: string, chatResult: ChatResult | void, metadataFragment: Partial<IResultMetadata>, baseModelTelemetry: ConversationalBaseTelemetryData, rounds: IToolCallRound[]): Promise<ChatResult> {
 		switch (fetchResult.type) {
 			case ChatFetchResponseType.Success:
@@ -509,6 +546,12 @@ interface IDefaultToolLoopOptions extends IToolCallingLoopOptions {
 	overrideRequestLocation?: ChatLocation;
 }
 
+class PromptInterceptionCancelledError extends CancellationError {
+	constructor(public readonly reason?: string) {
+		super();
+	}
+}
+
 class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	public telemetry!: ChatTelemetry;
 	private toolGrouping?: IToolGrouping;
@@ -525,6 +568,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		@IToolGroupingService private readonly toolGroupingService: IToolGroupingService,
 		@IExperimentationService private readonly _experimentationService: IExperimentationService,
 		@ICopilotTokenStore private readonly _copilotTokenStore: ICopilotTokenStore,
+		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
 	) {
 		super(options, instantiationService, endpointProvider, logService, requestLogger, authenticationChatUpgradeService, telemetryService);
 
@@ -677,11 +721,10 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		return buildPromptResult;
 	}
 
+
 	protected override async fetch(opts: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {
 		const messageSourcePrefix = this.options.location === ChatLocation.Editor ? 'inline' : 'chat';
-		const debugName = this.options.request.isSubagent ?
-			`tool/runSubagent` :
-			`${ChatLocation.toStringShorter(this.options.location)}/${this.options.intent?.id}`;
+		const debugName = this.computeDebugName();
 		return this.options.invocation.endpoint.makeChatRequest2({
 			...opts,
 			debugName,
@@ -711,6 +754,48 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		}, token);
 	}
 
+	protected override prepareLiveRequest(buildPromptResult: IBuildPromptResult, context: IBuildPromptContext, requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+		if (!this._liveRequestEditorService.isEnabled()) {
+			return undefined;
+		}
+		const sessionKey: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
+		const requestId = context.requestId ?? this.options.conversation.getLatestTurn().id;
+		const init: EditableChatRequestInit = {
+			sessionId: sessionKey.sessionId,
+			location: sessionKey.location,
+			debugName: this.computeDebugName(),
+			model: this.options.invocation.endpoint.model,
+			renderResult: buildPromptResult,
+			requestId,
+			intentId: this.options.intent?.id,
+			endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
+			modelFamily: this.options.invocation.endpoint.family,
+			requestOptions,
+			maxPromptTokens: this.options.invocation.endpoint.modelMaxPromptTokens,
+		};
+		this._liveRequestEditorService.prepareRequest(init);
+		void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
+		const result = this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
+		if (result.error) {
+			throw new LiveRequestEditorValidationError(result.error);
+		}
+		return result.messages;
+	}
+
+	private async populateTokenCounts(key: LiveRequestSessionKey, messages: Raw.ChatMessage[]): Promise<void> {
+		if (!messages.length) {
+			return;
+		}
+		try {
+			const tokenizer = await this.options.invocation.endpoint.acquireTokenizer();
+			const perMessage = await Promise.all(messages.map(message => tokenizer.countMessageTokens(message)));
+			const total = perMessage.reduce((sum, value) => sum + value, 0);
+			this._liveRequestEditorService.updateTokenCounts(key, { total, perMessage });
+		} catch (error) {
+			this._logService.debug(`Live Request Editor: failed to compute token counts: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
 	protected override async getAvailableTools(outputStream: ChatResponseStream | undefined, token: CancellationToken): Promise<LanguageModelToolInformation[]> {
 		const tools = await this.options.invocation.getAvailableTools?.() ?? [];
 		if (this.toolGrouping) {
@@ -736,6 +821,21 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		}
 	}
 
+	protected override async interceptMessages(messages: Raw.ChatMessage[], token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> {
+		if (!this._liveRequestEditorService.isInterceptionEnabled()) {
+			return messages;
+		}
+		const key: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
+		const decision = await this._liveRequestEditorService.waitForInterceptionApproval(key, token);
+		if (!decision) {
+			return messages;
+		}
+		if (decision.action === 'cancel') {
+			throw new PromptInterceptionCancelledError(decision.reason);
+		}
+		return decision.messages;
+	}
+
 	private fixMessageNames(messages: Raw.ChatMessage[]): void {
 		messages.forEach(m => {
 			if (m.role !== Raw.ChatRole.System && 'name' in m && m.name === this.options.intent?.id) {
@@ -744,6 +844,13 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 				m.name = undefined;
 			}
 		});
+	}
+
+	private computeDebugName(): string {
+		if (this.options.request.isSubagent) {
+			return 'tool/runSubagent';
+		}
+		return `${ChatLocation.toStringShorter(this.options.location)}/${this.options.intent?.id ?? 'unknown'}`;
 	}
 
 	private calculateTemperature(): number {
