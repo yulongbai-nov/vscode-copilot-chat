@@ -48,6 +48,8 @@ import { ILinkifyService, LinkifyService } from '../../linkify/common/linkifySer
 import { IFeedbackReporter, NullFeedbackReporterImpl } from '../../prompt/node/feedbackReporter';
 import { IPromptVariablesService, NullPromptVariablesService } from '../../prompt/node/promptVariablesService';
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
+import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
+import { LiveRequestEditorService } from '../../prompt/node/liveRequestEditorService';
 import { CodeMapperService, ICodeMapperService } from '../../prompts/node/codeMapper/codeMapperService';
 import { FixCookbookService, IFixCookbookService } from '../../prompts/node/inline/fixCookbookService';
 import { EditToolLearningService, IEditToolLearningService } from '../../tools/common/editToolLearningService';
@@ -115,6 +117,7 @@ export function createExtensionUnitTestingServices(disposables: Pick<DisposableS
 	testingServiceCollection.define(IGitExtensionService, new SyncDescriptor(NullGitExtensionService));
 	testingServiceCollection.define(IGitDiffService, new SyncDescriptor(NullGitDiffService));
 	testingServiceCollection.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(MockGithubAvailableEmbeddingTypesService));
+	testingServiceCollection.define(ILiveRequestEditorService, new SyncDescriptor(LiveRequestEditorService));
 	return testingServiceCollection;
 }
 

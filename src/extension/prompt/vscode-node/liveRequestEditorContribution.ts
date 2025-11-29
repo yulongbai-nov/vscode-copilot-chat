@@ -12,6 +12,7 @@ import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { IExtensionContribution } from '../../common/contributions';
 import { ILiveRequestEditorService, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
 
 export class LiveRequestEditorContribution implements IExtensionContribution {
@@ -29,6 +30,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 	) {
+		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, false);
 		this._registerProvider();
 		this._registerCommands();
 		this._statusBarItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10002));
@@ -71,6 +73,22 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 	}
 
 	private _registerCommands(): void {
+		const toggleCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.toggle',
+			async () => {
+				const current = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
+				try {
+					await this._configurationService.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, !current);
+					if (!current) {
+						await vscode.commands.executeCommand('github.copilot.liveRequestEditor.show');
+					}
+				} catch (error) {
+					this._logService.error('Failed to toggle Live Request Editor', error);
+					vscode.window.showErrorMessage('Failed to toggle the Live Request Editor. See output for details.');
+				}
+			}
+		);
+
 		const showCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestEditor.show',
 			async () => {
@@ -86,6 +104,13 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const toggleCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.toggle',
+			async () => {
+				await this._toggleInspectorVisibility();
+			}
+		);
+
 		const toggleInterceptionCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestEditor.toggleInterception',
 			async (source: 'command' | 'statusBar' = 'command') => {
@@ -94,6 +119,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		);
 
 		this._disposables.add(showCommand);
+		this._disposables.add(toggleCommand);
 		this._disposables.add(toggleInterceptionCommand);
 	}
 
@@ -120,6 +146,23 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			source,
 			enabled: enabled ? '1' : '0',
 		});
+	}
+
+	private async _toggleInspectorVisibility(): Promise<void> {
+		if (!this._liveRequestEditorService.isEnabled()) {
+			vscode.window.showWarningMessage('Enable the Live Request Editor to inspect prompts.');
+			return;
+		}
+		try {
+			if (this._provider?.isVisible()) {
+				await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+			} else {
+				await vscode.commands.executeCommand('github.copilot.liveRequestEditor.show');
+			}
+		} catch (error) {
+			this._logService.error('Failed to toggle Live Request Editor visibility', error);
+			vscode.window.showErrorMessage('Failed to toggle the Prompt Inspector. See output for details.');
+		}
 	}
 
 	private _updateStatusBar(state: PromptInterceptionState): void {

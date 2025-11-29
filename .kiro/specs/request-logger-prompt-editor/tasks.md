@@ -26,7 +26,7 @@
   - [x] 3.4 Handle error cases where the editor state cannot be mapped back into valid ChatML messages, surfacing clear errors and offering reset. _Requirements: 4.5, 6.4_  
 
 - [ ] 4. Chat panel Prompt Inspector UI  
-  - [ ] 4.1 Add a “View Prompt” / Prompt Inspector toggle to the chat panel UI when the feature flag is enabled. _Requirements: 1.2, 1.3_  
+  - [x] 4.1 Add a “View Prompt” / Prompt Inspector toggle to the chat panel UI when the feature flag is enabled. _Requirements: 1.2, 1.3_  
   - [ ] 4.2 Implement the Prompt Inspector as a drawer or secondary panel within the chat UI, wired to an `EditableChatRequest` instance for the pending request. _Requirements: 1.3, 2.1_  
   - [ ] 4.3 Render Prompt Sections using existing chat visualization components (chat bubbles, markdown, code blocks) and section headers with labels and optional token counts. _Requirements: 2.2, 2.3, 2.5_  
   - [ ] 4.4 Implement per-section collapse/expand controls with persistent state for the current editor session. _Requirements: 2.4_  

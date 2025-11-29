@@ -2211,9 +2211,9 @@
 			},
 			{
 				"command": "github.copilot.liveRequestEditor.toggle",
-				"title": "Toggle Live Request Editor",
+				"title": "View Prompt",
 				"icon": "$(edit)",
-				"enablement": "github.copilot-chat.activated",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
 			},
 			{
@@ -4543,6 +4543,12 @@
 					"command": "github.copilot.promptSectionVisualizer.toggle",
 					"when": "view == workbench.panel.chat.view.copilot && github.copilot-chat.activated",
 					"group": "navigation@10"
+				},
+				{
+					"command": "github.copilot.liveRequestEditor.toggle",
+					"when": "view == workbench.panel.chat.view.copilot && github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+					"group": "navigation@11",
+					"toggled": "github.copilot.liveRequestEditor.visible"
 				},
 				{
 					"command": "github.copilot.promptSectionVisualizer.refresh",

@@ -8,6 +8,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { EditableChatRequest } from '../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 
 /**
  * WebView provider for the Live Request Editor / Prompt Inspector panel.
@@ -33,6 +34,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	) {
 		super();
 		this._interceptionState = this._liveRequestEditorService.getInterceptionState();
+		this._setVisibilityContext(false);
 
 		// Listen for changes to the live request
 		this._register(this._liveRequestEditorService.onDidChange(request => {
@@ -62,6 +64,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._register(webviewView.webview.onDidReceiveMessage(message => {
 			this._handleWebviewMessage(message);
 		}));
+		this._register(webviewView.onDidChangeVisibility(() => this._updateVisibilityContext()));
+		this._register(webviewView.onDidDispose(() => this._setVisibilityContext(false)));
+		this._updateVisibilityContext();
 
 		// Send initial state if available
 		if (this._currentRequest) {
@@ -75,6 +80,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	public show(): void {
 		if (this._view) {
 			this._view.show?.(true);
+			this._setVisibilityContext(true);
 		}
 	}
 
@@ -94,6 +100,14 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 	private _updateWebview(): void {
 		this._postStateToWebview();
+	}
+
+	private _updateVisibilityContext(): void {
+		this._setVisibilityContext(this.isVisible());
+	}
+
+	private _setVisibilityContext(visible: boolean): void {
+		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, visible);
 	}
 
 	private _handleInterceptionStateChanged(state: PromptInterceptionState): void {
