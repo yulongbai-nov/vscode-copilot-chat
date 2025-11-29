@@ -105,6 +105,26 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}, false);
 	}
 
+	updateTokenCounts(key: LiveRequestSessionKey, tokenCounts: { total?: number; perMessage?: number[] }): EditableChatRequest | undefined {
+		return this.withRequest(key, request => {
+			let didChange = false;
+			if (typeof tokenCounts.total === 'number' && tokenCounts.total >= 0) {
+				request.metadata.tokenCount = tokenCounts.total;
+				didChange = true;
+			}
+			if (tokenCounts.perMessage && tokenCounts.perMessage.length) {
+				for (const section of request.sections) {
+					const value = tokenCounts.perMessage[section.sourceMessageIndex];
+					if (typeof value === 'number') {
+						section.tokenCount = value;
+						didChange = true;
+					}
+				}
+			}
+			return didChange;
+		}, false);
+	}
+
 	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): Raw.ChatMessage[] {
 		if (!this._enabled) {
 			return fallback;

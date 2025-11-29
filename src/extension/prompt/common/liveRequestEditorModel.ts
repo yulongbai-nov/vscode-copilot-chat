@@ -78,4 +78,9 @@ export interface EditableChatRequestInit {
 	endpointUrl?: string;
 	modelFamily?: string;
 	requestOptions?: OptionalChatRequestParams;
+	maxPromptTokens?: number;
+	tokenCounts?: {
+		total?: number;
+		perMessage?: number[];
+	};
 }

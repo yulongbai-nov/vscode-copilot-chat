@@ -730,9 +730,25 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
 			modelFamily: this.options.invocation.endpoint.family,
 			requestOptions,
+			maxPromptTokens: this.options.invocation.endpoint.modelMaxPromptTokens,
 		};
 		this._liveRequestEditorService.prepareRequest(init);
+		void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
 		return this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
+	}
+
+	private async populateTokenCounts(key: LiveRequestSessionKey, messages: Raw.ChatMessage[]): Promise<void> {
+		if (!messages.length) {
+			return;
+		}
+		try {
+			const tokenizer = await this.options.invocation.endpoint.acquireTokenizer();
+			const perMessage = await Promise.all(messages.map(message => tokenizer.countMessageTokens(message)));
+			const total = perMessage.reduce((sum, value) => sum + value, 0);
+			this._liveRequestEditorService.updateTokenCounts(key, { total, perMessage });
+		} catch (error) {
+			this._logService.debug(`Live Request Editor: failed to compute token counts: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 
 	protected override async getAvailableTools(outputStream: ChatResponseStream | undefined, token: CancellationToken): Promise<LanguageModelToolInformation[]> {

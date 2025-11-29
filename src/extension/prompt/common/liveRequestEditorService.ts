@@ -29,5 +29,7 @@ export interface ILiveRequestEditorService {
 
 	resetRequest(key: LiveRequestSessionKey): EditableChatRequest | undefined;
 
+	updateTokenCounts(key: LiveRequestSessionKey, tokenCounts: { total?: number; perMessage?: number[] }): EditableChatRequest | undefined;
+
 	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): Raw.ChatMessage[];
 }
