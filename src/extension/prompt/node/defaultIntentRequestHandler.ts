@@ -47,7 +47,7 @@ import { IToolGrouping, IToolGroupingService } from '../../tools/common/virtualT
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { Conversation, getUniqueReferences, GlobalContextMessageMetadata, IResultMetadata, RenderedUserMessageMetadata, RequestDebugInformation, ResponseStreamParticipant, Turn, TurnStatus } from '../common/conversation';
 import { IBuildPromptContext, IToolCallRound } from '../common/intents';
-import { EditableChatRequestInit, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { EditableChatRequestInit, LiveRequestEditorValidationError, LiveRequestSessionKey, LiveRequestValidationErrorCode } from '../common/liveRequestEditorModel';
 import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 import { isToolCallLimitCancellation } from '../common/specialRequestTypes';
 import { ChatTelemetry, ChatTelemetryBuilder } from './chatParticipantTelemetry';
@@ -156,6 +156,11 @@ export class DefaultIntentRequestHandler {
 				return {};
 			} else if (err instanceof PromptInterceptionCancelledError) {
 				const message = this.describePromptInterceptionCancel(err.reason);
+				this.stream.markdown(message);
+				this.turn.setResponse(TurnStatus.Cancelled, { message, type: 'meta' }, undefined, {});
+				return {};
+			} else if (err instanceof LiveRequestEditorValidationError) {
+				const message = this.describeLiveRequestValidationError(err.validationError.code);
 				this.stream.markdown(message);
 				this.turn.setResponse(TurnStatus.Cancelled, { message, type: 'meta' }, undefined, {});
 				return {};
@@ -435,6 +440,15 @@ export class DefaultIntentRequestHandler {
 				return l10n.t('Previous pending request was discarded before sending.');
 			default:
 				return l10n.t('Pending request was discarded before sending.');
+		}
+	}
+
+	private describeLiveRequestValidationError(code: LiveRequestValidationErrorCode): string {
+		switch (code) {
+			case 'empty':
+				return l10n.t('Prompt cannot be sent because all sections were removed. Reset the prompt to restore the original content.');
+			default:
+				return l10n.t('Prompt cannot be sent due to an invalid edit. Reset the prompt to continue.');
 		}
 	}
 
@@ -761,7 +775,11 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		};
 		this._liveRequestEditorService.prepareRequest(init);
 		void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
-		return this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
+		const result = this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
+		if (result.error) {
+			throw new LiveRequestEditorValidationError(result.error);
+		}
+		return result.messages;
 	}
 
 	private async populateTokenCounts(key: LiveRequestSessionKey, messages: Raw.ChatMessage[]): Promise<void> {

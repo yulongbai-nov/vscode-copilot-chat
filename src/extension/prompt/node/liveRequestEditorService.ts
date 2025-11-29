@@ -13,7 +13,7 @@ import { stringHash } from '../../../util/vs/base/common/hash';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestSectionKind, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestValidationError } from '../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, PendingPromptInterceptSummary, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
 
@@ -153,16 +153,22 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}, false);
 	}
 
-	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): Raw.ChatMessage[] {
+	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): LiveRequestSendResult {
 		if (!this._enabled) {
-			return fallback;
+			return { messages: fallback };
 		}
 		const request = this.getRequest(key);
 		if (!request) {
-			return fallback;
+			return { messages: fallback };
 		}
 		this.recomputeMessages(request);
-		return request.messages.length ? request.messages : fallback;
+		const validationError = this.validateRequestForSend(request);
+		request.metadata.lastValidationErrorCode = validationError?.code;
+		const messages = request.messages.length ? request.messages : fallback;
+		return {
+			messages,
+			error: validationError
+		};
 	}
 
 	getInterceptionState(): PromptInterceptionState {
@@ -222,21 +228,28 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this._pendingIntercepts.delete(pendingKey);
 
 		let outcomeReason = options?.reason;
+		let loggedAction: PromptInterceptionAction = action;
 		if (!pending.deferred.isSettled) {
 			if (action === 'resume') {
 				const request = this.getRequest(key);
-				const messages = request ? this.getMessagesForSend(key, request.messages) : pending.fallbackMessages;
-				void pending.deferred.complete({ action: 'resume', messages });
+				const result = request ? this.getMessagesForSend(key, request.messages) : { messages: pending.fallbackMessages };
+				if (result.error) {
+					loggedAction = 'cancel';
+					outcomeReason = 'invalid';
+					void pending.deferred.complete({ action: 'cancel', reason: 'invalid' });
+				} else {
+					void pending.deferred.complete({ action: 'resume', messages: result.messages });
+				}
 			} else {
 				void pending.deferred.complete({ action: 'cancel', reason: options?.reason });
 			}
 		}
 
-		if (action === 'resume' && !outcomeReason) {
+		if (loggedAction === 'resume' && !outcomeReason) {
 			outcomeReason = 'user';
 		}
 
-		this._logInterceptionOutcome(action, outcomeReason, pending.key);
+		this._logInterceptionOutcome(loggedAction, outcomeReason, pending.key);
 		this.emitInterceptionState();
 	}
 
@@ -335,6 +348,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 		request.messages = updatedMessages;
 		request.isDirty = isDirty || !equals(updatedMessages, request.originalMessages);
+	}
+
+	private validateRequestForSend(request: EditableChatRequest): LiveRequestValidationError | undefined {
+		if (!request.messages.length) {
+			return { code: 'empty' };
+		}
+		return undefined;
 	}
 
 	private computeMessagesHash(messages: Raw.ChatMessage[]): number {

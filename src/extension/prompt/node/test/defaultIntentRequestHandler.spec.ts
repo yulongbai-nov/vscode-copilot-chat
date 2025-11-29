@@ -26,7 +26,7 @@ import { isObject, isUndefinedOrNull } from '../../../../util/vs/base/common/typ
 import { generateUuid } from '../../../../util/vs/base/common/uuid';
 import { SyncDescriptor } from '../../../../util/vs/platform/instantiation/common/descriptors';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
-import { ChatLocation, ChatResponseConfirmationPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
+import { ChatLocation, ChatResponseConfirmationPart, ChatResponseMarkdownPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { ToolCallingLoop } from '../../../intents/node/toolCallingLoop';
 import { ToolResultMetadata } from '../../../prompts/node/panel/toolCalling';
 import { createExtensionUnitTestingServices, type TestingServiceCollection } from '../../../test/node/services';
@@ -37,7 +37,7 @@ import { ChatTelemetryBuilder } from '../chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
 import { ILiveRequestEditorService, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
-import { EditableChatRequest } from '../../common/liveRequestEditorModel';
+import { EditableChatRequest, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
 	let accessor: ITestingServicesAccessor;
@@ -165,6 +165,7 @@ suite('defaultIntentRequestHandler', () => {
 		public lastResolved?: PromptInterceptionDecision;
 		private _messages: Raw.ChatMessage[] = [];
 		private _deferred?: DeferredPromise<PromptInterceptionDecision>;
+		public validationError?: LiveRequestValidationError;
 
 		isEnabled(): boolean { return this.enabled; }
 		isInterceptionEnabled(): boolean {
@@ -181,8 +182,9 @@ suite('defaultIntentRequestHandler', () => {
 		resetRequest(): EditableChatRequest | undefined { return undefined; }
 		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
 
-		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]): Raw.ChatMessage[] {
-			return this._messages.length ? this._messages : fallback;
+		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
+			const messages = this._messages.length ? this._messages : fallback;
+			return { messages, error: this.validationError };
 		}
 
 		waitForInterceptionApproval(): Promise<PromptInterceptionDecision | undefined> {
@@ -192,6 +194,10 @@ suite('defaultIntentRequestHandler', () => {
 			this.waitCount++;
 			this._deferred = new DeferredPromise<PromptInterceptionDecision>();
 			return this._deferred.p;
+		}
+
+		setValidationError(error: LiveRequestValidationError | undefined): void {
+			this.validationError = error;
 		}
 
 		resolvePendingIntercept(_key: any, action: 'resume' | 'cancel', options?: { reason?: string }): void {
@@ -383,6 +389,24 @@ suite('defaultIntentRequestHandler', () => {
 		expect(response).to.have.length(1);
 		expect(response[0]).toMatchSnapshot();
 		expect(interceptService.cancelCalls).to.equal(1);
+	});
+
+	test('surfaces validation errors when prompt edits remove all sections', async () => {
+		const editorService = new TestLiveRequestEditorService();
+		editorService.enabled = true;
+		editorService.setValidationError({ code: 'empty' });
+		resetState(() => editorService);
+
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('remove everything')] }],
+		};
+
+		const handler = makeHandler();
+		const result = await handler.getResult();
+		expect(result).to.deep.equal({});
+		const last = response.at(-1) as ChatResponseMarkdownPart;
+		expect(last.value.value).to.contain('Prompt cannot be sent because all sections were removed.');
 	});
 
 	function fillWithToolCalls(insertN = 20) {

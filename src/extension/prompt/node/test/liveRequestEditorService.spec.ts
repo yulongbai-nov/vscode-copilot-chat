@@ -55,7 +55,9 @@ describe('LiveRequestEditorService interception', () => {
 		const request = service.getRequest(key)!;
 		const firstSection = request.sections[0];
 		service.updateSectionContent(key, firstSection.id, 'edited');
-		const editedMessages = service.getMessagesForSend(key, request.originalMessages);
+		const sendResult = service.getMessagesForSend(key, request.originalMessages);
+		expect(sendResult.error).toBeUndefined();
+		const editedMessages = sendResult.messages;
 		service.resolvePendingIntercept(key, 'resume');
 
 		const decision = await decisionPromise;
@@ -139,6 +141,19 @@ describe('LiveRequestEditorService interception', () => {
 		expect(updated.metadata.lastLoggedMatches).toBe(false);
 		const events = telemetry.getEvents().telemetryServiceEvents;
 		expect(events.some(evt => evt.eventName === 'liveRequestEditor.requestParityMismatch')).toBe(true);
+	});
+
+	test('returns validation error when all sections deleted', async () => {
+		const { service } = await createService();
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		service.prepareRequest(createServiceInit());
+		const request = service.getRequest(key)!;
+		for (const section of [...request.sections]) {
+			service.deleteSection(key, section.id);
+		}
+
+		const result = service.getMessagesForSend(key, request.originalMessages);
+		expect(result.error?.code).toBe('empty');
 	});
 });
 

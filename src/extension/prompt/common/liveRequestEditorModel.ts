@@ -51,6 +51,7 @@ export interface EditableChatRequestMetadata {
 	lastLoggedHash?: number;
 	lastLoggedMatches?: boolean;
 	lastLoggedMismatchReason?: string;
+	lastValidationErrorCode?: LiveRequestValidationError['code'];
 }
 
 export interface LiveRequestSessionKey {
@@ -87,4 +88,23 @@ export interface EditableChatRequestInit {
 		total?: number;
 		perMessage?: number[];
 	};
+}
+
+export type LiveRequestValidationErrorCode = 'empty';
+
+export interface LiveRequestValidationError {
+	code: LiveRequestValidationErrorCode;
+	details?: string;
+}
+
+export interface LiveRequestSendResult {
+	messages: Raw.ChatMessage[];
+	error?: LiveRequestValidationError;
+}
+
+export class LiveRequestEditorValidationError extends Error {
+	constructor(public readonly validationError: LiveRequestValidationError) {
+		super(validationError.code);
+		this.name = 'LiveRequestEditorValidationError';
+	}
 }

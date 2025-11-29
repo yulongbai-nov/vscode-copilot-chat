@@ -7,7 +7,7 @@ import { Raw } from '@vscode/prompt-tsx';
 import { createServiceIdentifier } from '../../../util/common/services';
 import { Event } from '../../../util/vs/base/common/event';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestSessionKey } from './liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestSendResult, LiveRequestSessionKey } from './liveRequestEditorModel';
 
 export const ILiveRequestEditorService = createServiceIdentifier<ILiveRequestEditorService>('ILiveRequestEditorService');
 
@@ -53,7 +53,7 @@ export interface ILiveRequestEditorService {
 
 	updateTokenCounts(key: LiveRequestSessionKey, tokenCounts: { total?: number; perMessage?: number[] }): EditableChatRequest | undefined;
 
-	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): Raw.ChatMessage[];
+	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): LiveRequestSendResult;
 
 	getInterceptionState(): PromptInterceptionState;
 
