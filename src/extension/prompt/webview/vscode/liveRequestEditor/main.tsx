@@ -471,6 +471,12 @@ const App: React.FC = () => {
 							<span>{request.sections.length}</span>
 						</div>
 					</div>
+					{totalTokens > 0 && request.metadata?.maxPromptTokens ? (
+						<div className="status-meter">
+							<div className="status-meter-fill" style={{ width: formatPercent(totalTokens, request.metadata.maxPromptTokens) }} />
+							<span className="status-meter-label">{formatPercent(totalTokens, request.metadata.maxPromptTokens)}</span>
+						</div>
+					) : null}
 				</div>
 
 				{pinnedSections.length > 0 && (
