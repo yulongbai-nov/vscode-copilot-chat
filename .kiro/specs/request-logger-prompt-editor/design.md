@@ -194,6 +194,10 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
 
 This interim design keeps parity with the backend model and lets early adopters validate editing semantics before the full chat-panel drawer ships. The drawer implementation should inherit these interaction contracts to avoid two divergent Prompt Inspector behaviours.
 
+### Updated UI Deployment Strategy (Feb 2025)
+
+As of today, the VS Code chat panel does not expose extensibility points that would let Copilot Chat embed a custom drawer directly inside the native chat surface. Shipping the prompt inspector “in-panel” therefore requires coordinated work in the core VS Code repository before any code in this repo can attach React/TSX components to the chat input. Until that host support exists, we will continue to invest in the webview-based Prompt Inspector described above, treating it as the primary user experience. All new 4.x tasks now target the webview implementation while mirroring the desired drawer interactions (hover toolbar, inline editors, metadata, conversation picker). Once VS Code surfaces the necessary APIs, we can port the matured webview components into the native drawer with minimal behavioural drift.
+
 ## Proposed Architecture
 
 ### High-Level Design
