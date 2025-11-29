@@ -39,6 +39,7 @@ import { generateUuid } from '../../../util/vs/base/common/uuid';
 import { isBYOKModel } from '../../byok/node/openAIEndpoint';
 import { EXTENSION_ID } from '../../common/constants';
 import { ChatMLFetcherTelemetrySender as Telemetry } from './chatMLFetcherTelemetry';
+import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 
 export interface IMadeChatRequestEvent {
 	readonly messages: Raw.ChatMessage[];
@@ -99,6 +100,7 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 		@IConversationOptions options: IConversationOptions,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IExperimentationService private readonly _experimentationService: IExperimentationService,
+		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
 	) {
 		super(options);
 	}
@@ -150,6 +152,8 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 			body: requestBody,
 			ignoreStatefulMarker: opts.ignoreStatefulMarker
 		});
+		const sessionKey = telemetryProperties?.conversationId ? { sessionId: telemetryProperties.conversationId, location: opts.location } : undefined;
+		this._liveRequestEditorService.recordLoggedRequest(sessionKey, opts.messages);
 		let tokenCount = -1;
 		const streamRecorder = new FetchStreamRecorder(finishedCb);
 		const enableRetryOnError = opts.enableRetryOnError ?? opts.enableRetryOnFilter;

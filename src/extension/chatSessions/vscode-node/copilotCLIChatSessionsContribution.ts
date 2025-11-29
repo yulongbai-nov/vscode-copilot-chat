@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { SweCustomAgent } from '@github/copilot/sdk';
+import type { SweCustomAgent } from '@github/copilot/sdk';
 import * as vscode from 'vscode';
 import { ChatExtendedRequestHandler, l10n, Uri } from 'vscode';
 import { IRunCommandExecutionService } from '../../../platform/commands/common/runCommandExecutionService';
@@ -265,9 +265,19 @@ export class CopilotCLIChatSessionContentProvider implements vscode.ChatSessionC
 		@ICopilotCLIAgents private readonly copilotCLIAgents: ICopilotCLIAgents,
 		@ICopilotCLISessionService private readonly sessionService: ICopilotCLISessionService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ICopilotCLISDK private readonly copilotCLISDK: ICopilotCLISDK,
+		@ILogService private readonly logService: ILogService,
 	) { }
 
 	async provideChatSessionContent(resource: Uri, token: vscode.CancellationToken): Promise<vscode.ChatSession> {
+		if (!this.copilotCLISDK.isAvailable()) {
+			return {
+				history: [],
+				activeResponseCallback: undefined,
+				requestHandler: undefined,
+				options: {}
+			};
+		}
 		const copilotcliSessionId = SessionIdForCLI.parse(resource);
 		const [models, defaultModel, sessionAgent, defaultAgent] = await Promise.all([
 			this.copilotCLIModels.getAvailableModels(),
@@ -321,6 +331,10 @@ export class CopilotCLIChatSessionContentProvider implements vscode.ChatSessionC
 	}
 
 	async provideChatSessionProviderOptions(): Promise<vscode.ChatSessionProviderOptions> {
+		if (!this.copilotCLISDK.isAvailable()) {
+			this.logService.info('Copilot CLI SDK unavailable; skipping CLI session provider options.');
+			return { optionGroups: [] };
+		}
 		const isolationItems = [
 			{ id: 'enabled', name: 'Isolated' },
 			{ id: 'disabled', name: 'Workspace' }
@@ -421,6 +435,10 @@ export class CopilotCLIChatSessionParticipant extends Disposable {
 
 	private readonly previousReferences = new Map<string, vscode.ChatPromptReference[]>();
 	private async handleRequest(request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult | void> {
+		if (!this.copilotCLISDK.isAvailable()) {
+			stream.warning(vscode.l10n.t('Copilot CLI is not available in this build.'));
+			return {};
+		}
 		const { chatSessionContext } = context;
 		const disposables = new DisposableStore();
 		try {

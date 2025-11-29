@@ -270,9 +270,10 @@ export interface IOctoKitService {
 	 * @param repo The repository name
 	 * @param agentName The name of the custom agent
 	 * @param version Optional git ref (branch, tag, or commit SHA) to fetch from
+	 * @param metadata Optional metadata from a previously fetched list item to avoid redundant calls
 	 * @returns The complete custom agent configuration including the prompt
 	 */
-	getCustomAgentDetails(owner: string, repo: string, agentName: string, version?: string): Promise<CustomAgentDetails | undefined>;
+	getCustomAgentDetails(owner: string, repo: string, agentName: string, version?: string, metadata?: CustomAgentListItem): Promise<CustomAgentDetails | undefined>;
 
 	/**
 	 * Gets the list of files changed in a pull request.
@@ -312,7 +313,7 @@ export interface IOctoKitService {
 export class BaseOctoKitService {
 	constructor(
 		protected readonly _capiClientService: ICAPIClientService,
-		private readonly _fetcherService: IFetcherService,
+		protected readonly fetcherService: IFetcherService,
 		protected readonly _logService: ILogService,
 		private readonly _telemetryService: ITelemetryService
 	) { }
@@ -326,34 +327,34 @@ export class BaseOctoKitService {
 	}
 
 	protected async _makeGHAPIRequest(routeSlug: string, method: 'GET' | 'POST', token: string, body?: { [key: string]: any }) {
-		return makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, routeSlug, method, token, body, '2022-11-28');
+		return makeGitHubAPIRequest(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, routeSlug, method, token, body, '2022-11-28');
 	}
 
 	protected async getCopilotPullRequestForUserWithToken(owner: string, repo: string, user: string, token: string) {
 		const query = `repo:${owner}/${repo} is:open author:copilot-swe-agent[bot] involves:${user}`;
-		return makeSearchGraphQLRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, query);
+		return makeSearchGraphQLRequest(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, query);
 	}
 
 	protected async addPullRequestCommentWithToken(pullRequestId: string, commentBody: string, token: string): Promise<PullRequestComment | null> {
-		return addPullRequestCommentGraphQLRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, pullRequestId, commentBody);
+		return addPullRequestCommentGraphQLRequest(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, pullRequestId, commentBody);
 	}
 
 	protected async getPullRequestFromSessionWithToken(globalId: string, token: string): Promise<PullRequestSearchItem | null> {
-		return getPullRequestFromGlobalId(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, globalId);
+		return getPullRequestFromGlobalId(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, globalId);
 	}
 
 	protected async getPullRequestFilesWithToken(owner: string, repo: string, pullNumber: number, token: string): Promise<PullRequestFile[]> {
-		const result = await makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, `repos/${owner}/${repo}/pulls/${pullNumber}/files`, 'GET', token, undefined, '2022-11-28');
+		const result = await makeGitHubAPIRequest(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, `repos/${owner}/${repo}/pulls/${pullNumber}/files`, 'GET', token, undefined, '2022-11-28');
 		return result || [];
 	}
 
 	protected async closePullRequestWithToken(owner: string, repo: string, pullNumber: number, token: string): Promise<boolean> {
-		return closePullRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, owner, repo, pullNumber);
+		return closePullRequest(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, token, owner, repo, pullNumber);
 	}
 
 	protected async getFileContentWithToken(owner: string, repo: string, ref: string, path: string, token: string): Promise<string> {
 		const route = `repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
-		const response = await makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, route, 'GET', token, undefined);
+		const response = await makeGitHubAPIRequest(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, route, 'GET', token, undefined);
 
 		if (!response || Array.isArray(response)) {
 			throw new Error('Unable to fetch file content');
@@ -378,7 +379,7 @@ export class BaseOctoKitService {
 
 	private async getBlobContentWithToken(owner: string, repo: string, sha: string, token: string): Promise<string | undefined> {
 		const blobRoute = `repos/${owner}/${repo}/git/blobs/${sha}`;
-		const blobResponse = await makeGitHubAPIRequest(this._fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, blobRoute, 'GET', token, undefined, '2022-11-28');
+		const blobResponse = await makeGitHubAPIRequest(this.fetcherService, this._logService, this._telemetryService, this._capiClientService.dotcomAPIURL, blobRoute, 'GET', token, undefined, '2022-11-28');
 
 		if (!blobResponse || Array.isArray(blobResponse)) {
 			return undefined;

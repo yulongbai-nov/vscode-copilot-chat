@@ -30,7 +30,7 @@ import { AdoCodeSearchService, IAdoCodeSearchService } from '../../../platform/r
 import { GithubCodeSearchService, IGithubCodeSearchService } from '../../../platform/remoteCodeSearch/common/githubCodeSearchService';
 import { ISimulationTestContext, NulSimulationTestContext } from '../../../platform/simulationTestContext/common/simulationTestContext';
 import { ITerminalService, NullTerminalService } from '../../../platform/terminal/common/terminalService';
-import { TestingServiceCollection, createPlatformServices } from '../../../platform/test/node/services';
+import { createPlatformServices, type TestingServiceCollection } from '../../../platform/test/node/services';
 import { SimulationAlternativeNotebookContentService, SimulationNotebookService, SimulationNotebookSummaryTracker } from '../../../platform/test/node/simulationWorkspaceServices';
 import { NullTestProvider } from '../../../platform/testing/common/nullTestProvider';
 import { TestLogService } from '../../../platform/testing/common/testLogService';
@@ -48,6 +48,8 @@ import { ILinkifyService, LinkifyService } from '../../linkify/common/linkifySer
 import { IFeedbackReporter, NullFeedbackReporterImpl } from '../../prompt/node/feedbackReporter';
 import { IPromptVariablesService, NullPromptVariablesService } from '../../prompt/node/promptVariablesService';
 import { ITodoListContextProvider, TodoListContextProvider } from '../../prompt/node/todoListContextProvider';
+import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
+import { LiveRequestEditorService } from '../../prompt/node/liveRequestEditorService';
 import { CodeMapperService, ICodeMapperService } from '../../prompts/node/codeMapper/codeMapperService';
 import { FixCookbookService, IFixCookbookService } from '../../prompts/node/inline/fixCookbookService';
 import { EditToolLearningService, IEditToolLearningService } from '../../tools/common/editToolLearningService';
@@ -115,5 +117,8 @@ export function createExtensionUnitTestingServices(disposables: Pick<DisposableS
 	testingServiceCollection.define(IGitExtensionService, new SyncDescriptor(NullGitExtensionService));
 	testingServiceCollection.define(IGitDiffService, new SyncDescriptor(NullGitDiffService));
 	testingServiceCollection.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(MockGithubAvailableEmbeddingTypesService));
+	testingServiceCollection.define(ILiveRequestEditorService, new SyncDescriptor(LiveRequestEditorService));
 	return testingServiceCollection;
 }
+
+export type { TestingServiceCollection } from '../../../platform/test/node/services';

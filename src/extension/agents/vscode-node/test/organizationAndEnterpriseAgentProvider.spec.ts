@@ -122,7 +122,7 @@ class MockOctoKitService implements IOctoKitService {
 		return this.customAgents;
 	}
 
-	async getCustomAgentDetails(owner: string, repo: string, agentName: string, version?: string): Promise<CustomAgentDetails | undefined> {
+	async getCustomAgentDetails(owner: string, repo: string, agentName: string, version?: string, _metadata?: CustomAgentListItem): Promise<CustomAgentDetails | undefined> {
 		return this.agentDetails.get(agentName);
 	}
 

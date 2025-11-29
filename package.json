@@ -2210,6 +2210,34 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.liveRequestEditor.toggle",
+				"title": "View Prompt",
+				"icon": "$(edit)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.toggleInterception",
+				"title": "Toggle Prompt Interception Mode",
+				"icon": "$(debug-pause)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.show",
+				"title": "Copilot: Show Prompt Inspector",
+				"icon": "$(open-preview)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.reset",
+				"title": "Live Request Editor: Reset",
+				"icon": "$(refresh)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.debug.workbenchState",
 				"title": "%github.copilot.command.logWorkbenchState%",
 				"category": "Developer"
@@ -3637,6 +3665,22 @@
 			{
 				"id": "advanced",
 				"properties": {
+					"github.copilot.advanced.livePromptEditorEnabled": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Enable the experimental Live Chat Request Editor inside the chat panel to inspect and edit the composed prompt before it is sent.",
+						"tags": [
+							"advanced"
+						]
+					},
+					"github.copilot.advanced.livePromptEditorInterception": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Pause every chat send until you explicitly resume from the Live Request Editor. Requires the Live Request Editor to be enabled.",
+						"tags": [
+							"advanced"
+						]
+					},
 					"github.copilot.chat.debug.overrideChatEngine": {
 						"type": [
 							"string",
@@ -4501,6 +4545,12 @@
 					"group": "navigation@10"
 				},
 				{
+					"command": "github.copilot.liveRequestEditor.toggle",
+					"when": "view == workbench.panel.chat.view.copilot && github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+					"group": "navigation@11",
+					"toggled": "github.copilot.liveRequestEditor.visible"
+				},
+				{
 					"command": "github.copilot.promptSectionVisualizer.refresh",
 					"when": "view == github.copilot.promptSectionVisualizer && config.github.copilot.chat.promptSectionVisualizer.enabled",
 					"group": "navigation@1"
@@ -4943,6 +4993,13 @@
 					"name": "Prompt Section Visualizer",
 					"type": "webview",
 					"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled"
+				},
+				{
+					"id": "github.copilot.liveRequestEditor",
+					"name": "Live Request Editor",
+					"type": "webview",
+					"icon": "assets/live-request-editor.svg",
+					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				}
 			]
 		},
@@ -5288,7 +5345,7 @@
 		"watch:tsc-extension": "tsc --noEmit --watch --project tsconfig.json",
 		"watch:tsc-extension-web": "tsc --noEmit --watch --project tsconfig.worker.json",
 		"watch:tsc-simulation-workbench": "tsc --noEmit --watch --project test/simulation/workbench/tsconfig.json",
-		"typecheck": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project test/simulation/workbench/tsconfig.json && tsc --noEmit --project tsconfig.worker.json && tsc --noEmit --project src/extension/completions-core/vscode-node/extension/src/copilotPanel/webView/tsconfig.json",
+		"typecheck": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project test/simulation/workbench/tsconfig.json && tsc --noEmit --project tsconfig.worker.json && tsc --noEmit --project src/extension/completions-core/vscode-node/extension/src/copilotPanel/webView/tsconfig.json && tsc --noEmit --project src/extension/prompt/webview/vscode/liveRequestEditor/tsconfig.json",
 		"lint": "eslint . --max-warnings=0",
 		"lint-staged": "eslint --max-warnings=0",
 		"tsfmt": "npx tsfmt -r --verify",

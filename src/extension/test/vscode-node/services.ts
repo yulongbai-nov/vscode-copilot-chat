@@ -110,6 +110,8 @@ import { IToolsService, NullToolsService } from '../../tools/common/toolsService
 import { ToolGroupingService } from '../../tools/common/virtualTools/toolGroupingService';
 import { ToolGroupingCache } from '../../tools/common/virtualTools/virtualToolGroupCache';
 import { IToolGroupingCache, IToolGroupingService } from '../../tools/common/virtualTools/virtualToolTypes';
+import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
+import { LiveRequestEditorService } from '../../prompt/node/liveRequestEditorService';
 
 /**
  * A default context for VSCode extension testing, building on general one in `lib`.
@@ -187,6 +189,7 @@ export function createExtensionTestingServices(): TestingServiceCollection {
 	testingServiceCollection.define(IToolGroupingService, new SyncDescriptor(ToolGroupingService));
 	testingServiceCollection.define(ITodoListContextProvider, new SyncDescriptor(TodoListContextProvider));
 	testingServiceCollection.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(GithubAvailableEmbeddingTypesService));
+	testingServiceCollection.define(ILiveRequestEditorService, new SyncDescriptor(LiveRequestEditorService));
 
 	return testingServiceCollection;
 }

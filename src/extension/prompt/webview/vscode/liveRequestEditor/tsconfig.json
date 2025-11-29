@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"module": "commonjs",
+		"target": "es2022",
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"rootDir": ".",
+		"lib": ["ES2021", "dom"],
+		"jsx": "react",
+		"strict": true,
+		"noUnusedLocals": true,
+		"noImplicitOverride": true,
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"useDefineForClassFields": false,
+		"resolveJsonModule": true,
+		"experimentalDecorators": true,
+		"isolatedModules": false
+	},
+	"exclude": []
+}

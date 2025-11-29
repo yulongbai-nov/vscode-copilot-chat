@@ -11,7 +11,7 @@ import { FetchStreamSource, IResponsePart } from '../../../platform/chat/common/
 import { CanceledResult, ChatFetchResponseType, ChatResponse } from '../../../platform/chat/common/commonTypes';
 import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../platform/log/common/logService';
-import { OpenAiFunctionDef } from '../../../platform/networking/common/fetch';
+import { OpenAiFunctionDef, OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { IMakeChatRequestOptions } from '../../../platform/networking/common/networking';
 import { IRequestLogger } from '../../../platform/requestLogger/node/requestLogger';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
@@ -161,6 +161,14 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		options: ToolCallingLoopFetchOptions,
 		token: CancellationToken
 	): Promise<ChatResponse>;
+
+	protected prepareLiveRequest(_buildPromptResult: IBuildPromptResult, _context: IBuildPromptContext, _requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+		return undefined;
+	}
+
+	protected interceptMessages(messages: Raw.ChatMessage[], _token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> | Raw.ChatMessage[] {
+		return messages;
+	}
 
 	private async throwIfCancelled(token: CancellationToken | PauseController) {
 		if (await this.checkAsync(token)) {
@@ -362,10 +370,30 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		// todo@connor4312: can interaction outcome logic be implemented in a more generic way?
 		const interactionOutcomeComputer = new InteractionOutcomeComputer(this.options.interactionContext);
 
+		const promptContextTools = availableTools.length ? availableTools.map(toolInfo => {
+			return {
+				name: toolInfo.name,
+				description: toolInfo.description,
+				parameters: toolInfo.inputSchema,
+			} satisfies OpenAiFunctionDef;
+		}) : undefined;
+		const requestOptions: OptionalChatRequestParams = {
+			tools: promptContextTools?.map(tool => ({
+				function: {
+					name: tool.name,
+					description: tool.description,
+					parameters: tool.parameters && Object.keys(tool.parameters).length ? tool.parameters : undefined
+				},
+				type: 'function',
+			})),
+		};
+		let messagesForRequest = this.prepareLiveRequest(buildPromptResult, context, requestOptions) ?? buildPromptResult.messages;
+		messagesForRequest = await this.interceptMessages(messagesForRequest, token);
+
 		const that = this;
 		const responseProcessor = new class implements IResponseProcessor {
 
-			private readonly context = new ResponseProcessorContext(that.options.conversation.sessionId, that.turn, buildPromptResult.messages, interactionOutcomeComputer);
+			private readonly context = new ResponseProcessorContext(that.options.conversation.sessionId, that.turn, messagesForRequest, interactionOutcomeComputer);
 
 			async processResponse(_context: unknown, inputStream: AsyncIterable<IResponsePart>, responseStream: ChatResponseStream, token: CancellationToken): Promise<ChatResult | void> {
 				let chatResult: ChatResult | void = undefined;
@@ -423,18 +451,11 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 			throw new EmptyPromptError();
 		}
 
-		const promptContextTools = availableTools.length ? availableTools.map(toolInfo => {
-			return {
-				name: toolInfo.name,
-				description: toolInfo.description,
-				parameters: toolInfo.inputSchema,
-			} satisfies OpenAiFunctionDef;
-		}) : undefined;
 		let statefulMarker: string | undefined;
 		const toolCalls: IToolCall[] = [];
 		let thinkingItem: ThinkingDataItem | undefined;
 		const fetchResult = await this.fetch({
-			messages: this.applyMessagePostProcessing(buildPromptResult.messages),
+			messages: this.applyMessagePostProcessing(messagesForRequest),
 			finishedCb: async (text, index, delta) => {
 				fetchStreamSource?.update(text, delta);
 				if (delta.copilotToolCalls) {
@@ -453,16 +474,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 
 				return stopEarly ? text.length : undefined;
 			},
-			requestOptions: {
-				tools: promptContextTools?.map(tool => ({
-					function: {
-						name: tool.name,
-						description: tool.description,
-						parameters: tool.parameters && Object.keys(tool.parameters).length ? tool.parameters : undefined
-					},
-					type: 'function',
-				})),
-			},
+			requestOptions,
 			userInitiatedRequest: iterationNumber === 0 && !isContinuation && !this.options.request.isSubagent
 		}, token);
 
@@ -497,7 +509,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 				}),
 				chatResult,
 				hadIgnoredFiles: buildPromptResult.hasIgnoredFiles,
-				lastRequestMessages: buildPromptResult.messages,
+				lastRequestMessages: messagesForRequest,
 				availableTools,
 			};
 		}
@@ -505,7 +517,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		return {
 			response: fetchResult,
 			hadIgnoredFiles: buildPromptResult.hasIgnoredFiles,
-			lastRequestMessages: buildPromptResult.messages,
+			lastRequestMessages: messagesForRequest,
 			availableTools,
 			round: new ToolCallRound('', toolCalls, toolInputRetry)
 		};
