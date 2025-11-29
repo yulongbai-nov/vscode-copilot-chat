@@ -19,6 +19,7 @@ import { ITestingServicesAccessor } from '../../../../platform/test/node/service
 import { NullWorkspaceFileIndex } from '../../../../platform/workspaceChunkSearch/node/nullWorkspaceFileIndex';
 import { IWorkspaceFileIndex } from '../../../../platform/workspaceChunkSearch/node/workspaceFileIndex';
 import { ChatResponseStreamImpl } from '../../../../util/common/chatResponseStreamImpl';
+import { DeferredPromise } from '../../../../util/vs/base/common/async';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { Event } from '../../../../util/vs/base/common/event';
 import { isObject, isUndefinedOrNull } from '../../../../util/vs/base/common/types';
@@ -28,13 +29,15 @@ import { IInstantiationService } from '../../../../util/vs/platform/instantiatio
 import { ChatLocation, ChatResponseConfirmationPart, LanguageModelTextPart, LanguageModelToolResult } from '../../../../vscodeTypes';
 import { ToolCallingLoop } from '../../../intents/node/toolCallingLoop';
 import { ToolResultMetadata } from '../../../prompts/node/panel/toolCalling';
-import { createExtensionUnitTestingServices } from '../../../test/node/services';
+import { TestingServiceCollection, createExtensionUnitTestingServices } from '../../../test/node/services';
 import { Conversation, Turn } from '../../common/conversation';
 import { IBuildPromptContext } from '../../common/intents';
 import { ToolCallRound } from '../../common/toolCallRound';
 import { ChatTelemetryBuilder } from '../chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
+import { ILiveRequestEditorService, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
+import { EditableChatRequest } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
 	let accessor: ITestingServicesAccessor;
@@ -49,22 +52,35 @@ suite('defaultIntentRequestHandler', () => {
 
 	const getTurnId = () => `turn-id-${turnIdCounter}`;
 
-	beforeEach(async () => {
+	function setupServices(customize?: (services: TestingServiceCollection, defaultLiveRequestEditorService: TestLiveRequestEditorService) => ILiveRequestEditorService | void) {
+		accessor?.dispose();
 		const services = createExtensionUnitTestingServices();
 		telemetry = new SpyingTelemetryService();
-		chatResponse = [];
 		services.define(ITelemetryService, telemetry);
 		services.define(IChatMLFetcher, new StaticChatMLFetcher(chatResponse));
 		services.define(IWorkspaceFileIndex, new SyncDescriptor(NullWorkspaceFileIndex));
-
+		const defaultLiveRequestEditorService = new TestLiveRequestEditorService();
+		defaultLiveRequestEditorService.enabled = false;
+		defaultLiveRequestEditorService.interceptionEnabled = false;
+		const override = customize?.(services, defaultLiveRequestEditorService);
+		services.define(ILiveRequestEditorService, override ?? defaultLiveRequestEditorService);
 		accessor = services.createTestingAccessor();
 		endpoint = accessor.get(IInstantiationService).createInstance(MockEndpoint, undefined);
-		builtPrompts = [];
+	}
+
+	function resetState(customize?: (services: TestingServiceCollection, defaultLiveRequestEditorService: TestLiveRequestEditorService) => ILiveRequestEditorService | void) {
 		response = [];
+		chatResponse = [];
+		builtPrompts = [];
 		promptResult = nullRenderPromptResult();
 		turnIdCounter = 0;
 		(ToolCallingLoop as any).NextToolCallId = 0;
 		(ToolCallRound as any).generateID = () => 'static-id';
+		setupServices(customize);
+	}
+
+	beforeEach(async () => {
+		resetState();
 	});
 
 	afterEach(() => {
@@ -135,6 +151,82 @@ suite('defaultIntentRequestHandler', () => {
 		sessionId = generateUuid();
 	}
 
+	class TestLiveRequestEditorService implements ILiveRequestEditorService {
+		declare readonly _serviceBrand: undefined;
+		onDidChange = Event.None;
+		onDidChangeInterception = Event.None;
+
+		public enabled = true;
+		public interceptionEnabled = true;
+		public isInterceptionEnabledCalls = 0;
+		public waitCount = 0;
+		public resumeCalls = 0;
+		public cancelCalls = 0;
+		public lastResolved?: PromptInterceptionDecision;
+		private _messages: Raw.ChatMessage[] = [];
+		private _deferred?: DeferredPromise<PromptInterceptionDecision>;
+
+		isEnabled(): boolean { return this.enabled; }
+		isInterceptionEnabled(): boolean {
+			this.isInterceptionEnabledCalls++;
+			return this.enabled && this.interceptionEnabled;
+		}
+		getInterceptionState() { return { enabled: this.isInterceptionEnabled(), pending: undefined }; }
+
+		prepareRequest(): EditableChatRequest | undefined { return undefined; }
+		getRequest(): EditableChatRequest | undefined { return undefined; }
+		updateSectionContent(): EditableChatRequest | undefined { return undefined; }
+		deleteSection(): EditableChatRequest | undefined { return undefined; }
+		restoreSection(): EditableChatRequest | undefined { return undefined; }
+		resetRequest(): EditableChatRequest | undefined { return undefined; }
+		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
+
+		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]): Raw.ChatMessage[] {
+			return this._messages.length ? this._messages : fallback;
+		}
+
+		waitForInterceptionApproval(): Promise<PromptInterceptionDecision | undefined> {
+			if (!this.isInterceptionEnabled()) {
+				return Promise.resolve(undefined);
+			}
+			this.waitCount++;
+			this._deferred = new DeferredPromise<PromptInterceptionDecision>();
+			return this._deferred.p;
+		}
+
+		resolvePendingIntercept(_key: any, action: 'resume' | 'cancel', options?: { reason?: string }): void {
+			if (action === 'resume') {
+				this.resume(this._messages);
+			} else {
+				this.cancel(options?.reason);
+			}
+		}
+
+		setMessages(messages: Raw.ChatMessage[]): void {
+			this._messages = messages;
+		}
+
+		resume(messages: Raw.ChatMessage[]): void {
+			if (!this._deferred) {
+				return;
+			}
+			this.resumeCalls++;
+			this.lastResolved = { action: 'resume', messages };
+			this._deferred.complete(this.lastResolved);
+			this._deferred = undefined;
+		}
+
+		cancel(reason?: string): void {
+			if (!this._deferred) {
+				return;
+			}
+			this.cancelCalls++;
+			this.lastResolved = { action: 'cancel', reason };
+			this._deferred.complete(this.lastResolved);
+			this._deferred = undefined;
+		}
+	}
+
 	const responseStream = new ChatResponseStreamImpl(p => response.push(p), () => { });
 	const maxToolCallIterations = 3;
 
@@ -163,6 +255,16 @@ suite('defaultIntentRequestHandler', () => {
 			Event.None,
 		);
 	};
+
+	async function waitForCondition(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
+		const start = Date.now();
+		while (!predicate()) {
+			if (Date.now() - start > timeoutMs) {
+				throw new Error('Condition not met in time');
+			}
+			await new Promise(resolve => setTimeout(resolve, 10));
+		}
+	}
 
 	test('avoids requests when handler return is null', async () => {
 		const handler = makeHandler();
@@ -226,6 +328,57 @@ suite('defaultIntentRequestHandler', () => {
 				response: 'response to tool call',
 			},
 		]);
+	});
+
+	test('pauses send until prompt interception resumes', async () => {
+		const interceptService = new TestLiveRequestEditorService();
+		interceptService.enabled = true;
+		interceptService.interceptionEnabled = true;
+		resetState(() => interceptService);
+		expect(accessor.get(ILiveRequestEditorService)).to.equal(interceptService);
+		expect(interceptService.isInterceptionEnabled()).to.equal(true);
+		chatResponse[0] = 'intercepted response';
+		const editedMessages: Raw.ChatMessage[] = [{ role: Raw.ChatRole.User, content: [toTextPart('edited prompt')] }];
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('original prompt')] }],
+		};
+
+		const handler = makeHandler();
+		const resultPromise = handler.getResult();
+		await waitForCondition(() => interceptService.waitCount === 1);
+
+		interceptService.setMessages(editedMessages);
+		interceptService.resume(editedMessages);
+
+		const result = await resultPromise;
+		expect(result).toMatchSnapshot();
+		expect(interceptService.waitCount).to.equal(1);
+		expect(interceptService.resumeCalls).to.equal(1);
+	});
+
+	test('cancels pending request when prompt interception cancels', async () => {
+		const interceptService = new TestLiveRequestEditorService();
+		interceptService.enabled = true;
+		interceptService.interceptionEnabled = true;
+		resetState(() => interceptService);
+		expect(accessor.get(ILiveRequestEditorService)).to.equal(interceptService);
+		expect(interceptService.isInterceptionEnabled()).to.equal(true);
+
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('cancel me')] }],
+		};
+
+		const handler = makeHandler();
+		const resultPromise = handler.getResult();
+		await waitForCondition(() => interceptService.waitCount === 1);
+		interceptService.cancel('user');
+		const result = await resultPromise;
+		expect(result).to.deep.equal({});
+		expect(response).to.have.length(1);
+		expect(response[0]).toMatchSnapshot();
+		expect(interceptService.cancelCalls).to.equal(1);
 	});
 
 	function fillWithToolCalls(insertN = 20) {

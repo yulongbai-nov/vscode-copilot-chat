@@ -707,20 +707,6 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		return buildPromptResult;
 	}
 
-	protected override async interceptMessages(messages: Raw.ChatMessage[], token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> {
-		if (!this._liveRequestEditorService.isInterceptionEnabled()) {
-			return messages;
-		}
-		const key: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
-		const decision = await this._liveRequestEditorService.waitForInterceptionApproval(key, token);
-		if (!decision) {
-			return messages;
-		}
-		if (decision.action === 'cancel') {
-			throw new PromptInterceptionCancelledError(decision.reason);
-		}
-		return decision.messages;
-	}
 
 	protected override async fetch(opts: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {
 		const messageSourcePrefix = this.options.location === ChatLocation.Editor ? 'inline' : 'chat';
@@ -815,6 +801,21 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		} finally {
 			clearTimeout(timeout);
 		}
+	}
+
+	protected override async interceptMessages(messages: Raw.ChatMessage[], token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> {
+		if (!this._liveRequestEditorService.isInterceptionEnabled()) {
+			return messages;
+		}
+		const key: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
+		const decision = await this._liveRequestEditorService.waitForInterceptionApproval(key, token);
+		if (!decision) {
+			return messages;
+		}
+		if (decision.action === 'cancel') {
+			throw new PromptInterceptionCancelledError(decision.reason);
+		}
+		return decision.messages;
 	}
 
 	private fixMessageNames(messages: Raw.ChatMessage[]): void {

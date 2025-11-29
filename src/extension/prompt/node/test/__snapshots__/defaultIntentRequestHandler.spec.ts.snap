@@ -153,6 +153,12 @@ exports[`defaultIntentRequestHandler > avoids requests when handler return is nu
 }
 `;
 
+exports[`defaultIntentRequestHandler > cancels pending request when prompt interception cancels 1`] = `
+ChatResponseMarkdownPart {
+  "value": MarkdownString {},
+}
+`;
+
 exports[`defaultIntentRequestHandler > confirms on max tool call iterations, and continues to iterate 1`] = `
 {
   "metadata": {
@@ -3277,5 +3283,25 @@ exports[`defaultIntentRequestHandler > makes a tool call turn 2`] = `
       },
     },
   ],
+}
+`;
+
+exports[`defaultIntentRequestHandler > pauses send until prompt interception resumes 1`] = `
+{
+  "metadata": {
+    "codeBlocks": [],
+    "toolCallResults": undefined,
+    "toolCallRounds": [
+      ToolCallRound {
+        "id": "static-id",
+        "response": "intercepted response",
+        "statefulMarker": undefined,
+        "summary": undefined,
+        "thinking": undefined,
+        "toolCalls": [],
+        "toolInputRetry": 0,
+      },
+    ],
+  },
 }
 `;
