@@ -112,19 +112,101 @@ function buildLabel(kind: LiveRequestSectionKind, message: Raw.ChatMessage, inde
 
 function renderMessageContent(message: Raw.ChatMessage): string {
 	const parts = message.content.map(part => {
-		if (part.type === Raw.ChatCompletionContentPartKind.Text) {
-			return part.text;
+		const kind = part.type;
+		switch (kind) {
+			case Raw.ChatCompletionContentPartKind.Text:
+				return part.text;
+			case Raw.ChatCompletionContentPartKind.Image:
+				return part.imageUrl
+					? `![image](${part.imageUrl.url})`
+					: '![image](about:blank)';
+			case Raw.ChatCompletionContentPartKind.CacheBreakpoint:
+				return formatCacheBreakpoint(part);
+			case Raw.ChatCompletionContentPartKind.Opaque:
+				return formatOpaquePart(part);
+			default: {
+				const fallbackText = (part as { text?: string }).text;
+				return fallbackText ?? `\`[${describePartType(kind)} content]\``;
+			}
 		}
-		if (part.type === Raw.ChatCompletionContentPartKind.Image) {
-			return part.imageUrl
-				? `![image](${part.imageUrl.url})`
-				: '![image](about:blank)';
-		}
-
-		const fallbackText = (part as { text?: string }).text;
-		return fallbackText ?? `\`[${part.type} content]\``;
 	});
 	return parts.join('\n\n').trim();
+}
+
+function formatCacheBreakpoint(part: Raw.ChatCompletionContentPartCacheBreakpoint): string {
+	const typeAttr = part.cacheType ? ` type="${escapeAttribute(part.cacheType)}"` : '';
+	return `<cacheBreakpoint${typeAttr} />`;
+}
+
+function formatOpaquePart(part: Raw.ChatCompletionContentPartOpaque): string {
+	const value = part.value;
+	if (value === null || value === undefined) {
+		return '<opaquePart />';
+	}
+	if (typeof value === 'string') {
+		return value;
+	}
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return `<opaquePart value="${escapeAttribute(String(value))}" />`;
+	}
+	if (Array.isArray(value)) {
+		return `<opaquePart items="${escapeAttribute(value.length.toString())}" />`;
+	}
+	if (typeof value === 'object') {
+		const record = value as Record<string, unknown>;
+		const type = pickStringField(record, ['type', 'kind', 'category']);
+		const id = pickStringField(record, ['id', 'referenceId', 'attachmentId']);
+		const label = pickStringField(record, ['label', 'name', 'title']);
+		const attributes: string[] = [];
+		if (type) {
+			attributes.push(`type="${escapeAttribute(type)}"`);
+		}
+		if (id) {
+			attributes.push(`id="${escapeAttribute(id)}"`);
+		}
+		if (label) {
+			attributes.push(`label="${escapeAttribute(label)}"`);
+		}
+		if (attributes.length > 0) {
+			return `<opaquePart ${attributes.join(' ')} />`;
+		}
+		const preview = JSON.stringify(value);
+		const truncated = preview.length > 160 ? `${preview.slice(0, 160)}…` : preview;
+		return `\`[opaque ${truncated}]\``;
+	}
+	return `<opaquePart value="${escapeAttribute(String(value))}" />`;
+}
+
+function pickStringField(record: Record<string, unknown>, keys: readonly string[]): string | undefined {
+	for (const key of keys) {
+		const candidate = record[key];
+		if (typeof candidate === 'string' && candidate.length) {
+			return candidate;
+		}
+	}
+	return undefined;
+}
+
+function escapeAttribute(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/"/g, '&quot;')
+		.replace(/</g, '&lt;');
+}
+
+function describePartType(type: number): string {
+	switch (type) {
+		case Raw.ChatCompletionContentPartKind.Text:
+			return 'text';
+		case Raw.ChatCompletionContentPartKind.Image:
+			return 'image';
+		case Raw.ChatCompletionContentPartKind.Opaque:
+			return 'opaque';
+		case Raw.ChatCompletionContentPartKind.CacheBreakpoint:
+			return 'cacheBreakpoint';
+		default:
+			return 'unknown';
+	}
 }
 
 function extractResponseTokenLimit(options?: OptionalChatRequestParams): number | undefined {
