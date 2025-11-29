@@ -97,6 +97,36 @@ body {
 	font-weight: 500;
 }
 
+.status-meter {
+	position: relative;
+	margin-top: 8px;
+	height: 10px;
+	border-radius: 999px;
+	background: var(--vscode-editorLineNumber-foreground);
+	overflow: hidden;
+}
+
+.status-meter-fill {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	border-radius: 999px;
+	background: linear-gradient(90deg, var(--vscode-charts-blue) 0%, var(--vscode-charts-green) 100%);
+	transition: width 0.2s ease;
+}
+
+.status-meter-label {
+	position: absolute;
+	right: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-size: 11px;
+	color: var(--vscode-foreground);
+	font-weight: 600;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
 .dirty-badge {
 	background: var(--vscode-editorWarning-foreground);
 	color: var(--vscode-editor-background);
