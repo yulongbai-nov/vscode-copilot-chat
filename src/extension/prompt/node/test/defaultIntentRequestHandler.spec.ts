@@ -225,6 +225,10 @@ suite('defaultIntentRequestHandler', () => {
 			this._deferred.complete(this.lastResolved);
 			this._deferred = undefined;
 		}
+
+		recordLoggedRequest(): void {
+			// no-op for tests
+		}
 	}
 
 	const responseStream = new ChatResponseStreamImpl(p => response.push(p), () => { });

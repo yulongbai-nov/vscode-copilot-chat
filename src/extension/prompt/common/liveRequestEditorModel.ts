@@ -47,6 +47,10 @@ export interface EditableChatRequestMetadata {
 	modelFamily?: string;
 	requestOptions?: OptionalChatRequestParams;
 	createdAt: number;
+	lastLoggedAt?: number;
+	lastLoggedHash?: number;
+	lastLoggedMatches?: boolean;
+	lastLoggedMismatchReason?: string;
 }
 
 export interface LiveRequestSessionKey {

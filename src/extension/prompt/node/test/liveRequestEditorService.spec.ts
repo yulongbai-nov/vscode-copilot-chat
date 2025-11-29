@@ -94,4 +94,61 @@ describe('LiveRequestEditorService interception', () => {
 		});
 		expect(hasCancelEvent).toBe(true);
 	});
+
+	test('records logged request metadata when messages match', async () => {
+		const { service, telemetry } = await createService();
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		const init = {
+			...createServiceInit()
+		};
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+
+		service.recordLoggedRequest(key, request.messages);
+
+		const updated = service.getRequest(key)!;
+		expect(updated.metadata.lastLoggedMatches).toBe(true);
+		const events = telemetry.getEvents().telemetryServiceEvents;
+		expect(events.some(evt => evt.eventName === 'liveRequestEditor.requestParityMismatch')).toBe(false);
+	});
+
+	test('emits telemetry when logged messages differ', async () => {
+		const { service, telemetry } = await createService();
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		const init = {
+			...createServiceInit()
+		};
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		const mutated = request.messages.map((message, index) => {
+			if (index === 0) {
+				return {
+					...message,
+					content: [{
+						type: Raw.ChatCompletionContentPartKind.Text,
+						text: 'mutated'
+					}] satisfies Raw.ChatCompletionContentPart[]
+				};
+			}
+			return message;
+		});
+
+		service.recordLoggedRequest(key, mutated);
+
+		const updated = service.getRequest(key)!;
+		expect(updated.metadata.lastLoggedMatches).toBe(false);
+		const events = telemetry.getEvents().telemetryServiceEvents;
+		expect(events.some(evt => evt.eventName === 'liveRequestEditor.requestParityMismatch')).toBe(true);
+	});
 });
+
+function createServiceInit() {
+	return {
+		sessionId: 'session',
+		location: ChatLocation.Panel,
+		debugName: 'debug',
+		model: 'gpt-test',
+		renderResult: createRenderResult('original'),
+		requestId: 'req'
+	};
+}

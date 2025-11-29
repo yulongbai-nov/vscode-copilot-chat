@@ -9,6 +9,7 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { deepClone, equals } from '../../../util/vs/base/common/objects';
+import { stringHash } from '../../../util/vs/base/common/hash';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
@@ -239,6 +240,32 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this.emitInterceptionState();
 	}
 
+	recordLoggedRequest(key: LiveRequestSessionKey | undefined, messages: Raw.ChatMessage[]): void {
+		if (!this._enabled || !key) {
+			return;
+		}
+		const request = this.getRequest(key);
+		if (!request) {
+			return;
+		}
+		this.recomputeMessages(request);
+		const expectedHash = this.computeMessagesHash(request.messages);
+		const loggedHash = this.computeMessagesHash(messages);
+		request.metadata.lastLoggedAt = Date.now();
+		request.metadata.lastLoggedHash = loggedHash;
+		request.metadata.lastLoggedMatches = expectedHash === loggedHash;
+		request.metadata.lastLoggedMismatchReason = request.metadata.lastLoggedMatches ? undefined : 'messages';
+		if (!request.metadata.lastLoggedMatches) {
+			this._telemetryService.sendGHTelemetryEvent('liveRequestEditor.requestParityMismatch', {
+				location: ChatLocation.toString(request.location),
+				intentId: request.metadata.intentId ?? 'unknown',
+				model: request.model,
+				debugName: request.debugName,
+			});
+		}
+		this._onDidChange.fire(request);
+	}
+
 	private withRequest(
 		key: LiveRequestSessionKey,
 		mutator: (request: EditableChatRequest) => boolean,
@@ -308,6 +335,19 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 		request.messages = updatedMessages;
 		request.isDirty = isDirty || !equals(updatedMessages, request.originalMessages);
+	}
+
+	private computeMessagesHash(messages: Raw.ChatMessage[]): number {
+		if (!messages.length) {
+			return 0;
+		}
+		try {
+			const serialized = JSON.stringify(messages);
+			return stringHash(serialized, 0);
+		} catch {
+			// fall back to length-based hash if serialization fails unexpectedly
+			return stringHash(String(messages.length), 0);
+		}
 	}
 
 	private createMessageShell(kind: LiveRequestSectionKind): Raw.ChatMessage {
