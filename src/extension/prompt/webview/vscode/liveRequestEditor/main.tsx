@@ -36,6 +36,8 @@ declare global {
 
 type LiveRequestValidationErrorCode = 'empty' | string;
 
+type SectionActionIconType = 'edit' | 'close' | 'delete' | 'pin' | 'pinFilled' | 'restore';
+
 interface EditableChatRequestMetadata {
 	requestId?: string;
 	tokenCount?: number;
@@ -176,6 +178,52 @@ function describeValidationError(code: LiveRequestValidationErrorCode | undefine
 			return 'Prompt cannot be sent due to an invalid edit. Reset the prompt to continue.';
 	}
 }
+
+const SECTION_ACTION_ICONS: Record<SectionActionIconType, { paths: string[]; filled?: boolean }> = {
+	edit: {
+		paths: ['M4 15.5L4 20L8.5 20L18.5 10L14 5.5L4 15.5Z', 'M15 6L18 9'],
+	},
+	close: {
+		paths: ['M6 6L18 18', 'M18 6L6 18']
+	},
+	delete: {
+		paths: ['M7 7H17', 'M9 7L10 5H14L15 7', 'M10 9V17', 'M14 9V17']
+	},
+	pin: {
+		paths: ['M12 4L14 9H18L15 12L16 19L12 16L8 19L9 12L6 9H10L12 4Z']
+	},
+	pinFilled: {
+		paths: ['M12 4L14 9H18L15 12L16 19L12 16L8 19L9 12L6 9H10L12 4Z'],
+		filled: true
+	},
+	restore: {
+		paths: ['M6 11V15H2', 'M6 15C7.2 17.7 9.9 19.5 13 19.5C17.1 19.5 20.5 16.1 20.5 12C20.5 7.9 17.1 4.5 13 4.5C10.6 4.5 8.5 5.6 7.1 7.3']
+	}
+};
+
+const SectionActionIcon: React.FC<{ type: SectionActionIconType }> = ({ type }) => {
+	const icon = SECTION_ACTION_ICONS[type];
+	return (
+		<svg
+			className="section-action-icon"
+			viewBox="0 0 24 24"
+			role="presentation"
+			aria-hidden="true"
+		>
+			{icon.paths.map((path, index) => (
+				<path
+					key={`${type}-${index}`}
+					d={path}
+					fill={icon.filled ? 'currentColor' : 'none'}
+					stroke="currentColor"
+					strokeWidth={1.6}
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			))}
+		</svg>
+	);
+};
 
 const EmptyState: React.FC = () => (
 	<div className="empty-state">
@@ -373,7 +421,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 							title="Restore section"
 							aria-label="Restore section"
 						>
-							<span className="codicon codicon-discard" aria-hidden="true" />
+							<SectionActionIcon type="restore" />
 						</button>
 					) : (
 						<>
@@ -386,10 +434,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 									aria-label={isEditing ? 'Exit edit mode' : 'Edit section'}
 									aria-pressed={isEditing}
 								>
-									<span
-										className={`codicon ${isEditing ? 'codicon-close' : 'codicon-edit'}`}
-										aria-hidden="true"
-									/>
+									<SectionActionIcon type={isEditing ? 'close' : 'edit'} />
 								</button>
 							)}
 							{section.deletable && (
@@ -400,7 +445,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 									title="Delete section"
 									aria-label="Delete section"
 								>
-									<span className="codicon codicon-trash" aria-hidden="true" />
+									<SectionActionIcon type="delete" />
 								</button>
 							)}
 							<button
@@ -411,7 +456,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 								aria-label={isPinned ? 'Unpin section' : 'Pin section'}
 								aria-pressed={isPinned}
 							>
-								<span className={`codicon ${isPinned ? 'codicon-pin-filled' : 'codicon-pin'}`} aria-hidden="true" />
+								<SectionActionIcon type={isPinned ? 'pinFilled' : 'pin'} />
 							</button>
 						</>
 					)}
