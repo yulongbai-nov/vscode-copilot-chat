@@ -318,12 +318,43 @@ We extend the chat panel UI (in the same TSX/React layer) with a **Prompt Inspec
 We modify the request creation path so that:
 
 - When the live editor feature is **disabled**, behaviour is unchanged.
-- When enabled:
-  - The intents layer requests an `EditableChatRequest` from the Live Request Builder instead of raw `messages`.
-  - `ChatMLFetcher.fetchMany` is invoked with the **edited** `messages` from `EditableChatRequest`.
-  - RequestLogger logs:
-    - The final, edited request as usual via `logChatRequest`.
-    - Optionally, a separate `MarkdownContentRequest` entry describing the diff from the original if the prompt was changed (future enhancement).
+
+### Prompt Interception Mode
+
+To support manual review of every request, we now ship an optional **Prompt Interception Mode** that pauses sends until the user explicitly resumes:
+
+- **Mode toggle & telemetry**
+  - Exposed as a command (`github.copilot.liveRequestEditor.toggleInterception`) plus a right-side status bar entry that flips the persisted `github.copilot.chat.advanced.livePromptEditorInterception` setting.
+  - When enabled, subsequent chat sends are intercepted before `ChatMLFetcher.fetchMany` executes. Disabling the mode immediately cancels any pending turn.
+  - We log every toggle and outcome (resume / cancel / mode disabled) via `liveRequestEditor.promptInterception.*` telemetry, tagged by chat location.
+
+- **Send interception flow**
+  1. User hits the normal chat `Send`.
+  2. `defaultIntentRequestHandler` builds the editable request as usual but **does not** call the fetcher.
+  3. The handler records a “pending turn” (request + completion resolver) inside `LiveRequestEditorService` and keeps the chat panel spinner in a pending state.
+  4. The Live Request Editor webview receives the interception state, focuses if needed, and highlights the banner so users know action is required.
+
+- **Live Request Editor UX**
+  - The sticky banner explains that the request is paused and exposes **“Resume Send”** and **“Cancel”** buttons. While idle (no pending turn) the banner still reminds the user that prompts will pause before sending.
+  - The normal edit/delete actions stay available; edits update the pending request in the same service model so “Resume Send” always forwards the latest edits.
+  - When the user presses **Resume Send**, the webview posts `resumeSend`. The handler marks the pending request as “approved” and continues with the fetcher using the latest `EditableChatRequest.messages`.
+  - Pressing **Cancel**, switching conversations, or sending a new prompt resolves the pending turn and the chat panel surfaces a benign “Request canceled before sending” message.
+
+- **Status bar & command palette**
+  - While interception is active, a status bar item shows `Prompt Interception: On` (or `On (request paused)` with a warning icon). Clicking it when idle toggles the mode; clicking while a request is paused focuses the editor.
+  - Command palette entries (`toggle`, `show`, `reset`) remain the quick entry points.
+
+- **Edge cases**
+  - If the user closes the editor or hides the view, intercept mode still blocks sends; the next send reopens/focuses the view automatically.
+  - Multiple conversations are handled by session/location keys so only the active conversation’s request is paused.
+  - Long-idle pending sends can be canceled by toggling the mode off, which resolves the deferred promise with a “modeDisabled” reason.
+
+Architecturally this added:
+
+- A `PendingIntercept` entry in `ILiveRequestEditorService` keyed by session that stores the promise resolvers plus metadata for telemetry/status UI.
+- New webview messages (`resumeSend`, `cancelIntercept`) and interception state in the React front-end.
+- Status bar contribution tied to the interception setting and pending state.
+- When enabled, `ToolCallingLoop` asks the service to await interception approval; `ChatMLFetcher.fetchMany` is only invoked after **edited** `EditableChatRequest.messages` are approved so the Request Logger continues to record exactly what was sent.
 
 ### UI / UX Considerations
 

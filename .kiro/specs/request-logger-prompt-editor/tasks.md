@@ -55,7 +55,15 @@
   - [ ] 7.3 Add integration tests that simulate a chat turn with the feature enabled, including viewing the prompt, editing sections, and confirming that `ChatMLFetcher` receives updated messages. _Requirements: 1.2, 4.3, 5.4_  
   - [ ] 7.4 Perform manual validation for representative prompts: simple prompts, prompts with multiple system messages, heavy context, and tool hints. _Requirements: 2.2, 2.5_  
   - [ ] 7.5 Manually test keyboard navigation and screen reader behaviour within the Prompt Inspector. _Requirements: 6.1, 6.2_  
-  - [ ] 7.6 Manually validate behaviour with multiple concurrent chat sessions (panel, side panel, editor-embedded) and switching via the conversation selector. _Requirements: 7.1–7.5_  
+- [ ] 7.6 Manually validate behaviour with multiple concurrent chat sessions (panel, side panel, editor-embedded) and switching via the conversation selector. _Requirements: 7.1–7.5_  
+
+- [x] 8. Prompt interception mode  
+  - [x] 8.1 Add a persisted configuration + command + status bar indicator for Prompt Interception Mode (default off). _Requirements: 8.1, 8.8_  
+  - [x] 8.2 Extend `defaultIntentRequestHandler` (or equivalent) to pause sends when interception is enabled, storing pending requests/resolvers per conversation without triggering offline UI. _Requirements: 8.2, 8.3, 8.9_  
+  - [x] 8.3 Update the Live Request Editor webview to react to interception events: auto-focus, display the interception banner, highlight the view, and show prominent “Resume Send” / “Cancel” buttons. _Requirements: 8.4, 8.5_  
+  - [x] 8.4 Wire the “Resume Send” and “Cancel” actions back to the extension host so edits are applied before resuming or discarded on cancel, including cleanup when the user switches conversations or closes the view. _Requirements: 8.6, 8.7_  
+  - [x] 8.5 Emit telemetry for mode toggles and interception outcomes (resume/cancel/timeout) to aid adoption tracking. _Requirements: 8.10_  
+  - [x] 8.6 Add tests covering the interception flow (pending send, resume, cancel, multi-session interactions) and manual QA instructions for the new mode. _Requirements: 8.3–8.9_  
 
 ## Implementation Notes
 

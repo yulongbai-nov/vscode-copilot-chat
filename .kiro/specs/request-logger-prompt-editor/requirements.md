@@ -124,3 +124,23 @@ As a user with multiple Copilot chat threads (panel, side panel, editor, other w
 7.3 WHEN multiple conversations exist in the current VS Code window, THEN the Live Chat Request Editor SHOULD provide a drop-down or equivalent control to switch its target conversation among those sessions.  
 7.4 THE Live Chat Request Editor SHALL scope its conversation list to the current VS Code window only and SHALL NOT attempt to span multiple windows or remote hosts.  
 7.5 WHEN the user switches the target conversation via the selector, THEN the Live Chat Request Editor SHALL refresh its view to show the pending request (or a message if none) for the newly selected conversation.  
+
+### Requirement 8 – Prompt Interception Mode
+
+**User Story:**  
+As a power user who wants to audit every prompt, I want to pause each send, review/edit the request, and explicitly resume sending so that I never leak an unintended prompt to the model.
+
+**Status:** ✅ Implemented in PR #17. Toggling `github.copilot.chat.advanced.livePromptEditorInterception` (via command palette or the dedicated status bar item) pauses every send, surfaces the sticky “Resume Send / Cancel” banner inside the Live Request Editor, focuses the view automatically, and only resumes `ChatMLFetcher.fetchMany` once the user confirms. Cancel/disable flows resolve the pending turn with a friendly cancellation message and emit telemetry.
+
+#### Acceptance Criteria
+
+8.1 THE extension SHALL expose a persisted setting/command to toggle **Prompt Interception Mode** on/off, surfaced in the command palette and status bar.  
+8.2 WHEN interception mode is OFF, THEN chat requests SHALL behave exactly as they do today (no pause, no additional UI).  
+8.3 WHEN interception mode is ON and the user presses Send, THEN the request SHALL be captured after prompt construction but BEFORE `ChatMLFetcher.fetchMany` runs, and the chat panel SHALL remain in a pending state instead of erroring or reporting “offline.”  
+8.4 WHEN a request is intercepted, THEN the Live Request Editor view SHALL automatically focus (or open), display a prominent banner (e.g., “Request intercepted – review and Resume Send”), and visually highlight itself.  
+8.5 WHILE intercepted, the editor SHALL present a large primary button labelled “Resume Send” plus a secondary affordance to cancel/discard the pending turn.  
+8.6 WHEN the user presses “Resume Send,” THEN the latest edits SHALL be applied and the pending request SHALL be forwarded to the ChatML fetcher as if it had been sent normally.  
+8.7 WHEN the user cancels the interception, closes the view, or sends another prompt, THEN the pending turn SHALL be resolved (discarded) and the user SHALL receive clear feedback.  
+8.8 THE status bar item SHALL reflect the current mode (“Prompt Interception: On/Off”) and, when a request is paused, indicate that action is required (e.g., warning icon, tooltip).  
+8.9 INTERCEPTION mode SHALL be conversation-aware; only the active conversation’s request is paused, and other conversations in the same window continue to work normally unless they also intercept.  
+8.10 ALL interception flows SHALL log telemetry (mode toggles, resume vs. cancel) for future analysis.  
