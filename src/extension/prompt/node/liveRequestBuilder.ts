@@ -12,10 +12,11 @@ import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetada
 export function buildEditableChatRequest(ctx: EditableChatRequestInit): EditableChatRequest {
 	const clonedMessages = ctx.renderResult.messages.map(message => deepClone(message));
 	const originalMessages = deepClone(clonedMessages);
-	const sections = createSectionsFromMessages(clonedMessages);
+	const sections = createSectionsFromMessages(clonedMessages, ctx.tokenCounts?.perMessage);
 	const metadata: EditableChatRequestMetadata = {
 		requestId: ctx.requestId,
-		tokenCount: ctx.renderResult.tokenCount,
+		tokenCount: ctx.tokenCounts?.total ?? ctx.renderResult.tokenCount,
+		maxPromptTokens: ctx.maxPromptTokens,
 		maxResponseTokens: extractResponseTokenLimit(ctx.requestOptions),
 		intentId: ctx.intentId,
 		endpointUrl: ctx.endpointUrl,
@@ -38,11 +39,11 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 	};
 }
 
-export function createSectionsFromMessages(messages: Raw.ChatMessage[]): LiveRequestSection[] {
-	return messages.map((message, index) => createSection(message, index));
+export function createSectionsFromMessages(messages: Raw.ChatMessage[], tokenCounts?: number[]): LiveRequestSection[] {
+	return messages.map((message, index) => createSection(message, index, tokenCounts?.[index]));
 }
 
-function createSection(message: Raw.ChatMessage, index: number): LiveRequestSection {
+function createSection(message: Raw.ChatMessage, index: number, tokenCount?: number): LiveRequestSection {
 	const kind = inferKind(message);
 	const label = buildLabel(kind, message, index);
 	const content = renderMessageContent(message);
@@ -71,6 +72,7 @@ function createSection(message: Raw.ChatMessage, index: number): LiveRequestSect
 		deletable,
 		sourceMessageIndex: index,
 		metadata,
+		tokenCount,
 	};
 }
 
