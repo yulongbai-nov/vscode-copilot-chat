@@ -40,6 +40,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private _lastInterceptNonce?: number;
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private _activeSessionKey?: string;
+	private _focusCommandAvailable?: boolean;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -126,10 +127,42 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		if (state.pending) {
 			if (state.pending.nonce !== this._lastInterceptNonce) {
 				this._lastInterceptNonce = state.pending.nonce;
-				this.show();
+				void this._ensureViewVisible();
 			}
 		} else {
 			this._lastInterceptNonce = undefined;
+		}
+	}
+
+	private async _ensureViewVisible(): Promise<void> {
+		if (this._view) {
+			this.show();
+			return;
+		}
+		if (this._focusCommandAvailable === false) {
+			return;
+		}
+		if (this._focusCommandAvailable === undefined) {
+			try {
+				const commands = await vscode.commands.getCommands(true);
+				this._focusCommandAvailable = commands.includes('github.copilot.liveRequestEditor.focus');
+			} catch (error) {
+				this._focusCommandAvailable = false;
+				this._logService.error('Live Request Editor: failed to enumerate commands for auto-show', error);
+				return;
+			}
+		}
+		if (!this._focusCommandAvailable) {
+			return;
+		}
+		try {
+			await vscode.commands.executeCommand('github.copilot.liveRequestEditor.focus');
+			if (!this._view) {
+				this._logService.warn('Live Request Editor: focus command did not instantiate the view during interception.');
+			}
+		} catch (error) {
+			this._focusCommandAvailable = false;
+			this._logService.error('Live Request Editor: failed to auto-show on interception', error);
 		}
 	}
 
