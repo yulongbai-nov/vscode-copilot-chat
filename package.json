@@ -2217,6 +2217,13 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.liveRequestEditor.toggleInterception",
+				"title": "Toggle Prompt Interception Mode",
+				"icon": "$(debug-pause)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.chat.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.liveRequestEditor.show",
 				"title": "Copilot: Show Prompt Inspector",
 				"icon": "$(open-preview)",
@@ -2625,6 +2632,11 @@
 						"type": "boolean",
 						"default": false,
 						"markdownDescription": "Enable the experimental Live Chat Request Editor inside the chat panel to inspect and edit the composed prompt before it is sent."
+					},
+					"github.copilot.chat.advanced.livePromptEditorInterception": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Pause every chat send until you explicitly resume from the Live Request Editor. Requires the Live Request Editor to be enabled."
 					},
 					"github.copilot.chat.promptSectionVisualizer.enabled": {
 						"type": "boolean",

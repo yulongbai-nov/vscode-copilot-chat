@@ -25,7 +25,7 @@ import { IExperimentationService } from '../../../platform/telemetry/common/null
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { ChatResponseStreamImpl } from '../../../util/common/chatResponseStreamImpl';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
-import { isCancellationError } from '../../../util/vs/base/common/errors';
+import { CancellationError, isCancellationError } from '../../../util/vs/base/common/errors';
 import { Event } from '../../../util/vs/base/common/event';
 import { Iterable } from '../../../util/vs/base/common/iterator';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
@@ -153,6 +153,11 @@ export class DefaultIntentRequestHandler {
 		} catch (err) {
 			if (err instanceof ToolCallCancelledError) {
 				this.turn.setResponse(TurnStatus.Cancelled, { message: err.message, type: 'meta' }, undefined, {});
+				return {};
+			} else if (err instanceof PromptInterceptionCancelledError) {
+				const message = this.describePromptInterceptionCancel(err.reason);
+				this.stream.markdown(message);
+				this.turn.setResponse(TurnStatus.Cancelled, { message, type: 'meta' }, undefined, {});
 				return {};
 			} else if (isCancellationError(err)) {
 				return CanceledResult;
@@ -418,6 +423,21 @@ export class DefaultIntentRequestHandler {
 		return {};
 	}
 
+	private describePromptInterceptionCancel(reason?: string): string {
+		switch (reason) {
+			case 'user':
+			case 'token':
+				return l10n.t('Request canceled before sending.');
+			case 'modeDisabled':
+			case 'editorDisabled':
+				return l10n.t('Prompt Interception Mode was disabled. Pending request discarded.');
+			case 'superseded':
+				return l10n.t('Previous pending request was discarded before sending.');
+			default:
+				return l10n.t('Pending request was discarded before sending.');
+		}
+	}
+
 	private async processResult(fetchResult: ChatResponse, responseMessage: string, chatResult: ChatResult | void, metadataFragment: Partial<IResultMetadata>, baseModelTelemetry: ConversationalBaseTelemetryData, rounds: IToolCallRound[]): Promise<ChatResult> {
 		switch (fetchResult.type) {
 			case ChatFetchResponseType.Success:
@@ -510,6 +530,12 @@ interface IDefaultToolLoopOptions extends IToolCallingLoopOptions {
 	location: ChatLocation;
 	temperature: number;
 	overrideRequestLocation?: ChatLocation;
+}
+
+class PromptInterceptionCancelledError extends CancellationError {
+	constructor(public readonly reason?: string) {
+		super();
+	}
 }
 
 class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
@@ -679,6 +705,21 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		const buildPromptResult = await this.options.invocation.buildPrompt(buildPromptContext, progress, token);
 		this.fixMessageNames(buildPromptResult.messages);
 		return buildPromptResult;
+	}
+
+	protected override async interceptMessages(messages: Raw.ChatMessage[], token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> {
+		if (!this._liveRequestEditorService.isInterceptionEnabled()) {
+			return messages;
+		}
+		const key: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
+		const decision = await this._liveRequestEditorService.waitForInterceptionApproval(key, token);
+		if (!decision) {
+			return messages;
+		}
+		if (decision.action === 'cancel') {
+			throw new PromptInterceptionCancelledError(decision.reason);
+		}
+		return decision.messages;
 	}
 
 	protected override async fetch(opts: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {

@@ -51,10 +51,19 @@ interface LiveRequestSection {
 interface StateUpdateMessage {
 	type: 'stateUpdate';
 	request?: EditableChatRequest;
+	interception?: InterceptionState;
 }
 
 interface PersistedState {
 	pinned?: string[];
+}
+
+interface InterceptionState {
+	enabled: boolean;
+	pending?: {
+		debugName: string;
+		nonce: number;
+	};
 }
 
 const vscode = acquireVsCodeApi<PersistedState>();
@@ -307,12 +316,14 @@ const SectionCard: React.FC<SectionCardProps> = ({
 
 const App: React.FC = () => {
 	const [request, setRequest] = React.useState<EditableChatRequest | undefined>(undefined);
+	const [interception, setInterception] = React.useState<InterceptionState | undefined>(undefined);
 	const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
 	const [pinnedOrder, setPinnedOrder] = React.useState<string[]>(() => {
 		const persisted = vscode.getState?.();
 		return Array.isArray(persisted?.pinned) ? [...persisted.pinned] : [];
 	});
 	const draggingSectionRef = React.useRef<string | null>(null);
+	const [bannerPulse, setBannerPulse] = React.useState(false);
 
 	const persistPinned = React.useCallback((order: string[]) => {
 		vscode.setState?.({ pinned: order });
@@ -322,11 +333,21 @@ const App: React.FC = () => {
 		const handler = (event: MessageEvent<StateUpdateMessage>) => {
 			if (event.data?.type === 'stateUpdate') {
 				setRequest(event.data.request);
+				setInterception(event.data.interception);
 			}
 		};
 		window.addEventListener('message', handler);
 		return () => window.removeEventListener('message', handler);
 	}, []);
+
+	React.useEffect(() => {
+		if (interception?.pending) {
+			setBannerPulse(true);
+			const handle = window.setTimeout(() => setBannerPulse(false), 900);
+			return () => window.clearTimeout(handle);
+		}
+		setBannerPulse(false);
+	}, [interception?.pending?.nonce]);
 
 	React.useEffect(() => {
 		if (!request?.sections) {
@@ -429,6 +450,14 @@ const App: React.FC = () => {
 		sendMessage('resetRequest', {});
 	}, [sendMessage]);
 
+	const handleResumeSend = React.useCallback(() => {
+		sendMessage('resumeSend');
+	}, [sendMessage]);
+
+	const handleCancelIntercept = React.useCallback(() => {
+		sendMessage('cancelIntercept');
+	}, [sendMessage]);
+
 	if (!request || !request.sections || request.sections.length === 0) {
 		return <EmptyState />;
 	}
@@ -478,6 +507,34 @@ const App: React.FC = () => {
 						</div>
 					) : null}
 				</div>
+
+				{interception?.enabled ? (
+					<div className={[
+						'interception-banner',
+						interception.pending ? 'pending' : 'ready',
+						bannerPulse ? 'pulse' : ''
+					].join(' ')}>
+						<div className="interception-text">
+							{interception.pending
+								? (
+									<>
+										Request intercepted{interception.pending.debugName ? ` - ${interception.pending.debugName}` : ''}. Review updates and choose an action.
+									</>
+								)
+								: 'Prompt Interception Mode is on. Requests pause here before sending.'}
+						</div>
+						{interception.pending ? (
+							<div className="interception-actions">
+								<vscode-button appearance="primary" onClick={handleResumeSend}>
+									Resume Send
+								</vscode-button>
+								<vscode-button appearance="secondary" onClick={handleCancelIntercept}>
+									Cancel
+								</vscode-button>
+							</div>
+						) : null}
+					</div>
+				) : null}
 
 				{pinnedSections.length > 0 && (
 					<div className="pinned-container">

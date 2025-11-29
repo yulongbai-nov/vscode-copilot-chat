@@ -4,12 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Raw } from '@vscode/prompt-tsx';
-import { Disposable } from '../../../util/vs/base/common/lifecycle';
+import { DeferredPromise } from '../../../util/vs/base/common/async';
+import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
+import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { deepClone, equals } from '../../../util/vs/base/common/objects';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
-import { LiveRequestSessionKey, EditableChatRequest, EditableChatRequestInit, LiveRequestSectionKind } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
+import { ChatLocation } from '../../../platform/chat/common/commonTypes';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestSectionKind, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { ILiveRequestEditorService, PendingPromptInterceptSummary, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
 
 export class LiveRequestEditorService extends Disposable implements ILiveRequestEditorService {
@@ -17,27 +21,50 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 	private readonly _onDidChange = this._register(new Emitter<EditableChatRequest>());
 	public readonly onDidChange: Event<EditableChatRequest> = this._onDidChange.event;
+	private readonly _onDidChangeInterception = this._register(new Emitter<PromptInterceptionState>());
+	public readonly onDidChangeInterception: Event<PromptInterceptionState> = this._onDidChangeInterception.event;
 
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private _enabled: boolean;
+	private _interceptionEnabled: boolean;
+	private readonly _pendingIntercepts = new Map<string, PendingIntercept>();
+	private _interceptNonce = 0;
+	private _interceptionState: PromptInterceptionState;
 
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
+		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 	) {
 		super();
 		this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
+		this._interceptionEnabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorInterception);
+		this._interceptionState = { enabled: this.isInterceptionEnabled() };
 		this._register(this._configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration(ConfigKey.Advanced.LivePromptEditorEnabled.fullyQualifiedId)) {
 				this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
 				if (!this._enabled) {
 					this._requests.clear();
+					this.cancelAllIntercepts('editorDisabled');
 				}
+				this.emitInterceptionState();
+			}
+			if (e.affectsConfiguration(ConfigKey.Advanced.LivePromptEditorInterception.fullyQualifiedId)) {
+				this._interceptionEnabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorInterception);
+				if (!this.isInterceptionEnabled()) {
+					this.cancelAllIntercepts('modeDisabled');
+				}
+				this.emitInterceptionState();
 			}
 		}));
+		this.emitInterceptionState();
 	}
 
 	isEnabled(): boolean {
 		return this._enabled;
+	}
+
+	isInterceptionEnabled(): boolean {
+		return this._enabled && !!this._interceptionEnabled;
 	}
 
 	prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
@@ -137,6 +164,81 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		return request.messages.length ? request.messages : fallback;
 	}
 
+	getInterceptionState(): PromptInterceptionState {
+		return this._interceptionState;
+	}
+
+	async waitForInterceptionApproval(key: LiveRequestSessionKey, token: CancellationToken): Promise<PromptInterceptionDecision | undefined> {
+		if (!this.isInterceptionEnabled()) {
+			return undefined;
+		}
+		const request = this.getRequest(key);
+		if (!request) {
+			return undefined;
+		}
+
+		const pendingKey = this.toKey(key.sessionId, key.location);
+		const existing = this._pendingIntercepts.get(pendingKey);
+		if (existing) {
+			this._pendingIntercepts.delete(pendingKey);
+			if (!existing.deferred.isSettled) {
+				void existing.deferred.complete({ action: 'cancel', reason: 'superseded' });
+			}
+			this._logInterceptionOutcome('cancel', 'superseded', existing.key);
+		}
+
+		const deferred = new DeferredPromise<PromptInterceptionDecision>();
+		const pending: PendingIntercept = {
+			key,
+			requestId: request.metadata.requestId,
+			debugName: request.debugName,
+			requestedAt: Date.now(),
+			nonce: ++this._interceptNonce,
+			deferred,
+			fallbackMessages: request.messages.map(message => deepClone(message)),
+		};
+
+		this._pendingIntercepts.set(pendingKey, pending);
+		this.emitInterceptionState();
+
+		const cancellationListener = token.onCancellationRequested(() => {
+			this.resolvePendingIntercept(key, 'cancel', { reason: 'token' });
+		});
+
+		try {
+			return await deferred.p;
+		} finally {
+			cancellationListener.dispose();
+		}
+	}
+
+	resolvePendingIntercept(key: LiveRequestSessionKey, action: PromptInterceptionAction, options?: { reason?: string }): void {
+		const pendingKey = this.toKey(key.sessionId, key.location);
+		const pending = this._pendingIntercepts.get(pendingKey);
+		if (!pending) {
+			return;
+		}
+		this._pendingIntercepts.delete(pendingKey);
+
+		let outcomeReason = options?.reason;
+		if (!pending.deferred.isSettled) {
+			if (action === 'resume') {
+				const request = this.getRequest(key);
+				const messages = request ? this.getMessagesForSend(key, request.messages) : pending.fallbackMessages;
+				void pending.deferred.complete({ action: 'resume', messages });
+			} else {
+				void pending.deferred.complete({ action: 'cancel', reason: options?.reason });
+			}
+		}
+
+		if (action === 'resume' && !outcomeReason) {
+			outcomeReason = 'user';
+		}
+
+		this._logInterceptionOutcome(action, outcomeReason, pending.key);
+		this.emitInterceptionState();
+	}
+
 	private withRequest(
 		key: LiveRequestSessionKey,
 		mutator: (request: EditableChatRequest) => boolean,
@@ -233,6 +335,66 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	private toKey(sessionId: string, location: number): string {
 		return `${sessionId}::${location}`;
 	}
+
+	private _logInterceptionOutcome(action: PromptInterceptionAction, reason: string | undefined, key: LiveRequestSessionKey): void {
+		const locationLabel = ChatLocation.toStringShorter(key.location);
+		this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.promptInterception.outcome', {
+			action,
+			reason: reason ?? 'unspecified',
+			location: locationLabel,
+		});
+	}
+
+	private cancelAllIntercepts(reason: string): void {
+		if (!this._pendingIntercepts.size) {
+			this.emitInterceptionState();
+			return;
+		}
+		for (const [key, pending] of this._pendingIntercepts) {
+			this._pendingIntercepts.delete(key);
+			if (!pending.deferred.isSettled) {
+				void pending.deferred.complete({ action: 'cancel', reason });
+			}
+			this._logInterceptionOutcome('cancel', reason, pending.key);
+		}
+		this.emitInterceptionState();
+	}
+
+	private emitInterceptionState(): void {
+		const enabled = this.isInterceptionEnabled();
+		let pendingSummary: PendingPromptInterceptSummary | undefined;
+		if (enabled && this._pendingIntercepts.size) {
+			let latest: PendingIntercept | undefined;
+			for (const pending of this._pendingIntercepts.values()) {
+				if (!latest || pending.requestedAt >= latest.requestedAt) {
+					latest = pending;
+				}
+			}
+			if (latest) {
+				pendingSummary = {
+					key: latest.key,
+					requestId: latest.requestId,
+					debugName: latest.debugName,
+					requestedAt: latest.requestedAt,
+					nonce: latest.nonce,
+				};
+			}
+		}
+
+		const nextState: PromptInterceptionState = pendingSummary ? { enabled, pending: pendingSummary } : { enabled };
+		this._interceptionState = nextState;
+		this._onDidChangeInterception.fire(this._interceptionState);
+	}
+}
+
+interface PendingIntercept {
+	readonly key: LiveRequestSessionKey;
+	readonly requestId: string;
+	readonly debugName: string;
+	readonly requestedAt: number;
+	readonly nonce: number;
+	readonly deferred: DeferredPromise<PromptInterceptionDecision>;
+	readonly fallbackMessages: Raw.ChatMessage[];
 }
 
 function kindToRole(kind: LiveRequestSectionKind): Raw.ChatRole {

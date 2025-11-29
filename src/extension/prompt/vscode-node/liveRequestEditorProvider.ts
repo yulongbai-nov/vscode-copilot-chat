@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { EditableChatRequest } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
+import { ILiveRequestEditorService, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 
 /**
  * WebView provider for the Live Request Editor / Prompt Inspector panel.
@@ -23,6 +23,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 	private _view?: vscode.WebviewView;
 	private _currentRequest?: EditableChatRequest;
+	private _interceptionState: PromptInterceptionState;
+	private _lastInterceptNonce?: number;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -30,10 +32,15 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService
 	) {
 		super();
+		this._interceptionState = this._liveRequestEditorService.getInterceptionState();
 
 		// Listen for changes to the live request
 		this._register(this._liveRequestEditorService.onDidChange(request => {
 			this._currentRequest = request;
+			this._updateWebview();
+		}));
+		this._register(this._liveRequestEditorService.onDidChangeInterception(state => {
+			this._handleInterceptionStateChanged(state);
 			this._updateWebview();
 		}));
 	}
@@ -87,6 +94,18 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 	private _updateWebview(): void {
 		this._postStateToWebview();
+	}
+
+	private _handleInterceptionStateChanged(state: PromptInterceptionState): void {
+		this._interceptionState = state;
+		if (state.pending) {
+			if (state.pending.nonce !== this._lastInterceptNonce) {
+				this._lastInterceptNonce = state.pending.nonce;
+				this.show();
+			}
+		} else {
+			this._lastInterceptNonce = undefined;
+		}
 	}
 
 	private async _handleWebviewMessage(message: unknown): Promise<void> {
@@ -150,6 +169,14 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					}
 					break;
 
+				case 'resumeSend':
+					this._resolvePendingIntercept('resume');
+					break;
+
+				case 'cancelIntercept':
+					this._resolvePendingIntercept('cancel', 'user');
+					break;
+
 				case 'command':
 					if (typeof payload.command === 'string') {
 						await vscode.commands.executeCommand(payload.command, ...(payload.args ?? []));
@@ -205,8 +232,31 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 		this._view.webview.postMessage({
 			type: 'stateUpdate',
-			request: this._currentRequest
+			request: this._currentRequest,
+			interception: this._toWebviewInterceptionPayload()
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
+	}
+
+	private _toWebviewInterceptionPayload() {
+		const state = this._interceptionState;
+		return {
+			enabled: state.enabled,
+			pending: state.pending ? {
+				debugName: state.pending.debugName,
+				nonce: state.pending.nonce,
+			} : undefined
+		};
+	}
+
+	private _resolvePendingIntercept(action: PromptInterceptionAction, reason?: string): void {
+		if (!this._currentRequest) {
+			return;
+		}
+		this._liveRequestEditorService.resolvePendingIntercept(
+			{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location },
+			action,
+			reason ? { reason } : undefined
+		);
 	}
 }
 

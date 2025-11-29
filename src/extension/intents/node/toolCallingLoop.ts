@@ -166,6 +166,10 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		return undefined;
 	}
 
+	protected interceptMessages(messages: Raw.ChatMessage[], _token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> | Raw.ChatMessage[] {
+		return messages;
+	}
+
 	private async throwIfCancelled(token: CancellationToken | PauseController) {
 		if (await this.checkAsync(token)) {
 			throw new CancellationError();
@@ -383,7 +387,8 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 				type: 'function',
 			})),
 		};
-		const messagesForRequest = this.prepareLiveRequest(buildPromptResult, context, requestOptions) ?? buildPromptResult.messages;
+		let messagesForRequest = this.prepareLiveRequest(buildPromptResult, context, requestOptions) ?? buildPromptResult.messages;
+		messagesForRequest = await this.interceptMessages(messagesForRequest, token);
 
 		const that = this;
 		const responseProcessor = new class implements IResponseProcessor {
