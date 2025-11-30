@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationToken, Command, EndOfLine, InlineCompletionContext, InlineCompletionDisplayLocation, InlineCompletionDisplayLocationKind, InlineCompletionEndOfLifeReason, InlineCompletionEndOfLifeReasonKind, InlineCompletionItem, InlineCompletionItemProvider, InlineCompletionList, InlineCompletionsDisposeReason, InlineCompletionsDisposeReasonKind, NotebookCell, NotebookCellKind, Position, Range, TextDocument, TextDocumentShowOptions, l10n, Event as vscodeEvent, window, workspace } from 'vscode';
+import { CancellationToken, Command, EndOfLine, InlineCompletionContext, InlineCompletionDisplayLocation, InlineCompletionDisplayLocationKind, InlineCompletionEndOfLifeReason, InlineCompletionEndOfLifeReasonKind, InlineCompletionItem, InlineCompletionItemProvider, InlineCompletionList, InlineCompletionsDisposeReason, InlineCompletionsDisposeReasonKind, NotebookCell, NotebookCellKind, Position, Range, TextDocument, TextDocumentShowOptions, Event as vscodeEvent, window, workspace } from 'vscode';
+import * as l10n from '@vscode/l10n';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { IDiffService } from '../../../platform/diff/common/diffService';
 import { stringEditFromDiff } from '../../../platform/editing/common/edit';
@@ -50,14 +51,14 @@ const learnMoreAction: Command = {
 	tooltip: learnMoreLink
 };
 
-interface NesCompletionItem extends InlineCompletionItem {
+export interface NesCompletionItem extends InlineCompletionItem {
 	readonly telemetryBuilder: NextEditProviderTelemetryBuilder;
 	readonly info: NesCompletionInfo;
 	wasShown: boolean;
 	isEditInAnotherDocument?: boolean;
 }
 
-class NesCompletionList extends InlineCompletionList {
+export class NesCompletionList extends InlineCompletionList {
 
 	public override enableForwardStability = true;
 
@@ -106,6 +107,9 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 	private readonly _tracer: ITracer;
 
 	public readonly onDidChange: vscodeEvent<void> | undefined = Event.fromObservableLight(this.model.onChange);
+	public readonly handleDidPartiallyAcceptCompletionItem = undefined;
+	public readonly handleDidRejectCompletionItem = undefined;
+
 	private readonly _displayNextEditorNES: boolean;
 	private readonly _renameSymbolSuggestions: IObservable<boolean>;
 
@@ -174,6 +178,13 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 			return undefined;
 		}
 
+		const ignoreWhenSuggestVisible = this._configurationService.getExperimentBasedConfig(ConfigKey.TeamInternal.InlineEditsIgnoreWhenSuggestVisible, this._expService);
+
+		if (ignoreWhenSuggestVisible && context.selectedCompletionInfo && !unification) {
+			tracer.returns('suggest widget is showing, not providing NES');
+			return undefined;
+		}
+
 		const doc = this.model.workspace.getDocumentByTextDocument(document);
 		if (!doc) {
 			tracer.returns('document not found in workspace');
@@ -190,7 +201,6 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 		telemetryBuilder.setIsNaturalLanguageDominated(LineCheck.isNaturalLanguageDominated(document, position));
 
 		const requestCancellationTokenSource = new CancellationTokenSource(token);
-		const completionsCts = new CancellationTokenSource(token);
 		let suggestionInfo: NesCompletionInfo | undefined;
 		try {
 			tracer.trace('invoking next edit provider');
@@ -198,18 +208,13 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 			const { first, all } = raceAndAll([
 				this.model.nextEditProvider.getNextEdit(doc.id, context, logContext, token, telemetryBuilder.nesBuilder),
 				this.model.diagnosticsBasedProvider?.runUntilNextEdit(doc.id, context, logContext, 50, requestCancellationTokenSource.token, telemetryBuilder.diagnosticsBuilder) ?? raceCancellation(new Promise<undefined>(() => { }), requestCancellationTokenSource.token),
-				this.model.completionsProvider?.getCompletions(doc.id, context, logContext, token) ?? raceCancellation(new Promise<undefined>(() => { }), completionsCts.token),
 			]);
 
-			let [providerSuggestion, diagnosticsSuggestion, completionAtCursor] = await first;
+			let [providerSuggestion, diagnosticsSuggestion] = await first;
 
-			// ensure completions promise resolves
-			completionsCts.cancel();
-
-			const hasCompletionAtCursor = completionAtCursor && completionAtCursor.result !== undefined;
 			const hasNonEmptyLlmNes = providerSuggestion && providerSuggestion.result !== undefined;
 
-			const shouldGiveMoreTimeToDiagnostics = !hasCompletionAtCursor && !hasNonEmptyLlmNes && this.model.diagnosticsBasedProvider;
+			const shouldGiveMoreTimeToDiagnostics = !hasNonEmptyLlmNes && this.model.diagnosticsBasedProvider;
 
 			if (shouldGiveMoreTimeToDiagnostics) {
 				tracer.trace('giving some more time to diagnostics provider');
@@ -229,9 +234,7 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 			}
 
 			// Determine which suggestion to use
-			if (completionAtCursor?.result) {
-				suggestionInfo = new LlmCompletionInfo(completionAtCursor, doc.id, document, context.requestUuid);
-			} else if (diagnosticsSuggestion?.result) {
+			if (diagnosticsSuggestion?.result) {
 				suggestionInfo = new DiagnosticsCompletionInfo(diagnosticsSuggestion, doc.id, document, context.requestUuid);
 			} else if (providerSuggestion) {
 				suggestionInfo = new LlmCompletionInfo(providerSuggestion, doc.id, document, context.requestUuid);
@@ -240,9 +243,24 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 				return emptyList;
 			}
 
+			if (suggestionInfo.source === 'provider' && suggestionInfo.suggestion.result?.jumpToPosition !== undefined) {
+				tracer.trace('next edit suggestion only has jumpToPosition');
+				this.telemetrySender.scheduleSendingEnhancedTelemetry(suggestionInfo.suggestion, telemetryBuilder);
+				const positionToJumpOneBased = suggestionInfo.suggestion.result.jumpToPosition;
+				const jumpToPosition = new Position(positionToJumpOneBased.lineNumber - 1, positionToJumpOneBased.column - 1);
+				const jumpToPositionCompletionItem: NesCompletionItem = {
+					insertText: undefined as unknown as string,
+					info: suggestionInfo,
+					wasShown: false,
+					telemetryBuilder,
+					jumpToPosition,
+				};
+				return new NesCompletionList(context.requestUuid, jumpToPositionCompletionItem, [], telemetryBuilder);
+			}
+
 			// Return and send telemetry if there is no result
 			const result = suggestionInfo.suggestion.result;
-			if (!result) {
+			if (!result || !result.edit) {
 				tracer.trace('no next edit suggestion');
 				this.telemetrySender.scheduleSendingEnhancedTelemetry(suggestionInfo.suggestion, telemetryBuilder);
 				return emptyList;
@@ -304,6 +322,8 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 
 			this.telemetrySender.scheduleSendingEnhancedTelemetry(suggestionInfo.suggestion, telemetryBuilder);
 
+			const supportsRename = (document.languageId === 'typescript' || document.languageId === 'typescriptreact') && this._renameSymbolSuggestions.get();
+
 			const nesCompletionItem: NesCompletionItem = {
 				...completionItem,
 				info: suggestionInfo,
@@ -312,7 +332,7 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 				isInlineEdit: !isInlineCompletion,
 				showInlineEditMenu: !serveAsCompletionsProvider,
 				wasShown: false,
-				supportsRename: this._renameSymbolSuggestions.get()
+				supportsRename
 			};
 
 			return new NesCompletionList(context.requestUuid, nesCompletionItem, menuCommands, telemetryBuilder);
@@ -329,7 +349,6 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 			throw e;
 		} finally {
 			requestCancellationTokenSource.dispose();
-			completionsCts.dispose();
 			this.logger.add(logContext);
 		}
 	}
@@ -373,6 +392,10 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 		result: NonNullable<(NextEditResult | DiagnosticsNextEditResult)['result']>,
 	): Omit<NesCompletionItem, 'telemetryBuilder' | 'info' | 'showInlineEditMenu' | 'action' | 'wasShown' | 'isInlineEdit'> | undefined {
 
+		if (!result.edit) {
+			return undefined;
+		}
+
 		// Only show edit when the cursor is max 4 lines away from the edit
 		const showRange = result.showRangePreference === ShowNextEditPreference.AroundEdit
 			? new Range(
@@ -399,7 +422,7 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 		};
 	}
 
-	public handleDidShowCompletionItem(completionItem: NesCompletionItem, updatedInsertText: string): void {
+	public handleDidShowCompletionItem(completionItem: NesCompletionItem, _updatedInsertText: string): void {
 		completionItem.wasShown = true;
 		completionItem.telemetryBuilder.setAsShown();
 
@@ -479,7 +502,7 @@ export class InlineCompletionProviderImpl implements InlineCompletionItemProvide
 	// TODO: Support tracking Diagnostics NES
 	private async _trackSurvivalRate(item: LlmCompletionInfo) {
 		const result = item.suggestion.result;
-		if (!result) {
+		if (!result || !result.edit) {
 			return;
 		}
 

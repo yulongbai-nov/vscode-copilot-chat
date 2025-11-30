@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { RequestType } from '@vscode/copilot-api';
-import { IExperimentationService } from '../../../lib/node/chatLibMain';
 import { ChatFetchResponseType, ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ChatEndpoint } from '../../../platform/endpoint/node/chatEndpoint';
 import { NextCursorLinePrediction } from '../../../platform/inlineEdits/common/dataTypes/nextCursorLinePrediction';
+import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
 import { fromUnknown } from '../../../util/common/errors';
 import { Result } from '../../../util/common/result';
 import { TokenizerType } from '../../../util/common/tokenizer';
@@ -40,12 +40,12 @@ export class XtabNextCursorPredictor {
 		const originalNextCursorLinePrediction = this.configService.getExperimentBasedConfig(ConfigKey.TeamInternal.InlineEditsNextCursorPredictionEnabled, this.expService);
 
 		switch (originalNextCursorLinePrediction) {
-			case undefined:
-				return undefined;
-
-			// remove support for enum members other than OnlyWithEdit
 			case NextCursorLinePrediction.OnlyWithEdit:
 			case NextCursorLinePrediction.Jump:
+			case undefined:
+				return originalNextCursorLinePrediction;
+
+			// remove support for LabelOnlyWithEdit
 			case NextCursorLinePrediction.LabelOnlyWithEdit:
 				return NextCursorLinePrediction.OnlyWithEdit;
 
