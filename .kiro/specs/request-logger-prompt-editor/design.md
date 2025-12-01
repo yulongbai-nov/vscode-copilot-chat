@@ -172,6 +172,7 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - Additional **Stick** action pins a section to the top (beneath the status banner) until unstuck; pinned sections keep their order relative to each other and display a “Pinned” indicator.
   - Pinned sections are draggable so users can reorder them relative to other pinned sections without affecting the unpinned list.
   - Deleted sections get a dashed border + reduced opacity and expose a single `Restore` button inline.
+  - Tool sections include a metadata strip that surfaces the tool name (or ID) and the JSON arguments passed to the invocation so advanced users can audit exactly what inputs were provided. Arguments reuse the markdown/code styling but are rendered in a monospace block for readability.
 - **Editing flow**
   - `Edit` toggles an inline `<textarea>` editor (monospace, chat theme colors). Save posts `editSection` with the new value; cancel just hides the editor and reverts to the previous text.
   - `Delete` soft-deletes the section (marks `section.deleted = true`). Subsequent sends omit the message until restored.
@@ -359,6 +360,37 @@ Architecturally this added:
 - New webview messages (`resumeSend`, `cancelIntercept`) and interception state in the React front-end.
 - Status bar contribution tied to the interception setting and pending state.
 - When enabled, `ToolCallingLoop` asks the service to await interception approval; `ChatMLFetcher.fetchMany` is only invoked after **edited** `EditableChatRequest.messages` are approved so the Request Logger continues to record exactly what was sent.
+
+#### Context-change cleanup
+
+Interceptions must also unwind automatically when the underlying session becomes invalid (e.g., user opens a new chat, switches the model picker, or VS Code disposes the session). The service now:
+
+- Subscribes to `IChatSessionService.onDidDisposeChatSession` and removes any cached requests for that session, firing a new `onDidRemoveRequest` event consumed by the webview provider to drop stale session cards.
+- Resolves any matching `PendingIntercept` entries with `action: 'cancel'` plus a `sessionDisposed` reason so both the chat pipeline and status bar clear without manual intervention.
+- Surfaces a human-readable banner message (“Context changed – request discarded”) when this happens, matching the new telemetry reason so diagnostics can distinguish user-initiated cancelations from automatic cleanup.
+- Treats “model changed” as a session reset because the VS Code chat host spins up a fresh session when the picker value changes; if future host changes deliver an explicit “model changed” event we can map it to the same cleanup helper.
+- Requests flagged as `isSubagent` (Plan/TODO sub-agents, runSubagent tool invocations) bypass interception entirely so automation does not stall waiting for user approval; these requests still render in the editor for observability but proceed immediately through the fetcher.
+
+### Subagent Prompt Monitor
+
+Automated subagent flows (Plan’s TODO tool, `runSubagent`, background task runners) now skip interception, but power users still need visibility into what those agents send. Rather than reusing the full Live Request Editor, we add a lightweight **Subagent Prompt Monitor**:
+
+- **Data source**
+  - `LiveRequestEditorService` already builds `EditableChatRequest` objects for every turn. When `request.isSubagent` is true, we publish a new `onDidAddSubagentRequest` event with a trimmed payload (session key, debug name, createdAt, sections, model metadata).
+  - Requests are still stored internally so token counts and parity checks work, but they are never fed through interception.
+
+- **View implementation**
+  - A dedicated `SubagentPromptMonitorProvider` (likely a `TreeDataProvider` backed by the same React bundle or a compact `webviewView`) lives in the right sidebar next to the Request Logger.
+  - Root nodes represent recent subagent runs (labelled `Session · intent · hh:mm:ss`), and expanding a node reveals child items for each prompt section (system/user/context/tool) rendered using the existing markdown renderer for consistency.
+  - Entries auto-expire after N runs (configurable, default 10) or when their session is disposed; the provider listens to the existing `onDidRemoveRequest` event to prune stale nodes.
+
+- **UX considerations**
+  - Read-only: no edit/delete controls; clicking copies content or opens a detail pane.
+  - Keyboard accessible tree with context menu actions (“Copy section”, “Reveal in request log”).
+  - Matches VS Code theming; uses the same hover toolbar icons for familiarity, but actions simply copy or expand.
+
+- **Telemetry**
+  - Emit `liveRequestEditor.subagentMonitor.viewed` when users expand entries, and `liveRequestEditor.subagentMonitor.trimmed` when older entries are dropped, so we can size the backlog appropriately.
 
 ### UI / UX Considerations
 

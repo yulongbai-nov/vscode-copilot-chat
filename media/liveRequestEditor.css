@@ -413,6 +413,68 @@ body {
 	overflow: auto;
 }
 
+.section-tool-details {
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 6px;
+	padding: 8px;
+	background: color-mix(in srgb, var(--vscode-sideBarSectionHeader-background) 70%, transparent);
+	margin-bottom: 10px;
+	font-size: 11px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.tool-name-row {
+	display: flex;
+	gap: 6px;
+	align-items: baseline;
+	font-weight: 600;
+}
+
+.tool-label {
+	text-transform: uppercase;
+	font-size: 10px;
+	letter-spacing: 0.05em;
+	color: var(--vscode-descriptionForeground);
+}
+
+.tool-name {
+	font-family: var(--vscode-font-family);
+}
+
+.tool-id {
+	font-family: var(--vscode-editor-font-family);
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.tool-args {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.tool-args-block {
+	margin: 0;
+	padding: 6px 8px;
+	background: var(--vscode-textPreformat-background);
+	border-radius: 4px;
+	max-height: 160px;
+	overflow: auto;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 11px;
+}
+
+.tool-args-block code {
+	white-space: pre-wrap;
+}
+
+.tool-args-empty {
+	font-style: italic;
+	color: var(--vscode-descriptionForeground);
+}
+
 .section.collapsed .section-content {
 	display: none;
 }

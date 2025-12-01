@@ -55,6 +55,7 @@ As a developer inspecting a pending request, I want the full prompt broken into 
 2.4 THE Live Chat Request Editor SHALL support collapsing and expanding each section individually, with collapsed state clearly indicated and the body content hidden when collapsed.  
 2.5 WHEN a section contains markdown with code blocks or inline code, THEN the Live Chat Request Editor SHALL render it using the same or equivalent markdown and code block renderer as the chat panel.  
 2.6 THE Live Chat Request Editor SHOULD surface key request metadata (e.g., model, max tokens, location) adjacent to the sections, derived from the Chat Request.  
+2.7 WHEN a Prompt Section represents a tool invocation or tool result, THEN the Live Chat Request Editor SHALL display the invoked tool’s name and the exact arguments that were sent so power users can audit the call.  
 
 ### Requirement 3 – Section Hover Action Menu (Edit / Delete)
 
@@ -144,3 +145,19 @@ As a power user who wants to audit every prompt, I want to pause each send, revi
 8.8 THE status bar item SHALL reflect the current mode (“Prompt Interception: On/Off”) and, when a request is paused, indicate that action is required (e.g., warning icon, tooltip).  
 8.9 INTERCEPTION mode SHALL be conversation-aware; only the active conversation’s request is paused, and other conversations in the same window continue to work normally unless they also intercept.  
 8.10 ALL interception flows SHALL log telemetry (mode toggles, resume vs. cancel) for future analysis.  
+8.11 WHEN the active chat session ends, the user switches to a different conversation, or the selected model/context changes while a request is intercepted, THEN the Live Chat Request Editor SHALL automatically cancel the pending turn, dismiss the interception UI, and surface a reason such as “Context changed – request discarded.”  
+8.12 WHEN a request originates from an automated sub-agent/tool flow (e.g., `runSubagent`, background TODO tool execution), THEN the Live Chat Request Editor SHALL bypass interception so automation continues without manual approval.  
+
+### Requirement 9 – Subagent Prompt Monitor
+
+**User Story:**  
+As a developer running automated TODO/Plan subagents, I want a compact widget that shows the prompts those subagents send so I can audit or troubleshoot their work without blocking the main chat flow.
+
+#### Acceptance Criteria
+
+9.1 THE extension SHALL expose a read-only “Subagent Prompt Monitor” view (e.g., a tree pinned to the right side of the chat panel) whenever the live editor feature flag is enabled.  
+9.2 WHEN a subagent (`request.isSubagent === true`) issues a request, THEN the monitor SHALL add an entry containing its session label, tool invocation, and timestamp without pausing or intercepting the send.  
+9.3 EACH monitor entry SHALL expand into a tree that mirrors the prompt sections (system/user/context/tool) so users can inspect what was sent; markdown/code should use the same renderer as the main editor.  
+9.4 THE monitor SHALL keep only a bounded history (at least the most recent 10 subagent runs) and provide affordances to collapse/expand or clear entries.  
+9.5 THE monitor SHALL be keyboard accessible (focusable tree items, expand/collapse via keyboard) and respect VS Code theming.  
+9.6 THE monitor SHALL stay synchronized with session lifecycle events (removed when the chat session is disposed) so stale subagent prompts are not shown.  

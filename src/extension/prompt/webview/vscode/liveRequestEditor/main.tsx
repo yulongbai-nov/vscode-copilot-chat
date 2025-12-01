@@ -58,6 +58,18 @@ interface EditableChatRequest {
 	metadata?: EditableChatRequestMetadata;
 }
 
+interface ToolInvocationMetadata {
+	id?: string;
+	name?: string;
+	arguments?: string;
+}
+
+interface LiveRequestSectionMetadata {
+	name?: string;
+	toolCallId?: string;
+	toolInvocation?: ToolInvocationMetadata;
+}
+
 interface LiveRequestSection {
 	id: string;
 	label: string;
@@ -68,6 +80,7 @@ interface LiveRequestSection {
 	editable?: boolean;
 	deletable?: boolean;
 	deleted?: boolean;
+	metadata?: LiveRequestSectionMetadata;
 }
 
 interface StateUpdateMessage {
@@ -282,6 +295,22 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		}
 		return DOMPurify.sanitize(markdown.render(section.content ?? ''));
 	}, [section.content]);
+	const toolInvocation = React.useMemo(() => {
+		if (section.kind !== 'tool') {
+			return undefined;
+		}
+		if (section.metadata?.toolInvocation) {
+			return section.metadata.toolInvocation;
+		}
+		if (section.metadata?.name || section.metadata?.toolCallId) {
+			return {
+				id: typeof section.metadata.toolCallId === 'string' ? section.metadata.toolCallId : undefined,
+				name: typeof section.metadata.name === 'string' ? section.metadata.name : undefined
+			};
+		}
+		return undefined;
+	}, [section]);
+	const toolArguments = toolInvocation?.arguments?.trim();
 
 	React.useEffect(() => {
 		if (isEditing) {
@@ -467,6 +496,27 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				id={sectionBodyId}
 				aria-hidden={collapsed && !isEditing}
 			>
+				{toolInvocation ? (
+					<div className="section-tool-details">
+						<div className="tool-name-row">
+							<span className="tool-label">Tool</span>
+							<span className="tool-name">{toolInvocation.name ?? 'Unknown tool'}</span>
+							{toolInvocation.id ? (
+								<span className="tool-id">#{toolInvocation.id}</span>
+							) : null}
+						</div>
+						{toolArguments ? (
+							<div className="tool-args">
+								<div className="tool-label">Arguments</div>
+								<pre className="tool-args-block">
+									<code>{toolArguments}</code>
+								</pre>
+							</div>
+						) : (
+							<div className="tool-args tool-args-empty">No invocation arguments provided.</div>
+						)}
+					</div>
+				) : null}
 				{isEditing ? (
 					<>
 						<textarea
