@@ -3,12 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-<<<<<<< HEAD
 import type { SweCustomAgent } from '@github/copilot/sdk';
-=======
-import { SweCustomAgent } from '@github/copilot/sdk';
 import * as l10n from '@vscode/l10n';
->>>>>>> upstream/main
 import * as vscode from 'vscode';
 import { ChatExtendedRequestHandler, Uri } from 'vscode';
 import { IRunCommandExecutionService } from '../../../platform/commands/common/runCommandExecutionService';
