@@ -65,6 +65,7 @@ export interface EditableChatRequest {
 	readonly location: ChatLocation;
 	readonly debugName: string;
 	readonly model: string;
+	readonly isSubagent?: boolean;
 	messages: Raw.ChatMessage[];
 	sections: LiveRequestSection[];
 	readonly originalMessages: Raw.ChatMessage[];
@@ -83,6 +84,7 @@ export interface EditableChatRequestInit {
 	endpointUrl?: string;
 	modelFamily?: string;
 	requestOptions?: OptionalChatRequestParams;
+	isSubagent?: boolean;
 	maxPromptTokens?: number;
 	tokenCounts?: {
 		total?: number;

@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 
@@ -54,6 +54,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		// Listen for changes to the live request
 		this._register(this._liveRequestEditorService.onDidChange(request => {
 			this._handleRequestUpdated(request);
+		}));
+		this._register(this._liveRequestEditorService.onDidRemoveRequest(key => {
+			this._handleRequestRemoved(key);
 		}));
 		this._register(this._liveRequestEditorService.onDidChangeInterception(state => {
 			this._handleInterceptionStateChanged(state);
@@ -252,6 +255,21 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		if (!this._activeSessionKey || this._activeSessionKey === key) {
 			this._activeSessionKey = key;
 			this._currentRequest = request;
+		}
+		this._postStateToWebview();
+	}
+
+	private _handleRequestRemoved(key: LiveRequestSessionKey): void {
+		const compositeKey = this._toCompositeKey(key.sessionId, key.location);
+		const wasActive = this._activeSessionKey === compositeKey;
+		this._requests.delete(compositeKey);
+		if (wasActive) {
+			const nextKey = this._requests.keys().next().value as string | undefined;
+			this._activeSessionKey = nextKey;
+			this._currentRequest = nextKey ? this._requests.get(nextKey) : undefined;
+		} else if (!this._requests.size) {
+			this._activeSessionKey = undefined;
+			this._currentRequest = undefined;
 		}
 		this._postStateToWebview();
 	}

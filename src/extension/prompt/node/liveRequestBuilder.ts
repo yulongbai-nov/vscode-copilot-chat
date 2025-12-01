@@ -31,6 +31,7 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 		location: ctx.location,
 		debugName: ctx.debugName,
 		model: ctx.model,
+		isSubagent: ctx.isSubagent,
 		messages: clonedMessages,
 		sections,
 		originalMessages,
@@ -40,7 +41,9 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 }
 
 export function createSectionsFromMessages(messages: Raw.ChatMessage[], tokenCounts?: number[]): LiveRequestSection[] {
-	return messages.map((message, index) => createSection(message, index, tokenCounts?.[index]));
+	const sections = messages.map((message, index) => createSection(message, index, tokenCounts?.[index]));
+	annotateToolSections(messages, sections);
+	return sections;
 }
 
 function createSection(message: Raw.ChatMessage, index: number, tokenCount?: number): LiveRequestSection {
@@ -74,6 +77,62 @@ function createSection(message: Raw.ChatMessage, index: number, tokenCount?: num
 		metadata,
 		tokenCount,
 	};
+}
+
+function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequestSection[]): void {
+	const toolCallMap = new Map<string, { id: string; name?: string; args?: string }>();
+	for (const message of messages) {
+		if (message.role === Raw.ChatRole.Assistant && 'toolCalls' in message && message.toolCalls?.length) {
+			for (const call of message.toolCalls) {
+				const name = call.function?.name;
+				const args = extractToolArguments(call.function?.arguments);
+				toolCallMap.set(call.id, { id: call.id, name, args });
+			}
+		}
+	}
+
+	for (const section of sections) {
+		if (section.kind !== 'tool') {
+			continue;
+		}
+		const metadata = section.metadata ?? {};
+		const toolCallId = typeof metadata.toolCallId === 'string' ? metadata.toolCallId : undefined;
+		const lookup = toolCallId ? toolCallMap.get(toolCallId) : undefined;
+		if (!lookup && !metadata.name) {
+			continue;
+		}
+		metadata.toolInvocation = {
+			id: lookup?.id ?? toolCallId,
+			name: lookup?.name ?? (typeof metadata.name === 'string' ? metadata.name : undefined),
+			arguments: lookup?.args
+		};
+		section.metadata = metadata;
+	}
+}
+
+function extractToolArguments(raw: unknown): string | undefined {
+	if (raw === undefined || raw === null) {
+		return undefined;
+	}
+	if (typeof raw === 'string') {
+		const trimmed = raw.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+		try {
+			return JSON.stringify(JSON.parse(trimmed), null, 2);
+		} catch {
+			return trimmed;
+		}
+	}
+	if (typeof raw === 'object') {
+		try {
+			return JSON.stringify(raw, null, 2);
+		} catch {
+			return JSON.stringify(raw);
+		}
+	}
+	return String(raw);
 }
 
 function inferKind(message: Raw.ChatMessage): LiveRequestSectionKind {

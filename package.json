@@ -1816,6 +1816,11 @@
 				"view": "workbench.view.chat.sessions.copilotcli",
 				"when": "github.copilot.chat.cliSessionsEmpty",
 				"contents": "%github.copilot.viewsWelcome.cliSessionsEmpty.contents%"
+			},
+			{
+				"view": "github.copilot.subagentPromptMonitor",
+				"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"contents": "Subagent prompts from TODO/Plan runs will appear here."
 			}
 		],
 		"chatViewsWelcome": [
@@ -2129,6 +2134,19 @@
 				"command": "github.copilot.liveRequestEditor.reset",
 				"title": "Live Request Editor: Reset",
 				"icon": "$(refresh)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.subagentPromptMonitor.copySection",
+				"title": "Copy Subagent Section",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.subagentPromptMonitor.clear",
+				"title": "Clear Subagent History",
+				"icon": "$(trash)",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
 			},
@@ -4454,6 +4472,11 @@
 					"command": "github.copilot.cloud.sessions.refresh",
 					"when": "view == workbench.view.chat.sessions.copilot-cloud-agent",
 					"group": "navigation@1"
+				},
+				{
+					"command": "github.copilot.subagentPromptMonitor.clear",
+					"when": "view == github.copilot.subagentPromptMonitor",
+					"group": "navigation@9"
 				}
 			],
 			"view/item/context": [
@@ -4476,6 +4499,11 @@
 					"command": "github.copilot.chat.debug.exportPromptLogsAsJson",
 					"when": "view == copilot-chat && viewItem == chatprompt",
 					"group": "export@3"
+				},
+				{
+					"command": "github.copilot.subagentPromptMonitor.copySection",
+					"when": "view == github.copilot.subagentPromptMonitor && viewItem == github.copilot.subagentSection",
+					"group": "inline"
 				}
 			],
 			"searchPanel/aiResults/commands": [
@@ -4893,6 +4921,12 @@
 					"id": "github.copilot.liveRequestEditor",
 					"name": "Live Request Editor",
 					"type": "webview",
+					"icon": "assets/live-request-editor.svg",
+					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
+				},
+				{
+					"id": "github.copilot.subagentPromptMonitor",
+					"name": "Subagent Prompt Monitor",
 					"icon": "assets/live-request-editor.svg",
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				}

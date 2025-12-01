@@ -149,11 +149,14 @@ suite('defaultIntentRequestHandler', () => {
 		tools = new Map();
 		id = generateUuid();
 		sessionId = generateUuid();
+		isSubagent = false;
 	}
 
 	class TestLiveRequestEditorService implements ILiveRequestEditorService {
 		declare readonly _serviceBrand: undefined;
 		onDidChange = Event.None;
+		onDidRemoveRequest = Event.None;
+		onDidUpdateSubagentHistory = Event.None;
 		onDidChangeInterception = Event.None;
 
 		public enabled = true;
@@ -196,6 +199,10 @@ suite('defaultIntentRequestHandler', () => {
 			return this._deferred.p;
 		}
 
+		handleContextChange(): void {
+			// no-op
+		}
+
 		setValidationError(error: LiveRequestValidationError | undefined): void {
 			this.validationError = error;
 		}
@@ -234,6 +241,12 @@ suite('defaultIntentRequestHandler', () => {
 
 		recordLoggedRequest(): void {
 			// no-op for tests
+		}
+		getSubagentRequests(): readonly [] {
+			return [];
+		}
+		clearSubagentHistory(): void {
+			// no-op
 		}
 	}
 
@@ -389,6 +402,26 @@ suite('defaultIntentRequestHandler', () => {
 		expect(response).to.have.length(1);
 		expect(response[0]).toMatchSnapshot();
 		expect(interceptService.cancelCalls).to.equal(1);
+	});
+
+	test('does not intercept subagent requests', async () => {
+		const interceptService = new TestLiveRequestEditorService();
+		interceptService.enabled = true;
+		interceptService.interceptionEnabled = true;
+		resetState(() => interceptService);
+
+		const subagentRequest = new TestChatRequest();
+		subagentRequest.isSubagent = true;
+		chatResponse[0] = 'subagent response';
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('auto flow')] }],
+		};
+
+		const handler = makeHandler({ request: subagentRequest });
+		const result = await handler.getResult();
+		expect(result).toMatchSnapshot();
+		expect(interceptService.waitCount).to.equal(0);
 	});
 
 	test('surfaces validation errors when prompt edits remove all sections', async () => {

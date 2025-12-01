@@ -10,22 +10,30 @@ import { Emitter, Event } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { deepClone, equals } from '../../../util/vs/base/common/objects';
 import { stringHash } from '../../../util/vs/base/common/hash';
+import { ChatLocation } from '../../../platform/chat/common/commonTypes';
+import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
-import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestValidationError } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, PendingPromptInterceptSummary, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestValidationError } from '../common/liveRequestEditorModel';
+import { ILiveRequestEditorService, PendingPromptInterceptSummary, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
 import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
+
+const SUBAGENT_HISTORY_LIMIT = 10;
 
 export class LiveRequestEditorService extends Disposable implements ILiveRequestEditorService {
 	declare readonly _serviceBrand: undefined;
 
 	private readonly _onDidChange = this._register(new Emitter<EditableChatRequest>());
 	public readonly onDidChange: Event<EditableChatRequest> = this._onDidChange.event;
+	private readonly _onDidRemoveRequest = this._register(new Emitter<LiveRequestSessionKey>());
+	public readonly onDidRemoveRequest: Event<LiveRequestSessionKey> = this._onDidRemoveRequest.event;
+	private readonly _onDidUpdateSubagentHistory = this._register(new Emitter<void>());
+	public readonly onDidUpdateSubagentHistory: Event<void> = this._onDidUpdateSubagentHistory.event;
 	private readonly _onDidChangeInterception = this._register(new Emitter<PromptInterceptionState>());
 	public readonly onDidChangeInterception: Event<PromptInterceptionState> = this._onDidChangeInterception.event;
 
 	private readonly _requests = new Map<string, EditableChatRequest>();
+	private readonly _subagentHistory: SubagentRequestEntry[] = [];
 	private _enabled: boolean;
 	private _interceptionEnabled: boolean;
 	private readonly _pendingIntercepts = new Map<string, PendingIntercept>();
@@ -35,6 +43,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
+		@IChatSessionService private readonly _chatSessionService: IChatSessionService,
 	) {
 		super();
 		this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
@@ -44,7 +53,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			if (e.affectsConfiguration(ConfigKey.Advanced.LivePromptEditorEnabled.fullyQualifiedId)) {
 				this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
 				if (!this._enabled) {
-					this._requests.clear();
+					this.removeAllRequests();
 					this.cancelAllIntercepts('editorDisabled');
 				}
 				this.emitInterceptionState();
@@ -56,6 +65,9 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				}
 				this.emitInterceptionState();
 			}
+		}));
+		this._register(this._chatSessionService.onDidDisposeChatSession(sessionId => {
+			this._handleSessionDisposed(sessionId);
 		}));
 		this.emitInterceptionState();
 	}
@@ -70,12 +82,15 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 	prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
 		if (!this._enabled) {
-			this._requests.delete(this.toKey(init.sessionId, init.location));
+			this.removeRequest(init.sessionId, init.location);
 			return undefined;
 		}
 		const request = buildEditableChatRequest(init);
 		this._requests.set(this.toKey(init.sessionId, init.location), request);
 		this._onDidChange.fire(request);
+		if (request.isSubagent) {
+			this.recordSubagentRequest(request);
+		}
 		return request;
 	}
 
@@ -282,6 +297,19 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this._onDidChange.fire(request);
 	}
 
+	getSubagentRequests(): readonly SubagentRequestEntry[] {
+		return [...this._subagentHistory];
+	}
+
+	clearSubagentHistory(): void {
+		if (!this._subagentHistory.length) {
+			return;
+		}
+		this._subagentHistory.length = 0;
+		this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.subagentMonitor.cleared', {});
+		this._onDidUpdateSubagentHistory.fire();
+	}
+
 	private withRequest(
 		key: LiveRequestSessionKey,
 		mutator: (request: EditableChatRequest) => boolean,
@@ -431,6 +459,48 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this.emitInterceptionState();
 	}
 
+	private removeRequest(sessionId: string, location: ChatLocation): void {
+		this.removeRequestByCompositeKey(this.toKey(sessionId, location));
+	}
+
+	private removeRequestByCompositeKey(compositeKey: string): void {
+		const existing = this._requests.get(compositeKey);
+		if (!existing) {
+			return;
+		}
+		this._requests.delete(compositeKey);
+		this._onDidRemoveRequest.fire({ sessionId: existing.sessionId, location: existing.location });
+		if (existing.isSubagent) {
+			this.removeSubagentEntriesForRequest(existing.id);
+		}
+	}
+
+	private removeAllRequests(): void {
+		if (!this._requests.size) {
+			return;
+		}
+		for (const key of Array.from(this._requests.keys())) {
+			this.removeRequestByCompositeKey(key);
+		}
+	}
+
+	private _handleSessionDisposed(sessionId: string): void {
+		for (const [key, request] of Array.from(this._requests.entries())) {
+			if (request.sessionId === sessionId) {
+				this.removeRequestByCompositeKey(key);
+			}
+		}
+		const didTrim = this.removeSubagentEntriesBySession(sessionId);
+		if (didTrim) {
+			this._onDidUpdateSubagentHistory.fire();
+		}
+		for (const pending of Array.from(this._pendingIntercepts.values())) {
+			if (pending.key.sessionId === sessionId) {
+				this.resolvePendingIntercept(pending.key, 'cancel', { reason: 'sessionDisposed' });
+			}
+		}
+	}
+
 	private emitInterceptionState(): void {
 		const enabled = this.isInterceptionEnabled();
 		let pendingSummary: PendingPromptInterceptSummary | undefined;
@@ -455,6 +525,56 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		const nextState: PromptInterceptionState = pendingSummary ? { enabled, pending: pendingSummary } : { enabled };
 		this._interceptionState = nextState;
 		this._onDidChangeInterception.fire(this._interceptionState);
+	}
+
+	private recordSubagentRequest(request: EditableChatRequest): void {
+		const entry: SubagentRequestEntry = {
+			id: request.id,
+			sessionId: request.sessionId,
+			location: request.location,
+			debugName: request.debugName,
+			model: request.model,
+			requestId: request.metadata.requestId,
+			createdAt: request.metadata.createdAt ?? Date.now(),
+			sections: request.sections.map(section => this.cloneSection(section)),
+		};
+		this._subagentHistory.unshift(entry);
+		if (this._subagentHistory.length > SUBAGENT_HISTORY_LIMIT) {
+			const removed = this._subagentHistory.length - SUBAGENT_HISTORY_LIMIT;
+			this._subagentHistory.length = SUBAGENT_HISTORY_LIMIT;
+			this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.subagentMonitor.trimmed', { removed: String(removed) });
+		}
+		this._onDidUpdateSubagentHistory.fire();
+	}
+
+	private cloneSection(section: LiveRequestSection): LiveRequestSection {
+		return {
+			...section,
+			message: section.message ? deepClone(section.message) : undefined,
+			metadata: section.metadata ? { ...section.metadata } : undefined,
+		};
+	}
+
+	private removeSubagentEntriesForRequest(requestId: string): void {
+		const before = this._subagentHistory.length;
+		for (let i = this._subagentHistory.length - 1; i >= 0; i--) {
+			if (this._subagentHistory[i].id === requestId) {
+				this._subagentHistory.splice(i, 1);
+			}
+		}
+		if (before !== this._subagentHistory.length) {
+			this._onDidUpdateSubagentHistory.fire();
+		}
+	}
+
+	private removeSubagentEntriesBySession(sessionId: string): boolean {
+		const before = this._subagentHistory.length;
+		for (let i = this._subagentHistory.length - 1; i >= 0; i--) {
+			if (this._subagentHistory[i].sessionId === sessionId) {
+				this._subagentHistory.splice(i, 1);
+			}
+		}
+		return before !== this._subagentHistory.length;
 	}
 }
 

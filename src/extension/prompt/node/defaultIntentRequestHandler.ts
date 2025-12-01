@@ -438,6 +438,8 @@ export class DefaultIntentRequestHandler {
 				return l10n.t('Prompt Interception Mode was disabled. Pending request discarded.');
 			case 'superseded':
 				return l10n.t('Previous pending request was discarded before sending.');
+			case 'sessionDisposed':
+				return l10n.t('Chat context changed (new session or model). Pending request was discarded.');
 			default:
 				return l10n.t('Pending request was discarded before sending.');
 		}
@@ -765,6 +767,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			location: sessionKey.location,
 			debugName: this.computeDebugName(),
 			model: this.options.invocation.endpoint.model,
+			isSubagent: !!this.options.request.isSubagent,
 			renderResult: buildPromptResult,
 			requestId,
 			intentId: this.options.intent?.id,
@@ -822,7 +825,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	}
 
 	protected override async interceptMessages(messages: Raw.ChatMessage[], token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> {
-		if (!this._liveRequestEditorService.isInterceptionEnabled()) {
+		if (!this._liveRequestEditorService.isInterceptionEnabled() || this.options.request.isSubagent) {
 			return messages;
 		}
 		const key: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
