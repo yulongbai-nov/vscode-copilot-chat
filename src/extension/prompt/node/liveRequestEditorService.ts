@@ -198,7 +198,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return undefined;
 		}
 		const request = this.getRequest(key);
-		if (!request) {
+		if (!request || request.isSubagent) {
 			return undefined;
 		}
 

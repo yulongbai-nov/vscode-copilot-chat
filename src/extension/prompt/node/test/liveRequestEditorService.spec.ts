@@ -250,6 +250,16 @@ describe('LiveRequestEditorService interception', () => {
 		expect(events.some(evt => evt.eventName === 'liveRequestEditor.subagentMonitor.trimmed')).toBe(true);
 	});
 
+	test('skips interception for subagent requests', async () => {
+		const { service } = await createService();
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		service.prepareRequest(createServiceInit({ isSubagent: true }));
+
+		const decision = await service.waitForInterceptionApproval(key, CancellationToken.None);
+		expect(decision).toBeUndefined();
+		expect(service.getInterceptionState().pending).toBeUndefined();
+	});
+
 	test('clears subagent history', async () => {
 		const { service, telemetry } = await createService();
 		service.prepareRequest(createServiceInit({ requestId: 'sub-clear', isSubagent: true }));

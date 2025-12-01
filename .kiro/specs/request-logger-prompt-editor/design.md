@@ -369,7 +369,7 @@ Interceptions must also unwind automatically when the underlying session becomes
 - Resolves any matching `PendingIntercept` entries with `action: 'cancel'` plus a `sessionDisposed` reason so both the chat pipeline and status bar clear without manual intervention.
 - Surfaces a human-readable banner message (“Context changed – request discarded”) when this happens, matching the new telemetry reason so diagnostics can distinguish user-initiated cancelations from automatic cleanup.
 - Treats “model changed” as a session reset because the VS Code chat host spins up a fresh session when the picker value changes; if future host changes deliver an explicit “model changed” event we can map it to the same cleanup helper.
-- Requests flagged as `isSubagent` (Plan/TODO sub-agents, runSubagent tool invocations) bypass interception entirely so automation does not stall waiting for user approval; these requests still render in the editor for observability but proceed immediately through the fetcher.
+- Requests flagged as `isSubagent` (Plan/TODO sub-agents, runSubagent tool invocations) bypass interception entirely so automation does not stall waiting for user approval. The default intent handler short-circuits `interceptMessages`, and the service's `waitForInterceptionApproval` immediately returns for these requests so future entry points cannot accidentally pause automation. These requests still render in the editor for observability but proceed immediately through the fetcher.
 
 ### Subagent Prompt Monitor
 
