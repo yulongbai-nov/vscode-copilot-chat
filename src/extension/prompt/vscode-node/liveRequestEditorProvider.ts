@@ -252,7 +252,11 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private _handleRequestUpdated(request: EditableChatRequest): void {
 		const key = this._toCompositeKey(request.sessionId, request.location);
 		this._requests.set(key, request);
-		if (!this._activeSessionKey || this._activeSessionKey === key) {
+		const pendingCompositeKey = this._getPendingCompositeKey();
+		const shouldActivate = !this._activeSessionKey
+			|| this._activeSessionKey === key
+			|| (pendingCompositeKey !== undefined && pendingCompositeKey === key);
+		if (shouldActivate) {
 			this._activeSessionKey = key;
 			this._currentRequest = request;
 		}
@@ -387,6 +391,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		return {
 			enabled: state.enabled,
 			pending: state.pending ? {
+				sessionKey: this._toCompositeKey(state.pending.key.sessionId, state.pending.key.location),
 				debugName: state.pending.debugName,
 				nonce: state.pending.nonce,
 			} : undefined
@@ -394,14 +399,27 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	}
 
 	private _resolvePendingIntercept(action: PromptInterceptionAction, reason?: string): void {
-		if (!this._currentRequest) {
+		const pendingKey = this._interceptionState.pending?.key;
+		const fallback = this._currentRequest
+			? { sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
+			: undefined;
+		const targetKey = pendingKey ?? fallback;
+		if (!targetKey) {
 			return;
 		}
 		this._liveRequestEditorService.resolvePendingIntercept(
-			{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location },
+			targetKey,
 			action,
 			reason ? { reason } : undefined
 		);
+	}
+
+	private _getPendingCompositeKey(): string | undefined {
+		const pending = this._interceptionState.pending;
+		if (!pending) {
+			return undefined;
+		}
+		return this._toCompositeKey(pending.key.sessionId, pending.key.location);
 	}
 }
 
