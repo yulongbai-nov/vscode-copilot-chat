@@ -185,6 +185,10 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
 - **Conversation targeting**
   - The interim webview always listens to `ILiveRequestEditorService.onDidChange`. The last-updated session automatically re-renders in the view.
   - A conversation drop-down is optional in this phase; instead we surface the session id + chat location in metadata and rely on one-active-session behaviour. Future drawer work will introduce the picker.
+- **Advanced extras (opt-in)**
+  - Some users need insight into the full HTTP payload (tool schemas, requestOptions, telemetry) that would otherwise clutter the default UI. We expose a configuration key `github.copilot.chat.promptInspector.extraSections` that accepts an array of identifiers (`requestOptions`, `telemetry`, `rawRequest`).
+  - When non-empty, the inspector appends read-only panels after the metadata strip: formatted JSON for request options and raw request body (with copy buttons), plus a telemetry table showing intent ID, endpoint URL, timestamps, and parity diagnostics.
+  - This setting never hides existing controls—it only augments the view so power users can replicate what `request.json` contains without leaving the inspector, while the default experience stays streamlined.
 - **Empty/error states**
   - When no editable request exists, show a centered “Waiting for chat request” message with instructions (“Send a prompt with the feature flag enabled…”).
   - When the service is disabled via settings, the view collapses to a short explanation plus a settings gear link.

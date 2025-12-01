@@ -2663,6 +2663,24 @@
 						"default": 500,
 						"minimum": 100,
 						"markdownDescription": "Token count threshold for automatically collapsing large sections (when autoCollapseLargeSections is enabled)."
+					},
+					"github.copilot.chat.promptInspector.extraSections": {
+						"type": "array",
+						"default": [],
+						"items": {
+							"type": "string",
+							"enum": [
+								"requestOptions",
+								"telemetry",
+								"rawRequest"
+							],
+							"markdownEnumDescriptions": [
+								"Show the JSON request options that include model parameters and tool/MCP declarations.",
+								"Show telemetry metadata such as intent ID, endpoint URL, and parity diagnostics.",
+								"Show the raw request payload (messages + options) exactly as it will be logged."
+							]
+						},
+						"markdownDescription": "Append additional read-only panels to the Live Request Editor for advanced inspection. The default view remains unchanged; any sections listed here will be rendered after the metadata header."
 					}
 				}
 			},

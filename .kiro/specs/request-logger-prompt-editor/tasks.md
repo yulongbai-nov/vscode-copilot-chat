@@ -43,6 +43,7 @@
   - [x] 5.2 Wire the Send action to use edited messages when the request is dirty, and original messages otherwise. _Requirements: 4.2, 4.3_  
   - [x] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _Requirements: 4.4_  
   - [x] 5.4 Guard against invalid/empty requests (e.g., all sections deleted) by blocking send with explanatory error UI and offering reset. _Requirements: 4.5_  
+  - [ ] 5.5 Add a configuration-driven “extra detail” area in the Live Request Editor so advanced users can opt-in to view `requestOptions`, telemetry metadata, and the raw JSON payload that matches the Request Logger output. Do not hide existing UI; only append the additional panels when explicitly enabled. _Requirements: 5.6_  
 
 - [ ] 6. Performance, reliability, and security hardening  
   - [ ] 6.1 Add lazy rendering or truncation for very large sections with “Show more” links to protect UI responsiveness. _Requirements: 6.3_  

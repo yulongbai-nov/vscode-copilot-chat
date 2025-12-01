@@ -12,15 +12,26 @@ import { EditableChatRequest } from '../../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, PromptInterceptionState } from '../../common/liveRequestEditorService';
 import { LiveRequestEditorProvider } from '../liveRequestEditorProvider';
 
+const mockExtraSectionsValue: string[] = [];
+
 vi.mock('vscode', async () => {
 	const shim = await import('../../../../util/common/test/shims/vscodeTypesShim');
+	const configurationGetter = vi.fn().mockImplementation(() => ({
+		get: vi.fn().mockImplementation((_key: string, defaultValue: unknown) => {
+			return mockExtraSectionsValue.length ? [...mockExtraSectionsValue] : defaultValue;
+		})
+	}));
 	return {
 		...shim,
 		commands: {
 			executeCommand: vi.fn(),
 			getCommands: vi.fn().mockResolvedValue([])
 		},
-		window: {}
+		window: {},
+		workspace: {
+			getConfiguration: configurationGetter,
+			onDidChangeConfiguration: vi.fn().mockReturnValue({ dispose: vi.fn() })
+		}
 	};
 });
 
@@ -29,6 +40,7 @@ describe('LiveRequestEditorProvider', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockExtraSectionsValue.length = 0;
 		logService = {
 			trace: vi.fn(),
 			debug: vi.fn(),
@@ -97,6 +109,23 @@ describe('LiveRequestEditorProvider', () => {
 			'cancel',
 			{ reason: 'user' }
 		);
+	});
+
+	test('includes configured extra sections when posting state', () => {
+		mockExtraSectionsValue.push('rawRequest');
+		const { provider } = createProvider(logService);
+		const postMessage = vi.fn().mockResolvedValue(undefined);
+		(provider as any)._view = {
+			webview: {
+				postMessage
+			}
+		};
+
+		(provider as any)._postStateToWebview();
+
+		expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({
+			extraSections: ['rawRequest']
+		}));
 	});
 	function createProvider(logSvc: ILogService) {
 		const onDidChange = new Emitter<EditableChatRequest>();

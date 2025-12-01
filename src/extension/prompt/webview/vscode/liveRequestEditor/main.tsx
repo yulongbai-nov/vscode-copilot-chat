@@ -38,6 +38,8 @@ type LiveRequestValidationErrorCode = 'empty' | string;
 
 type SectionActionIconType = 'edit' | 'close' | 'delete' | 'pin' | 'pinFilled' | 'restore';
 
+type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
+
 interface EditableChatRequestMetadata {
 	requestId?: string;
 	tokenCount?: number;
@@ -45,6 +47,26 @@ interface EditableChatRequestMetadata {
 	maxResponseTokens?: number;
 	createdAt?: number;
 	lastValidationErrorCode?: LiveRequestValidationErrorCode;
+	intentId?: string;
+	endpointUrl?: string;
+	modelFamily?: string;
+	requestOptions?: Record<string, unknown>;
+	lastLoggedAt?: number;
+	lastLoggedHash?: number;
+	lastLoggedMatches?: boolean;
+	lastLoggedMismatchReason?: string;
+}
+
+interface RawChatMessageContentPart {
+	type: string;
+	text?: string;
+	[key: string]: unknown;
+}
+
+interface RawChatMessage {
+	role?: string;
+	content?: RawChatMessageContentPart[];
+	[key: string]: unknown;
 }
 
 interface EditableChatRequest {
@@ -54,6 +76,7 @@ interface EditableChatRequest {
 	debugName?: string;
 	model: string;
 	isDirty: boolean;
+	messages?: RawChatMessage[];
 	sections: LiveRequestSection[];
 	metadata?: EditableChatRequestMetadata;
 }
@@ -89,6 +112,7 @@ interface StateUpdateMessage {
 	interception?: InterceptionState;
 	sessions?: SessionSummary[];
 	activeSessionKey?: string;
+	extraSections?: InspectorExtraSection[];
 }
 
 interface SessionSummary {
@@ -129,6 +153,49 @@ function formatNumber(value?: number): string {
 		return '—';
 	}
 	return Number(value).toLocaleString();
+}
+
+const EXTRA_SECTION_VALUES: InspectorExtraSection[] = ['requestOptions', 'telemetry', 'rawRequest'];
+
+function isInspectorExtraSection(value: unknown): value is InspectorExtraSection {
+	return typeof value === 'string' && EXTRA_SECTION_VALUES.includes(value as InspectorExtraSection);
+}
+
+function formatTimestamp(value?: number): string {
+	if (!value) {
+		return '—';
+	}
+	try {
+		return new Date(value).toLocaleString();
+	} catch {
+		return String(value);
+	}
+}
+
+function safeStringify(data: unknown): string {
+	try {
+		return JSON.stringify(data, null, 2);
+	} catch (error) {
+		return String(error);
+	}
+}
+
+function copyToClipboard(text: string): void {
+	if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+		void navigator.clipboard.writeText(text);
+		return;
+	}
+	const textarea = document.createElement('textarea');
+	textarea.value = text;
+	textarea.style.position = 'fixed';
+	textarea.style.opacity = '0';
+	document.body.appendChild(textarea);
+	textarea.select();
+	try {
+		document.execCommand('copy');
+	} finally {
+		document.body.removeChild(textarea);
+	}
 }
 
 function computeTotalTokens(request?: EditableChatRequest): number {
@@ -547,9 +614,113 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	);
 };
 
+interface InspectorPanelProps {
+	title: string;
+	description?: string;
+	actions?: React.ReactNode;
+	children: React.ReactNode;
+}
+
+const InspectorPanel: React.FC<InspectorPanelProps> = ({ title, description, actions, children }) => (
+	<div className="inspector-panel">
+		<div className="inspector-panel-header">
+			<h4>{title}</h4>
+			{actions ? <div className="inspector-panel-actions">{actions}</div> : null}
+		</div>
+		{description ? <p className="inspector-panel-description">{description}</p> : null}
+		{children}
+	</div>
+);
+
+interface JsonPanelProps {
+	title: string;
+	description?: string;
+	data: unknown;
+	emptyLabel: string;
+	onCopy?: (json: string) => void;
+}
+
+const JsonPanel: React.FC<JsonPanelProps> = ({ title, description, data, emptyLabel, onCopy }) => {
+	const serialized = React.useMemo(() => {
+		if (data === undefined || data === null) {
+			return undefined;
+		}
+		if (typeof data === 'object' && !Array.isArray(data) && Object.keys(data as Record<string, unknown>).length === 0) {
+			return undefined;
+		}
+		return safeStringify(data);
+	}, [data]);
+
+	const handleCopy = React.useCallback(() => {
+		if (serialized && onCopy) {
+			onCopy(serialized);
+		}
+	}, [serialized, onCopy]);
+
+	return (
+		<InspectorPanel
+			title={title}
+			description={description}
+			actions={serialized && onCopy ? (
+				<vscode-button appearance="secondary" onClick={handleCopy}>Copy JSON</vscode-button>
+			) : undefined}
+		>
+			{serialized ? (
+				<pre className="json-preview">
+					<code>{serialized}</code>
+				</pre>
+			) : (
+				<div className="inspector-panel-empty">{emptyLabel}</div>
+			)}
+		</InspectorPanel>
+	);
+};
+
+const TelemetryPanel: React.FC<{ metadata?: EditableChatRequestMetadata }> = ({ metadata }) => {
+	const rows = React.useMemo(() => ([
+		{ label: 'Request ID', value: metadata?.requestId },
+		{ label: 'Intent', value: metadata?.intentId },
+		{ label: 'Endpoint', value: metadata?.endpointUrl },
+		{ label: 'Model Family', value: metadata?.modelFamily },
+		{ label: 'Created', value: formatTimestamp(metadata?.createdAt) },
+		{ label: 'Last Logged', value: formatTimestamp(metadata?.lastLoggedAt) },
+		{
+			label: 'Parity',
+			value: metadata?.lastLoggedMatches === undefined
+				? undefined
+				: metadata.lastLoggedMatches
+					? 'Matches logged request'
+					: `Mismatch (${metadata.lastLoggedMismatchReason ?? 'unspecified'})`
+		}
+	]), [metadata]);
+
+	const hasData = rows.some(row => row.value && row.value !== '—');
+
+	return (
+		<InspectorPanel
+			title="Telemetry"
+			description="Metadata recorded for parity checks and endpoint diagnostics."
+		>
+			{hasData ? (
+				<dl className="telemetry-grid">
+					{rows.map(row => (
+						<React.Fragment key={row.label}>
+							<dt>{row.label}</dt>
+							<dd>{row.value ?? '—'}</dd>
+						</React.Fragment>
+					))}
+				</dl>
+			) : (
+				<div className="inspector-panel-empty">No telemetry metadata available.</div>
+			)}
+		</InspectorPanel>
+	);
+};
+
 const App: React.FC = () => {
 	const [request, setRequest] = React.useState<EditableChatRequest | undefined>(undefined);
 	const [interception, setInterception] = React.useState<InterceptionState | undefined>(undefined);
+	const [extraSections, setExtraSections] = React.useState<InspectorExtraSection[]>([]);
 	const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
@@ -634,6 +805,8 @@ const App: React.FC = () => {
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
 				setActiveSessionKey(event.data.activeSessionKey);
+				const extras = (event.data.extraSections ?? []).filter(isInspectorExtraSection);
+				setExtraSections(extras);
 			}
 		};
 		window.addEventListener('message', handler);
@@ -713,9 +886,29 @@ const App: React.FC = () => {
 
 	const pinnedSections = orderedSections.filter(section => pinnedIdSet.has(section.id));
 	const unpinnedSections = orderedSections.filter(section => !pinnedIdSet.has(section.id));
+	const requestOptionsData = request?.metadata?.requestOptions;
+	const rawRequestPayload = React.useMemo(() => {
+		if (!request) {
+			return undefined;
+		}
+		return {
+			model: request.model,
+			location: request.location,
+			messages: request.messages ?? [],
+			requestOptions: requestOptionsData,
+			metadata: {
+				requestId: request.metadata?.requestId,
+				intentId: request.metadata?.intentId,
+				endpointUrl: request.metadata?.endpointUrl
+			}
+		};
+	}, [request, requestOptionsData]);
 
 	const sendMessage = React.useCallback((type: string, data?: Record<string, unknown>) => {
 		vscode.postMessage({ type, ...(data ?? {}) });
+	}, []);
+	const copyJson = React.useCallback((json: string) => {
+		copyToClipboard(json);
 	}, []);
 
 	const handleTogglePinned = React.useCallback((sectionId: string) => {
@@ -887,6 +1080,32 @@ const App: React.FC = () => {
 						</div>
 					) : null}
 				</div>
+
+				{request && extraSections.length > 0 ? (
+					<div className="inspector-extra-panels">
+						{extraSections.includes('telemetry') ? (
+							<TelemetryPanel metadata={request.metadata} />
+						) : null}
+						{extraSections.includes('requestOptions') ? (
+							<JsonPanel
+								title="Request Options"
+								description="Model parameters and tool declarations that accompany this prompt."
+								data={requestOptionsData}
+								emptyLabel="No request options available for this request."
+								onCopy={copyJson}
+							/>
+						) : null}
+						{extraSections.includes('rawRequest') ? (
+							<JsonPanel
+								title="Raw Request Payload"
+								description="Matches the payload recorded by the Copilot Request Logger."
+								data={rawRequestPayload}
+								emptyLabel="The raw request will appear once a prompt is ready."
+								onCopy={copyJson}
+							/>
+						) : null}
+					</div>
+				) : null}
 
 				{validationMessage ? (
 					<div className="validation-banner" role="alert" aria-live="polite">

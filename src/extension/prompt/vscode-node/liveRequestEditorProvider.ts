@@ -11,6 +11,8 @@ import { EditableChatRequest, LiveRequestSessionKey } from '../common/liveReques
 import { ILiveRequestEditorService, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 
+type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
+
 interface SessionSummaryPayload {
 	key: string;
 	sessionId: string;
@@ -41,6 +43,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private _activeSessionKey?: string;
 	private _focusCommandAvailable?: boolean;
+	private _extraSections: InspectorExtraSection[];
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -50,6 +53,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		super();
 		this._interceptionState = this._liveRequestEditorService.getInterceptionState();
 		this._setVisibilityContext(false);
+		this._extraSections = this._readExtraSectionsSetting();
 
 		// Listen for changes to the live request
 		this._register(this._liveRequestEditorService.onDidChange(request => {
@@ -61,6 +65,12 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._register(this._liveRequestEditorService.onDidChangeInterception(state => {
 			this._handleInterceptionStateChanged(state);
 			this._updateWebview();
+		}));
+		this._register(vscode.workspace.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('github.copilot.chat.promptInspector.extraSections')) {
+				this._extraSections = this._readExtraSectionsSetting();
+				this._postStateToWebview();
+			}
 		}));
 	}
 
@@ -335,8 +345,17 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			request: this._currentRequest,
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
-			activeSessionKey: this._activeSessionKey
+			activeSessionKey: this._activeSessionKey,
+			extraSections: this._extraSections
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
+	}
+
+	private _readExtraSectionsSetting(): InspectorExtraSection[] {
+		const config = vscode.workspace.getConfiguration('github.copilot.chat.promptInspector');
+		const value = config.get<string[]>('extraSections', []);
+		const allowed: InspectorExtraSection[] = ['requestOptions', 'telemetry', 'rawRequest'];
+		const allowedSet = new Set(allowed);
+		return value.filter((entry): entry is InspectorExtraSection => allowedSet.has(entry as InspectorExtraSection));
 	}
 
 	private _getSessionSummaries(): SessionSummaryPayload[] {
