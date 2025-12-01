@@ -1429,6 +1429,7 @@
 				]
 			},
 			{
+<<<<<<< HEAD
 				"id": "github.copilot.promptVisualizer",
 				"name": "PromptVisualizer",
 				"fullName": "Prompt Section Visualizer",
@@ -1558,6 +1559,8 @@
 				]
 			},
 			{
+=======
+>>>>>>> upstream/main
 				"id": "github.copilot.notebook",
 				"name": "GitHubCopilot",
 				"fullName": "GitHub Copilot",
@@ -5254,7 +5257,11 @@
 				"capabilities": {
 					"supportsFileAttachments": true,
 					"supportsProblemAttachments": true,
-					"supportsToolAttachments": false
+					"supportsToolAttachments": false,
+					"supportsImageAttachments": true,
+					"supportsSymbolAttachments": true,
+					"supportsSearchResultAttachments": true,
+					"supportsSourceControlAttachments": true
 				},
 				"commands": [
 					{

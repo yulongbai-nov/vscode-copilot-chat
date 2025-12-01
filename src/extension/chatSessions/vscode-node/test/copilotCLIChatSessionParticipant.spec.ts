@@ -15,6 +15,7 @@ import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/
 import { MockFileSystemService } from '../../../../platform/filesystem/node/test/mockFileSystemService';
 import { IGitService } from '../../../../platform/git/common/gitService';
 import { ILogService } from '../../../../platform/log/common/logService';
+import { PromptsServiceImpl } from '../../../../platform/promptFiles/common/promptsServiceImpl';
 import { NullTelemetryService } from '../../../../platform/telemetry/common/nullTelemetryService';
 import type { ITelemetryService } from '../../../../platform/telemetry/common/telemetry';
 import { IWorkspaceService, NullWorkspaceService } from '../../../../platform/workspace/common/workspaceService';
@@ -63,8 +64,9 @@ class FakeWorktreeManager extends mock<CopilotCLIWorktreeManager>() {
 
 class FakeModels implements ICopilotCLIModels {
 	_serviceBrand: undefined;
-	getDefaultModel = vi.fn(async () => ({ id: 'base', name: 'Base' }));
-	getAvailableModels = vi.fn(async () => [{ id: 'base', name: 'Base' }]);
+	resolveModel = vi.fn(async (modelId: string) => modelId);
+	getDefaultModel = vi.fn(async () => 'base');
+	getModels = vi.fn(async () => [{ id: 'base', name: 'Base' }]);
 	setDefaultModel = vi.fn(async () => { });
 	toModelProvider = vi.fn((id: string) => id); // passthrough
 }
@@ -188,7 +190,8 @@ describe('CopilotCLIChatSessionParticipant.handleRequest', () => {
 			instantiationService,
 			configurationService,
 			copilotSDK,
-			logger
+			logger,
+			new PromptsServiceImpl(new NullWorkspaceService())
 		);
 	});
 
