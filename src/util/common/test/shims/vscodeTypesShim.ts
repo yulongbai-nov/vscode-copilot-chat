@@ -70,6 +70,7 @@ const shim: typeof vscodeTypes = {
 	ChatPrepareToolInvocationPart,
 	ChatRequestTurn,
 	ChatResponseTurn,
+	ChatRequest: class { } as any,
 	ChatRequestEditorData,
 	ChatRequestNotebookData,
 	NewSymbolName,
@@ -78,6 +79,7 @@ const shim: typeof vscodeTypes = {
 	ChatLocation,
 	SymbolInformation: SymbolInformation as any,
 	LanguageModelToolResult,
+	LanguageModelToolInformation: class { } as any,
 	ExtendedLanguageModelToolResult: LanguageModelToolResult,
 	LanguageModelToolResult2,
 	LanguageModelPromptTsxPart,
@@ -121,6 +123,7 @@ const shim: typeof vscodeTypes = {
 	SnippetTextEdit,
 	FileType,
 	ChatSessionStatus,
+	Extension: class { } as any,
 	authentication: {
 		getSession: async () => { throw new Error('authentication.getSession not mocked in test'); }
 	}
