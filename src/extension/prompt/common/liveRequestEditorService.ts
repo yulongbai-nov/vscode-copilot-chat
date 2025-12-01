@@ -7,7 +7,8 @@ import { Raw } from '@vscode/prompt-tsx';
 import { createServiceIdentifier } from '../../../util/common/services';
 import { Event } from '../../../util/vs/base/common/event';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestSendResult, LiveRequestSessionKey } from './liveRequestEditorModel';
+import { ChatLocation } from '../../../platform/chat/common/commonTypes';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey } from './liveRequestEditorModel';
 
 export const ILiveRequestEditorService = createServiceIdentifier<ILiveRequestEditorService>('ILiveRequestEditorService');
 
@@ -34,6 +35,8 @@ export interface ILiveRequestEditorService {
 	readonly _serviceBrand: undefined;
 
 	readonly onDidChange: Event<EditableChatRequest>;
+	readonly onDidRemoveRequest: Event<LiveRequestSessionKey>;
+	readonly onDidUpdateSubagentHistory: Event<void>;
 	readonly onDidChangeInterception: Event<PromptInterceptionState>;
 
 	isEnabled(): boolean;
@@ -61,5 +64,26 @@ export interface ILiveRequestEditorService {
 
 	resolvePendingIntercept(key: LiveRequestSessionKey, action: PromptInterceptionAction, options?: { reason?: string }): void;
 
+	handleContextChange(event: PromptContextChangeEvent): void;
+
 	recordLoggedRequest(key: LiveRequestSessionKey | undefined, messages: Raw.ChatMessage[]): void;
+
+	getSubagentRequests(): readonly SubagentRequestEntry[];
+	clearSubagentHistory(): void;
+}
+
+export interface PromptContextChangeEvent {
+	readonly key: LiveRequestSessionKey;
+	readonly reason?: string;
+}
+
+export interface SubagentRequestEntry {
+	readonly id: string;
+	readonly sessionId: string;
+	readonly location: ChatLocation;
+	readonly debugName: string;
+	readonly model: string;
+	readonly requestId: string;
+	readonly createdAt: number;
+	readonly sections: readonly LiveRequestSection[];
 }

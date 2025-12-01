@@ -65,6 +65,7 @@
   - [x] 8.4 Wire the “Resume Send” and “Cancel” actions back to the extension host so edits are applied before resuming or discarded on cancel, including cleanup when the user switches conversations or closes the view. _Requirements: 8.6, 8.7_  
   - [x] 8.5 Emit telemetry for mode toggles and interception outcomes (resume/cancel/timeout) to aid adoption tracking. _Requirements: 8.10_  
   - [x] 8.6 Add tests covering the interception flow (pending send, resume, cancel, multi-session interactions) and manual QA instructions for the new mode. _Requirements: 8.3–8.9_  
+  - [x] 8.7 Auto-cancel pending interceptions when the backing chat session or model context changes, removing stale requests from the editor and surfacing a “context changed” reason. _Requirements: 8.7, 8.11_  
 
 ## Implementation Notes
 

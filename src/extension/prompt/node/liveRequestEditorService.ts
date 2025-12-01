@@ -15,7 +15,7 @@ import { IChatSessionService } from '../../../platform/chat/common/chatSessionSe
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestValidationError } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, PendingPromptInterceptSummary, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
+import { ILiveRequestEditorService, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
 import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
 
 const SUBAGENT_HISTORY_LIMIT = 10;
@@ -269,6 +269,17 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 		this._logInterceptionOutcome(loggedAction, outcomeReason, pending.key);
 		this.emitInterceptionState();
+	}
+
+	handleContextChange(event: PromptContextChangeEvent): void {
+		if (!this._pendingIntercepts.size || !this.isInterceptionEnabled()) {
+			return;
+		}
+		const reason = event.reason ?? 'contextChanged';
+		const pendingIntercepts = Array.from(this._pendingIntercepts.values());
+		for (const pending of pendingIntercepts) {
+			this.resolvePendingIntercept(pending.key, 'cancel', { reason });
+		}
 	}
 
 	recordLoggedRequest(key: LiveRequestSessionKey | undefined, messages: Raw.ChatMessage[]): void {

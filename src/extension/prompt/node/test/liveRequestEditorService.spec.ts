@@ -267,6 +267,21 @@ describe('LiveRequestEditorService interception', () => {
 		expect(service.getSubagentRequests()).toHaveLength(0);
 	});
 
+	test('handleContextChange cancels pending intercepts with provided reason', async () => {
+		const { service } = await createService();
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		service.prepareRequest(createServiceInit());
+		const decisionPromise = service.waitForInterceptionApproval(key, CancellationToken.None);
+
+		service.handleContextChange({
+			key: { sessionId: 'otherSession', location: ChatLocation.Panel },
+			reason: 'contextChanged:newRequest'
+		});
+
+		const decision = await decisionPromise;
+		expect(decision).toEqual({ action: 'cancel', reason: 'contextChanged:newRequest' });
+	});
+
 });
 
 function createServiceInit(overrides: Partial<EditableChatRequestInit> = {}): EditableChatRequestInit {
