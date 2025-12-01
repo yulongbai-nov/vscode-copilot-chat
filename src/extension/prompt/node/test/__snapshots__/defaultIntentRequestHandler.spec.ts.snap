@@ -3325,3 +3325,23 @@ exports[`defaultIntentRequestHandler > pauses send until prompt interception res
   },
 }
 `;
+
+exports[`defaultIntentRequestHandler > subagent requests integrate with LiveRequestEditorService without interception 1`] = `
+{
+  "metadata": {
+    "codeBlocks": [],
+    "toolCallResults": undefined,
+    "toolCallRounds": [
+      ToolCallRound {
+        "id": "static-id",
+        "response": "integrated subagent response",
+        "statefulMarker": undefined,
+        "summary": undefined,
+        "thinking": undefined,
+        "toolCalls": [],
+        "toolInputRetry": 0,
+      },
+    ],
+  },
+}
+`;

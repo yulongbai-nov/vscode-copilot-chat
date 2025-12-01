@@ -8,11 +8,15 @@ import { Raw, RenderPromptResult } from '@vscode/prompt-tsx';
 import { afterEach, beforeEach, expect, suite, test } from 'vitest';
 import type { ChatLanguageModelToolReference, ChatPromptReference, ChatRequest, ExtendedChatResponsePart, LanguageModelChat } from 'vscode';
 import { IChatMLFetcher } from '../../../../platform/chat/common/chatMLFetcher';
+import { IChatSessionService } from '../../../../platform/chat/common/chatSessionService';
 import { toTextPart } from '../../../../platform/chat/common/globalStringUtils';
 import { StaticChatMLFetcher } from '../../../../platform/chat/test/common/staticChatMLFetcher';
 import { MockEndpoint } from '../../../../platform/endpoint/test/node/mockEndpoint';
 import { IResponseDelta } from '../../../../platform/networking/common/fetch';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
+import { ConfigKey } from '../../../../platform/configuration/common/configurationService';
+import { DefaultsOnlyConfigurationService } from '../../../../platform/configuration/common/defaultsOnlyConfigurationService';
+import { InMemoryConfigurationService } from '../../../../platform/configuration/test/common/inMemoryConfigurationService';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry';
 import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyingTelemetryService';
 import { ITestingServicesAccessor } from '../../../../platform/test/node/services';
@@ -21,7 +25,7 @@ import { IWorkspaceFileIndex } from '../../../../platform/workspaceChunkSearch/n
 import { ChatResponseStreamImpl } from '../../../../util/common/chatResponseStreamImpl';
 import { DeferredPromise } from '../../../../util/vs/base/common/async';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
-import { Event } from '../../../../util/vs/base/common/event';
+import { Emitter, Event } from '../../../../util/vs/base/common/event';
 import { isObject, isUndefinedOrNull } from '../../../../util/vs/base/common/types';
 import { generateUuid } from '../../../../util/vs/base/common/uuid';
 import { SyncDescriptor } from '../../../../util/vs/platform/instantiation/common/descriptors';
@@ -35,9 +39,10 @@ import { IBuildPromptContext } from '../../common/intents';
 import { ToolCallRound } from '../../common/toolCallRound';
 import { ChatTelemetryBuilder } from '../chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
+import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
 import { ILiveRequestEditorService, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
-import { EditableChatRequest, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
 	let accessor: ITestingServicesAccessor;
@@ -169,6 +174,7 @@ suite('defaultIntentRequestHandler', () => {
 		private _messages: Raw.ChatMessage[] = [];
 		private _deferred?: DeferredPromise<PromptInterceptionDecision>;
 		public validationError?: LiveRequestValidationError;
+		public prepareRequestCalls: EditableChatRequestInit[] = [];
 
 		isEnabled(): boolean { return this.enabled; }
 		isInterceptionEnabled(): boolean {
@@ -177,7 +183,10 @@ suite('defaultIntentRequestHandler', () => {
 		}
 		getInterceptionState() { return { enabled: this.isInterceptionEnabled(), pending: undefined }; }
 
-		prepareRequest(): EditableChatRequest | undefined { return undefined; }
+		prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
+			this.prepareRequestCalls.push(init);
+			return undefined;
+		}
 		getRequest(): EditableChatRequest | undefined { return undefined; }
 		updateSectionContent(): EditableChatRequest | undefined { return undefined; }
 		deleteSection(): EditableChatRequest | undefined { return undefined; }
@@ -248,6 +257,26 @@ suite('defaultIntentRequestHandler', () => {
 		clearSubagentHistory(): void {
 			// no-op
 		}
+	}
+
+	class IntegrationChatSessionService implements IChatSessionService {
+		declare readonly _serviceBrand: undefined;
+		private readonly _onDidDispose = new Emitter<string>();
+		readonly onDidDisposeChatSession = this._onDidDispose.event;
+		dispose(): void {
+			this._onDidDispose.dispose();
+		}
+	}
+
+	async function createLiveRequestEditorServiceForIntegration(): Promise<{ service: LiveRequestEditorService; chatSessions: IntegrationChatSessionService }> {
+		const defaults = new DefaultsOnlyConfigurationService();
+		const config = new InMemoryConfigurationService(defaults);
+		await config.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, true);
+		await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
+		const telemetry = new SpyingTelemetryService();
+		const chatSessions = new IntegrationChatSessionService();
+		const service = new LiveRequestEditorService(config, telemetry, chatSessions);
+		return { service, chatSessions };
 	}
 
 	const responseStream = new ChatResponseStreamImpl(p => response.push(p), () => { });
@@ -422,6 +451,35 @@ suite('defaultIntentRequestHandler', () => {
 		const result = await handler.getResult();
 		expect(result).toMatchSnapshot();
 		expect(interceptService.waitCount).to.equal(0);
+		expect(interceptService.prepareRequestCalls).to.have.length(1);
+		expect(interceptService.prepareRequestCalls[0].isSubagent).to.equal(true);
+	});
+
+	test('subagent requests integrate with LiveRequestEditorService without interception', async () => {
+		const { service, chatSessions } = await createLiveRequestEditorServiceForIntegration();
+		resetState(() => service);
+
+		const subagentRequest = new TestChatRequest();
+		subagentRequest.isSubagent = true;
+		chatResponse[0] = 'integrated subagent response';
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('auto flow integration')] }],
+		};
+
+		try {
+			const handler = makeHandler({ request: subagentRequest });
+			const result = await handler.getResult();
+			expect(result).toMatchSnapshot();
+
+			const history = service.getSubagentRequests();
+			expect(history.length).to.equal(1);
+			expect(history[0].debugName).to.equal('tool/runSubagent');
+			expect(service.getInterceptionState().pending).to.be.undefined;
+		} finally {
+			service.dispose();
+			chatSessions.dispose();
+		}
 	});
 
 	test('surfaces validation errors when prompt edits remove all sections', async () => {
