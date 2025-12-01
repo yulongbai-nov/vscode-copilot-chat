@@ -10,7 +10,6 @@ import { ChatQuotaContribution } from '../../chat/vscode-node/chatQuota.contribu
 import { ChatSessionsContrib } from '../../chatSessions/vscode-node/chatSessions';
 import * as chatBlockLanguageContribution from '../../codeBlocks/vscode-node/chatBlockLanguageFeatures.contribution';
 import { IExtensionContributionFactory, asContributionFactory } from '../../common/contributions';
-import { CompletionsCoreContribution } from '../../completions/vscode-node/completionsCoreContribution';
 import { CompletionsUnificationContribution } from '../../completions/vscode-node/completionsUnificationContribution';
 import { ConfigurationMigrationContribution } from '../../configuration/vscode-node/configurationMigration';
 import { ContextKeysContribution } from '../../contextKeys/vscode-node/contextKeys.contribution';
@@ -27,7 +26,7 @@ import { WalkthroughCommandContribution } from '../../getting-started/vscode-nod
 import * as newWorkspaceContribution from '../../getting-started/vscode-node/newWorkspace.contribution';
 import { GitHubMcpContrib } from '../../githubMcp/vscode-node/githubMcp.contribution';
 import { IgnoredFileProviderContribution } from '../../ignore/vscode-node/ignoreProvider';
-import { InlineEditProviderFeature } from '../../inlineEdits/vscode-node/inlineEditProviderFeature';
+import { JointCompletionsProviderContribution } from '../../inlineEdits/vscode-node/jointInlineCompletionProvider';
 import { FixTestFailureContribution } from '../../intents/vscode-node/fixTestFailureContributions';
 import { TestGenLensContribution } from '../../intents/vscode-node/testGenLens';
 import { LoggingActionsContrib } from '../../log/vscode-node/loggingActions';
@@ -49,6 +48,7 @@ import { SurveyCommandContribution } from '../../survey/vscode-node/surveyComman
 import { SetupTestsContribution } from '../../testing/vscode/setupTestContributions';
 import { ToolsContribution } from '../../tools/vscode-node/tools';
 import { InlineCompletionContribution } from '../../typescriptContext/vscode-node/languageContextService';
+import { NesRenameContribution } from '../../typescriptContext/vscode-node/nesRenameService';
 import * as workspaceChunkSearchContribution from '../../workspaceChunkSearch/node/workspaceChunkSearch.contribution';
 import * as workspaceIndexingContribution from '../../workspaceChunkSearch/vscode-node/workspaceChunkSearch.contribution';
 import { WorkspaceRecorderFeature } from '../../workspaceRecorder/vscode-node/workspaceRecorderFeature';
@@ -75,19 +75,22 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(DebugCommandsContribution),
 	asContributionFactory(LanguageModelAccess),
 	asContributionFactory(WalkthroughCommandContribution),
-	asContributionFactory(InlineEditProviderFeature),
+	asContributionFactory(JointCompletionsProviderContribution),
+	// replaced by JointCompletionsProviderContribution
+	// asContributionFactory(InlineEditProviderFeatureContribution),
+	// asContributionFactory(CompletionsCoreContribution),
 	asContributionFactory(SettingsSchemaFeature),
 	asContributionFactory(WorkspaceRecorderFeature),
 	asContributionFactory(SurveyCommandContribution),
 	asContributionFactory(FeedbackCommandContribution),
 	asContributionFactory(InlineCompletionContribution),
+	asContributionFactory(NesRenameContribution),
 	asContributionFactory(SearchPanelCommands),
 	asContributionFactory(ChatQuotaContribution),
 	asContributionFactory(NotebookFollowCommands),
 	asContributionFactory(PromptFileContextContribution),
 	asContributionFactory(DiagnosticsContextContribution),
 	asContributionFactory(ChatReplayContribution),
-	asContributionFactory(CompletionsCoreContribution),
 	asContributionFactory(CompletionsUnificationContribution),
 	workspaceIndexingContribution,
 	asContributionFactory(ChatSessionsContrib),
