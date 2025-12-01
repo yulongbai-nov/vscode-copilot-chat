@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 import * as vscode from 'vscode';
 import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { ILogService } from '../../../../platform/log/common/logService';
@@ -86,7 +86,7 @@ describe('LiveRequestEditorProvider', () => {
 		);
 
 		// When no pending request remains we fall back to the current session
-		(service.resolvePendingIntercept as vi.Mock).mockClear();
+		(service.resolvePendingIntercept as Mock).mockClear();
 		emitInterception({ enabled: true });
 		(provider as any)._currentRequest = createRequest('fallback-session');
 
@@ -153,7 +153,10 @@ describe('LiveRequestEditorProvider', () => {
 			messages: [],
 			sections: [],
 			originalMessages: [],
-			metadata: {},
+			metadata: {
+				requestId: `${sessionId}-req`,
+				createdAt: Date.now(),
+			},
 			isDirty: false,
 		};
 	}
