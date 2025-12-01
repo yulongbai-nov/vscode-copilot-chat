@@ -4,7 +4,7 @@
 
 - ✅ Backend plumbing landed: the feature flag is in `package.json`, the `ILiveRequestEditorService` + builder produce editable sections, and `defaultIntentRequestHandler` now feeds edited messages to the fetcher.
 - ✅ Send/reset helpers exist server-side (`getMessagesForSend`, `resetRequest`, `isDirty`), ensuring the prompt pipeline can already consume edited sections once a UI drives the mutations.
-- 🚧 Next sprint focus flows directly from the open items: (1) build the Prompt Inspector drawer UI (Tasks 4.1–4.10), (2) enforce send blocking/reset UX (Task 5.4 plus associated messaging), (3) add telemetry + accessibility polish + tests (Tasks 6.x/7.x).
+- 🚧 Remaining focus flows directly from the open items: (1) finish the optional HTML tracer integration (Task 2.4), (2) harden performance/accessibility/reliability (Tasks 6.x), and (3) expand automated + manual coverage (Tasks 7.x).
 
 ---
 
@@ -38,11 +38,11 @@
   - [x] 4.10 Add a conversation selector (drop-down) inside the webview that lists other open conversations in the current window and allows switching the inspector’s target session. _Requirements: 7.3, 7.4, 7.5_  
   - [x] 4.11 Surface tool invocation metadata (tool name + JSON arguments) inside tool sections so auditors can inspect the exact call inputs. _Requirements: 2.7_  
 
-- [ ] 5. Apply, reset, and send integration  
-  - [ ] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _(Backend plumbing via `isDirty` is ready; UI indicator still required.)_ _Requirements: 4.1, 4.4_  
+- [x] 5. Apply, reset, and send integration  
+  - [x] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _Requirements: 4.1, 4.4_  
   - [x] 5.2 Wire the Send action to use edited messages when the request is dirty, and original messages otherwise. _Requirements: 4.2, 4.3_  
-  - [ ] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _(Service-level `resetRequest` exists; hook up UI action.)_ _Requirements: 4.4_  
-  - [ ] 5.4 Guard against invalid/empty requests (e.g., all sections deleted) by blocking send with explanatory error UI and offering reset. _Requirements: 4.5_  
+  - [x] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _Requirements: 4.4_  
+  - [x] 5.4 Guard against invalid/empty requests (e.g., all sections deleted) by blocking send with explanatory error UI and offering reset. _Requirements: 4.5_  
 
 - [ ] 6. Performance, reliability, and security hardening  
   - [ ] 6.1 Add lazy rendering or truncation for very large sections with “Show more” links to protect UI responsiveness. _Requirements: 6.3_  
@@ -89,5 +89,5 @@
 
 ## Current Status Summary
 
-- Feature flag, editable request model, and prompt-pipeline wiring now exist behind the advanced flag; edits propagate through `ChatMLFetcher` even without a UI.  
-- Remaining tracked work is focused on the Prompt Inspector drawer UX, error/dirty/reset surfacing, telemetry/accessibility, and the associated automated/manual tests (Tasks 4.x–7.x).  
+- Feature flag, editable request model, prompt inspector UI, and interception mode are fully wired behind the advanced flag; edits propagate through `ChatMLFetcher`, and interception skips subagent automation.  
+- Remaining tracked work is focused on HTML tracer enrichment (Task 2.4), performance/reliability/accessibility hardening (Tasks 6.x), and the automated + manual validation backlog (Tasks 7.x).  
