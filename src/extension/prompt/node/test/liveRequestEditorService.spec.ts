@@ -292,6 +292,55 @@ describe('LiveRequestEditorService interception', () => {
 		expect(decision).toEqual({ action: 'cancel', reason: 'contextChanged:newRequest' });
 	});
 
+	const contextChangeScenarios = [
+		{ label: 'model change', reason: 'contextChanged:model' },
+		{ label: 'tool configuration change', reason: 'contextChanged:toolConfig' },
+		{ label: 'new chat session creation', reason: 'contextChanged:newSession' },
+	];
+
+	for (const scenario of contextChangeScenarios) {
+		test(`handleContextChange cancels pending intercept on ${scenario.label}`, async () => {
+			const { service, telemetry } = await createService();
+			const key = { sessionId: 'session', location: ChatLocation.Panel };
+			service.prepareRequest(createServiceInit());
+			const decisionPromise = service.waitForInterceptionApproval(key, CancellationToken.None);
+
+			service.handleContextChange({ key, reason: scenario.reason });
+
+			const decision = await decisionPromise;
+			expect(decision).toEqual({ action: 'cancel', reason: scenario.reason });
+
+			const events = telemetry.getEvents().telemetryServiceEvents;
+			const sawReason = events.some(evt => {
+				const properties = evt.properties as Record<string, unknown> | undefined;
+				return evt.eventName === 'liveRequestEditor.promptInterception.outcome' && properties?.['reason'] === scenario.reason;
+			});
+			expect(sawReason).toBe(true);
+		});
+	}
+
+	test('handleContextChange cancels all pending intercepts when switching sessions', async () => {
+		const { service } = await createService();
+		const keyA = { sessionId: 'session-a', location: ChatLocation.Panel };
+		const keyB = { sessionId: 'session-b', location: ChatLocation.Editor };
+		service.prepareRequest(createServiceInit({ sessionId: 'session-a', requestId: 'req-a' }));
+		service.prepareRequest(createServiceInit({ sessionId: 'session-b', location: ChatLocation.Editor, requestId: 'req-b' }));
+
+		const decisionAPromise = service.waitForInterceptionApproval(keyA, CancellationToken.None);
+		const decisionBPromise = service.waitForInterceptionApproval(keyB, CancellationToken.None);
+
+		service.handleContextChange({
+			key: keyB,
+			reason: 'contextChanged:sessionSwitch'
+		});
+
+		const decisionA = await decisionAPromise;
+		const decisionB = await decisionBPromise;
+		expect(decisionA).toEqual({ action: 'cancel', reason: 'contextChanged:sessionSwitch' });
+		expect(decisionB).toEqual({ action: 'cancel', reason: 'contextChanged:sessionSwitch' });
+		expect(service.getInterceptionState().pending).toBeUndefined();
+	});
+
 });
 
 function createServiceInit(overrides: Partial<EditableChatRequestInit> = {}): EditableChatRequestInit {

@@ -36,7 +36,24 @@ Use the plumbing we already own to guarantee that only one interception can exis
 - Starting another turn in the same conversation while paused → cancel the old interception, let the latest turn own the editor.  
 - Switching to a different chat session/location while paused → auto-cancel the stale request.  
 - Changing the selected model mid-intercept → cancel with `reason: 'contextChanged:model'`.  
+- Updating prompt/tool configuration (e.g., turning tools on/off or changing tool schemas) → cancel with `reason: 'contextChanged:toolConfig'` so the inspector rebuilds the sections with the new tool metadata.  
+- Creating a brand-new chat session (e.g., launching the inline chat while the panel is paused) → cancel existing intercepts with `reason: 'contextChanged:newSession'` so the new session can start cleanly.  
 - Subagent/automation turns (which skip interception) should not trigger cancellations.  
-- Session disposal is already handled; keep emitting the current `sessionDisposed` reason.
+- Session disposal is already handled; keep emitting the current `sessionDisposed` reason.  
+- Toggling the interception feature or disabling the Live Request Editor entirely should cancel any pending pause (`reason: 'modeDisabled'` or `reason: 'editorDisabled'`) to keep the chat host unblocked.
+
+### Expected Behavior Matrix
+
+| Trigger | Suggested `reason` | Expected behavior |
+| --- | --- | --- |
+| User sends another message in the same conversation | `contextChanged:newRequest` | Cancel pending intercept, reuse editor for the new turn |
+| User switches to a different chat session/location | `contextChanged:sessionSwitch` | Cancel all pending intercepts so the new surface can send immediately |
+| User creates a brand-new chat session (inline chat, new panel) | `contextChanged:newSession` | Cancel pending intercepts before the new session performs its first send |
+| Model picker selection changes mid-intercept | `contextChanged:model` | Cancel pending intercept and rebuild prompt metadata for the newly selected model |
+| Tool configuration changes (enabling/disabling tools) | `contextChanged:toolConfig` | Cancel pending intercept and trigger a fresh prompt render with the updated tool set |
+| Prompt Interception mode toggled off | `modeDisabled` | Cancel pending intercept and remove the status bar warning |
+| Live Request Editor feature flag disabled | `editorDisabled` | Cancel pending intercepts and clear cached requests |
+| Chat session disposed | `sessionDisposed` | Remove cached request + history entries and cancel the pause |
+| Subagent (`isSubagent`) request starts | _no cancellation_ | Interception is skipped, so the main pause remains untouched |
 
 With this hook in place, interception remains the single source of truth, but stale pauses can no longer block future turns even when the user jumps between conversations.
