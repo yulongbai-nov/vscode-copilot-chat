@@ -486,6 +486,23 @@ suite('defaultIntentRequestHandler', () => {
 		}
 	});
 
+	test('live request editor request options include sampling defaults', async () => {
+		const interceptService = new TestLiveRequestEditorService();
+		interceptService.enabled = true;
+		interceptService.interceptionEnabled = false;
+		resetState(() => interceptService);
+
+		const handler = makeHandler();
+		await handler.getResult();
+
+		expect(interceptService.prepareRequestCalls).to.have.length(1);
+		const requestOptions = interceptService.prepareRequestCalls[0].requestOptions;
+		expect(requestOptions).to.be.ok;
+		expect(requestOptions?.n).to.equal(1);
+		expect(requestOptions?.top_p).to.equal(1);
+		expect(requestOptions?.temperature).to.equal(0.2);
+	});
+
 	test('surfaces validation errors when prompt edits remove all sections', async () => {
 		const editorService = new TestLiveRequestEditorService();
 		editorService.enabled = true;
