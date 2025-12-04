@@ -13,6 +13,7 @@ import { IXtabHistoryEditEntry, IXtabHistoryEntry } from '../../../platform/inli
 import { ContextKind, TraitContext } from '../../../platform/languageServer/common/languageContextService';
 import { Result } from '../../../util/common/result';
 import { pushMany, range } from '../../../util/vs/base/common/arrays';
+import { assertNever } from '../../../util/vs/base/common/assert';
 import { illegalArgument } from '../../../util/vs/base/common/errors';
 import { Schemas } from '../../../util/vs/base/common/network';
 import { StringEdit, StringReplacement } from '../../../util/vs/editor/common/core/edits/stringEdit';
@@ -71,7 +72,9 @@ ${areaAroundCodeToEdit}`;
 
 	const includeBackticks = opts.promptingStrategy !== PromptingStrategy.Nes41Miniv3 && opts.promptingStrategy !== PromptingStrategy.Codexv21NesUnified;
 
-	const prompt = relatedInformation + (includeBackticks ? wrapInBackticks(mainPrompt) : mainPrompt) + postScript;
+	const packagedPrompt = includeBackticks ? wrapInBackticks(mainPrompt) : mainPrompt;
+	const packagedPromptWithRelatedInfo = addRelatedInformation(relatedInformation, packagedPrompt, opts.languageContext.traitPosition);
+	const prompt = packagedPromptWithRelatedInfo + postScript;
 
 	const trimmedPrompt = prompt.trim();
 
@@ -80,6 +83,28 @@ ${areaAroundCodeToEdit}`;
 
 function wrapInBackticks(content: string) {
 	return `\`\`\`\n${content}\n\`\`\``;
+}
+
+function addRelatedInformation(relatedInformation: string, prompt: string, position: 'before' | 'after'): string {
+	if (position === 'before') {
+		return appendWithNewLineIfNeeded(relatedInformation, prompt, 2);
+	}
+	return appendWithNewLineIfNeeded(prompt, relatedInformation, 2);
+}
+
+function appendWithNewLineIfNeeded(base: string, toAppend: string, minNewLines: number): string {
+	// Count existing newlines at the end of base and start of toAppend
+	let existingNewLines = 0;
+	for (let i = base.length - 1; i >= 0 && base[i] === '\n'; i--) {
+		existingNewLines++;
+	}
+	for (let i = 0; i < toAppend.length && toAppend[i] === '\n'; i++) {
+		existingNewLines++;
+	}
+
+	// Add newlines to reach the minimum required
+	const newLinesToAdd = Math.max(0, minNewLines - existingNewLines);
+	return (base + '\n'.repeat(newLinesToAdd) + toAppend).trim();
 }
 
 function getPostScript(strategy: PromptingStrategy | undefined, currentFilePath: string) {
@@ -97,7 +122,8 @@ function getPostScript(strategy: PromptingStrategy | undefined, currentFilePath:
 			postScript = `The developer was working on a section of code within the tags \`code_to_edit\` in the file located at \`${currentFilePath}\`. Using the given \`recently_viewed_code_snippets\`, \`current_file_content\`, \`edit_diff_history\`, \`area_around_code_to_edit\`, and the cursor position marked as \`${PromptTags.CURSOR}\`, please continue the developer's work. Update the \`code_to_edit\` section by predicting and completing the changes they would have made next. Provide the revised code that was between the \`${PromptTags.EDIT_WINDOW.start}\` and \`${PromptTags.EDIT_WINDOW.end}\` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy.`;
 			break;
 		case PromptingStrategy.SimplifiedSystemPrompt:
-		default:
+		case PromptingStrategy.CopilotNesXtab:
+		case undefined:
 			postScript = `The developer was working on a section of code within the tags \`code_to_edit\` in the file located at \`${currentFilePath}\`. \
 Using the given \`recently_viewed_code_snippets\`, \`current_file_content\`, \`edit_diff_history\`, \`area_around_code_to_edit\`, and the cursor \
 position marked as \`${PromptTags.CURSOR}\`, please continue the developer's work. Update the \`code_to_edit\` section by predicting and completing the changes \
@@ -106,6 +132,8 @@ they would have made next. Provide the revised code that was between the \`${Pro
 // Your revised code goes here
 \`\`\``;
 			break;
+		default:
+			assertNever(strategy);
 	}
 
 	const formattedPostScript = postScript === undefined ? '' : `\n\n${postScript}`;
@@ -130,7 +158,7 @@ function getRelatedInformation(langCtx: LanguageContextResponse | undefined): st
 		relatedInformation.push(`${trait.name}: ${trait.value}`);
 	}
 
-	return `Consider this related information:\n${relatedInformation.join('\n')}\n\n`;
+	return `Consider this related information:\n${relatedInformation.join('\n')}`;
 }
 
 function getEditDiffHistory(
