@@ -41,7 +41,7 @@ import { ChatTelemetryBuilder } from '../chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
-import { ILiveRequestEditorService, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestMetadataSnapshot, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
 import { EditableChatRequest, EditableChatRequestInit, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
@@ -163,6 +163,7 @@ suite('defaultIntentRequestHandler', () => {
 		onDidRemoveRequest = Event.None;
 		onDidUpdateSubagentHistory = Event.None;
 		onDidChangeInterception = Event.None;
+		onDidChangeMetadata = Event.None;
 
 		public enabled = true;
 		public interceptionEnabled = true;
@@ -256,6 +257,9 @@ suite('defaultIntentRequestHandler', () => {
 		}
 		clearSubagentHistory(): void {
 			// no-op
+		}
+		getMetadataSnapshot(): LiveRequestMetadataSnapshot | undefined {
+			return undefined;
 		}
 	}
 

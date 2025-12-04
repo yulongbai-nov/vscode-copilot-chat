@@ -2138,6 +2138,13 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.liveRequestMetadata.copy",
+				"title": "Live Request Metadata: Copy Field",
+				"icon": "$(copy)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.subagentPromptMonitor.copySection",
 				"title": "Copy Subagent Section",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
@@ -2681,6 +2688,33 @@
 							]
 						},
 						"markdownDescription": "Append additional read-only panels to the Live Request Editor for advanced inspection. The default view remains unchanged; any sections listed here will be rendered after the metadata header."
+					},
+					"github.copilot.chat.promptInspector.sessionMetadata.fields": {
+						"type": "array",
+						"default": [
+							"sessionId",
+							"requestId"
+						],
+						"items": {
+							"type": "string",
+							"enum": [
+								"sessionId",
+								"requestId",
+								"model",
+								"location",
+								"interception",
+								"dirty"
+							],
+							"markdownEnumDescriptions": [
+								"Display the internal session identifier associated with the pending request.",
+								"Display the request identifier for the ChatML payload about to be sent.",
+								"Display the model identifier associated with the pending request.",
+								"Display the chat location (panel, editor, terminal, etc.).",
+								"Display whether Prompt Interception Mode is currently pausing the request.",
+								"Display whether the current request has unsaved edits (dirty state)."
+							]
+						},
+						"markdownDescription": "Configure which metadata fields render inside the Live Request Usage footer (webview) when the Live Request Editor is enabled. Leave empty to hide the metadata chips."
 					}
 				}
 			},
@@ -4934,6 +4968,13 @@
 					"name": "Prompt Section Visualizer",
 					"type": "webview",
 					"when": "github.copilot-chat.activated && config.github.copilot.chat.promptSectionVisualizer.enabled"
+				},
+				{
+					"id": "github.copilot.liveRequestUsage",
+					"name": "Live Request Usage",
+					"type": "webview",
+					"icon": "assets/live-request-editor.svg",
+					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				},
 				{
 					"id": "github.copilot.liveRequestEditor",

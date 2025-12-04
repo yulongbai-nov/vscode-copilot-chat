@@ -858,6 +858,9 @@ export namespace ConfigKey {
 	export const PromptSectionVisualizerPersistCollapseState = defineSetting<boolean>('chat.promptSectionVisualizer.persistCollapseState', ConfigType.Simple, true);
 	export const PromptSectionVisualizerAutoCollapseLargeSections = defineSetting<boolean>('chat.promptSectionVisualizer.autoCollapseLargeSections', ConfigType.Simple, false);
 	export const PromptSectionVisualizerLargeSectionTokenThreshold = defineSetting<number>('chat.promptSectionVisualizer.largeSectionTokenThreshold', ConfigType.Simple, 500);
+	/** Prompt Inspector settings */
+	export const PromptInspectorExtraSections = defineSetting<string[]>('chat.promptInspector.extraSections', ConfigType.Simple, []);
+	export const PromptInspectorSessionMetadataFields = defineSetting<string[]>('chat.promptInspector.sessionMetadata.fields', ConfigType.Simple, ['sessionId', 'requestId']);
 
 	export const NewWorkspaceCreationAgentEnabled = defineSetting<boolean>('chat.newWorkspaceCreation.enabled', ConfigType.Simple, true);
 	export const NewWorkspaceUseContext7 = defineSetting<boolean>('chat.newWorkspace.useContext7', ConfigType.Simple, false);

@@ -14,6 +14,7 @@ import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyi
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { Emitter } from '../../../../util/vs/base/common/event';
 import { EditableChatRequestInit, LiveRequestSessionKey } from '../../common/liveRequestEditorModel';
+import { LiveRequestMetadataEvent } from '../../common/liveRequestEditorService';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { nullRenderPromptResult } from '../intents';
 
@@ -145,6 +146,19 @@ describe('LiveRequestEditorService interception', () => {
 		expect(updated.metadata.lastLoggedMatches).toBe(false);
 		const events = telemetry.getEvents().telemetryServiceEvents;
 		expect(events.some(evt => evt.eventName === 'liveRequestEditor.requestParityMismatch')).toBe(true);
+	});
+
+	test('emits metadata events on prepare and disposal', async () => {
+		const { service, chatSessions } = await createService();
+		const events: LiveRequestMetadataEvent[] = [];
+		service.onDidChangeMetadata(event => events.push(event));
+		const init = createServiceInit();
+		service.prepareRequest(init);
+		expect(events.length).toBeGreaterThan(0);
+		expect(events[events.length - 1]?.metadata?.sessionId).toBe(init.sessionId);
+
+		chatSessions.fireDidDispose(init.sessionId);
+		expect(events[events.length - 1]?.metadata).toBeUndefined();
 	});
 
 	test('tool sections expose invocation metadata', async () => {

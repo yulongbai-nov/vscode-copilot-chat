@@ -9,7 +9,7 @@ import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { Emitter } from '../../../../util/vs/base/common/event';
 import { EditableChatRequest } from '../../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, PromptInterceptionState } from '../../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestMetadataEvent, PromptInterceptionState } from '../../common/liveRequestEditorService';
 import { LiveRequestEditorProvider } from '../liveRequestEditorProvider';
 
 const mockExtraSectionsValue: string[] = [];
@@ -131,6 +131,7 @@ describe('LiveRequestEditorProvider', () => {
 		const onDidChange = new Emitter<EditableChatRequest>();
 		const onDidRemove = new Emitter<{ sessionId: string; location: ChatLocation }>();
 		const onDidInterception = new Emitter<PromptInterceptionState>();
+		const onDidMetadata = new Emitter<LiveRequestMetadataEvent>();
 
 		const service: ILiveRequestEditorService = {
 			_serviceBrand: undefined,
@@ -138,6 +139,7 @@ describe('LiveRequestEditorProvider', () => {
 			onDidRemoveRequest: onDidRemove.event,
 			onDidUpdateSubagentHistory: new Emitter<void>().event,
 			onDidChangeInterception: onDidInterception.event,
+			onDidChangeMetadata: onDidMetadata.event,
 			isEnabled: () => true,
 			isInterceptionEnabled: () => true,
 			prepareRequest: () => undefined,
@@ -155,6 +157,7 @@ describe('LiveRequestEditorProvider', () => {
 			recordLoggedRequest: () => undefined,
 			getSubagentRequests: () => [],
 			clearSubagentHistory: () => undefined,
+			getMetadataSnapshot: () => undefined,
 		};
 
 		let currentInterceptionState: PromptInterceptionState = { enabled: false };

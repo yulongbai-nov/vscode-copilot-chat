@@ -15,7 +15,7 @@ import { IChatSessionService } from '../../../platform/chat/common/chatSessionSe
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestValidationError } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
 import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
 
 const SUBAGENT_HISTORY_LIMIT = 10;
@@ -31,6 +31,8 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	public readonly onDidUpdateSubagentHistory: Event<void> = this._onDidUpdateSubagentHistory.event;
 	private readonly _onDidChangeInterception = this._register(new Emitter<PromptInterceptionState>());
 	public readonly onDidChangeInterception: Event<PromptInterceptionState> = this._onDidChangeInterception.event;
+	private readonly _onDidChangeMetadata = this._register(new Emitter<LiveRequestMetadataEvent>());
+	public readonly onDidChangeMetadata: Event<LiveRequestMetadataEvent> = this._onDidChangeMetadata.event;
 
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private readonly _subagentHistory: SubagentRequestEntry[] = [];
@@ -88,6 +90,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		const request = buildEditableChatRequest(init);
 		this._requests.set(this.toKey(init.sessionId, init.location), request);
 		this._onDidChange.fire(request);
+		this.emitMetadataForRequest(request);
 		if (request.isSubagent) {
 			this.recordSubagentRequest(request);
 		}
@@ -182,6 +185,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		const messages = request.messages.length ? request.messages : fallback;
 		if (validationChanged) {
 			this._onDidChange.fire(request);
+			this.emitMetadataForRequest(request);
 		}
 		return {
 			messages,
@@ -306,6 +310,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			});
 		}
 		this._onDidChange.fire(request);
+		this.emitMetadataForRequest(request);
 	}
 
 	getSubagentRequests(): readonly SubagentRequestEntry[] {
@@ -319,6 +324,14 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this._subagentHistory.length = 0;
 		this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.subagentMonitor.cleared', {});
 		this._onDidUpdateSubagentHistory.fire();
+	}
+
+	getMetadataSnapshot(key: LiveRequestSessionKey): LiveRequestMetadataSnapshot | undefined {
+		if (!this._enabled) {
+			return undefined;
+		}
+		const request = this.getRequest(key);
+		return request ? this.buildMetadataSnapshot(request) : undefined;
 	}
 
 	private withRequest(
@@ -345,6 +358,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		const validationError = this.validateRequestForSend(request);
 		this.updateValidationMetadata(request, validationError);
 		this._onDidChange.fire(request);
+		this.emitMetadataForRequest(request);
 		return request;
 	}
 
@@ -481,6 +495,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		this._requests.delete(compositeKey);
 		this._onDidRemoveRequest.fire({ sessionId: existing.sessionId, location: existing.location });
+		this.emitMetadataCleared({ sessionId: existing.sessionId, location: existing.location });
 		if (existing.isSubagent) {
 			this.removeSubagentEntriesForRequest(existing.id);
 		}
@@ -514,6 +529,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 	private emitInterceptionState(): void {
 		const enabled = this.isInterceptionEnabled();
+		const previousPendingKey = this._interceptionState?.pending?.key;
 		let pendingSummary: PendingPromptInterceptSummary | undefined;
 		if (enabled && this._pendingIntercepts.size) {
 			let latest: PendingIntercept | undefined;
@@ -536,6 +552,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		const nextState: PromptInterceptionState = pendingSummary ? { enabled, pending: pendingSummary } : { enabled };
 		this._interceptionState = nextState;
 		this._onDidChangeInterception.fire(this._interceptionState);
+
+		if (previousPendingKey && !this.keysEqual(previousPendingKey, pendingSummary?.key)) {
+			this.emitMetadataForKey(previousPendingKey);
+		}
+		if (pendingSummary) {
+			this.emitMetadataForKey(pendingSummary.key);
+		}
 	}
 
 	private recordSubagentRequest(request: EditableChatRequest): void {
@@ -586,6 +609,66 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			}
 		}
 		return before !== this._subagentHistory.length;
+	}
+
+	private emitMetadataForRequest(request: EditableChatRequest): void {
+		this._onDidChangeMetadata.fire({
+			key: { sessionId: request.sessionId, location: request.location },
+			metadata: this.buildMetadataSnapshot(request)
+		});
+	}
+
+	private emitMetadataCleared(key: LiveRequestSessionKey): void {
+		this._onDidChangeMetadata.fire({ key, metadata: undefined });
+	}
+
+	private emitMetadataForKey(key: LiveRequestSessionKey): void {
+		const request = this.getRequest(key);
+		if (request) {
+			this.emitMetadataForRequest(request);
+		} else {
+			this.emitMetadataCleared(key);
+		}
+	}
+
+	private buildMetadataSnapshot(request: EditableChatRequest): LiveRequestMetadataSnapshot {
+		const tokenCount = this.getTokenCountForRequest(request);
+		const maxPromptTokens = request.metadata.maxPromptTokens;
+		return {
+			sessionId: request.sessionId,
+			location: request.location,
+			requestId: request.metadata.requestId,
+			debugName: request.debugName,
+			model: request.model,
+			isDirty: request.isDirty,
+			createdAt: request.metadata.createdAt,
+			lastUpdated: Date.now(),
+			interceptionState: this._pendingIntercepts.has(this.toKey(request.sessionId, request.location)) ? 'pending' : 'idle',
+			tokenCount,
+			maxPromptTokens
+		};
+	}
+
+	private getTokenCountForRequest(request: EditableChatRequest): number | undefined {
+		if (typeof request.metadata.tokenCount === 'number' && !Number.isNaN(request.metadata.tokenCount)) {
+			return request.metadata.tokenCount;
+		}
+		const summed = this.sumSectionTokenCounts(request.sections);
+		return summed > 0 ? summed : undefined;
+	}
+
+	private sumSectionTokenCounts(sections: LiveRequestSection[]): number {
+		let total = 0;
+		for (const section of sections) {
+			if (typeof section.tokenCount === 'number' && section.tokenCount > 0) {
+				total += section.tokenCount;
+			}
+		}
+		return total;
+	}
+
+	private keysEqual(a: LiveRequestSessionKey | undefined, b: LiveRequestSessionKey | undefined): boolean {
+		return !!a && !!b && a.sessionId === b.sessionId && a.location === b.location;
 	}
 }
 

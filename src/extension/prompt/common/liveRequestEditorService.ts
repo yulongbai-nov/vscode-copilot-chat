@@ -31,6 +31,25 @@ export type PromptInterceptionDecision =
 	| { action: 'resume'; messages: Raw.ChatMessage[] }
 	| { action: 'cancel'; reason?: string };
 
+export interface LiveRequestMetadataSnapshot {
+	readonly sessionId: string;
+	readonly location: ChatLocation;
+	readonly requestId?: string;
+	readonly debugName?: string;
+	readonly model: string;
+	readonly isDirty: boolean;
+	readonly createdAt: number;
+	readonly lastUpdated: number;
+	readonly interceptionState: 'pending' | 'idle';
+	readonly tokenCount?: number;
+	readonly maxPromptTokens?: number;
+}
+
+export interface LiveRequestMetadataEvent {
+	readonly key: LiveRequestSessionKey;
+	readonly metadata?: LiveRequestMetadataSnapshot;
+}
+
 export interface ILiveRequestEditorService {
 	readonly _serviceBrand: undefined;
 
@@ -38,6 +57,7 @@ export interface ILiveRequestEditorService {
 	readonly onDidRemoveRequest: Event<LiveRequestSessionKey>;
 	readonly onDidUpdateSubagentHistory: Event<void>;
 	readonly onDidChangeInterception: Event<PromptInterceptionState>;
+	readonly onDidChangeMetadata: Event<LiveRequestMetadataEvent>;
 
 	isEnabled(): boolean;
 	isInterceptionEnabled(): boolean;
@@ -70,6 +90,8 @@ export interface ILiveRequestEditorService {
 
 	getSubagentRequests(): readonly SubagentRequestEntry[];
 	clearSubagentHistory(): void;
+
+	getMetadataSnapshot(key: LiveRequestSessionKey): LiveRequestMetadataSnapshot | undefined;
 }
 
 export interface PromptContextChangeEvent {
