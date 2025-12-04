@@ -2086,8 +2086,15 @@
 				"category": "Chat"
 			},
 			{
-				"command": "github.copilot.liveRequestMetadata.copy",
-				"title": "Live Request Metadata: Copy Field",
+				"command": "github.copilot.liveRequestMetadata.configureFields",
+				"title": "Live Request Metadata: Configure Fields",
+				"icon": "$(gear)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestMetadata.copyValue",
+				"title": "Live Request Metadata: Copy Value",
 				"icon": "$(copy)",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
@@ -2589,12 +2596,12 @@
 								"rawRequest"
 							],
 							"markdownEnumDescriptions": [
-								"Show the JSON request options that include model parameters and tool/MCP declarations.",
-								"Show telemetry metadata such as intent ID, endpoint URL, and parity diagnostics.",
-								"Show the raw request payload (messages + options) exactly as it will be logged."
+								"Show the JSON request options inside the Live Request Metadata view using an outline-style tree.",
+								"Show telemetry metadata such as intent ID, endpoint URL, and parity diagnostics inside the Live Request Editor.",
+								"Show the raw request payload (messages + options) inside the Live Request Metadata view using an outline-style tree."
 							]
 						},
-						"markdownDescription": "Append additional read-only panels to the Live Request Editor for advanced inspection. The default view remains unchanged; any sections listed here will be rendered after the metadata header."
+						"markdownDescription": "Append additional read-only panels to the Live Request tooling. Telemetry renders as an extra panel in the Live Request Editor, while Request Options and Raw Request payloads now appear inside the Live Request Metadata view."
 					},
 					"github.copilot.chat.promptInspector.sessionMetadata.fields": {
 						"type": "array",
@@ -2621,7 +2628,7 @@
 								"Display whether the current request has unsaved edits (dirty state)."
 							]
 						},
-						"markdownDescription": "Configure which metadata fields render inside the Live Request Usage footer (webview) when the Live Request Editor is enabled. Leave empty to hide the metadata chips."
+						"markdownDescription": "Configure which metadata fields render inside the Live Request Metadata view when the Live Request Editor is enabled. Leave empty to hide the metadata section."
 					}
 				}
 			},
@@ -4418,6 +4425,11 @@
 					"toggled": "github.copilot.liveRequestEditor.visible"
 				},
 				{
+					"command": "github.copilot.liveRequestMetadata.configureFields",
+					"when": "view == github.copilot.liveRequestMetadata && github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+					"group": "navigation@5"
+				},
+				{
 					"command": "github.copilot.cloud.sessions.refresh",
 					"when": "view == workbench.view.chat.sessions.copilot-cloud-agent",
 					"group": "navigation@1"
@@ -4861,9 +4873,8 @@
 			],
 			"workbench.panel.chat": [
 				{
-					"id": "github.copilot.liveRequestUsage",
-					"name": "Live Request Usage",
-					"type": "webview",
+					"id": "github.copilot.liveRequestMetadata",
+					"name": "Live Request Metadata",
 					"icon": "assets/live-request-editor.svg",
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				},

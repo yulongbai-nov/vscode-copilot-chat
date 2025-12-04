@@ -9,12 +9,12 @@
   1. **Metadata stream**
      - `ILiveRequestEditorService` now emits `onDidChangeMetadata` snapshots containing session/request IDs, model,
   dirty state, interception state, and token counts that any UI surface can subscribe to.
-  2. **Live usage footer**
-     - The standalone chat status widget was removed; instead, we drive all metadata visuals through the `github.copilot.liveRequestUsage` webview view so users can dock it beneath the chat input. The footer reuses the inspector’s CSS, stacks chips vertically, mirrors the animated token meter, and now includes an inline “Configure metadata” button.
-     - Users can toggle the chips without editing JSON: the Quick Pick writes to `github.copilot.chat.promptInspector.sessionMetadata.fields`, we immediately re-render the footer, and the copy buttons next to each chip write the underlying value to the clipboard while flashing inline confirmation.
+  2. **Live metadata view**
+     - The standalone chat status widget was removed; instead, we drive all metadata visuals through the `github.copilot.liveRequestMetadata` tree view so users can dock it beneath the chat input. The view mirrors the animated token meter, exposes chip-style metadata as collapsible nodes, and now includes outline renderings of the request options and raw payload.
+     - Users can toggle the chips without editing JSON: the Quick Pick writes to `github.copilot.chat.promptInspector.sessionMetadata.fields`, we immediately refresh the tree, and selecting a leaf copies the underlying value to the clipboard while flashing inline confirmation.
   3. **Inspector extras**
      - Opt-in panels (`requestOptions`, `telemetry`, `rawRequest`) reuse the same collapsible section chrome as core
-  prompt sections, so they inherit keyboard/ARIA behavior and persist collapse state per session.
+  prompt sections, so they inherit keyboard/ARIA behavior and persist collapse state per session. Request Options and Raw Request now live exclusively inside the Live Request Metadata view, where they render via outline-style trees for easier navigation.
   4. **Specs & docs**
      - `.kiro/specs/request-logger-prompt-editor/{design,requirements,tasks}.md` updated to cover the metadata footer and inspector extras.
      - `docs/prompt-inspector-handoff.md` refreshed with the latest verification status (current `npm run test:unit` clean) and pointers to the metadata features.
@@ -24,10 +24,10 @@
   - `npm run typecheck`
   - `npm run compile`
   - `npx vitest run src/extension/prompt/vscode-node/test/liveRequestEditorProvider.spec.ts src/extension/prompt/
-  vscode-node/test/liveRequestUsageProvider.spec.ts src/extension/prompt/node/test/liveRequestEditorService.spec.ts src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts`
+  vscode-node/test/liveRequestMetadataProvider.spec.ts src/extension/prompt/node/test/liveRequestEditorService.spec.ts src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts`
   - `npm run test:unit` (pass; historical flaky suites noted in handoff doc)
   - `npm run simulate -- --scenario-test debugCommandToConfig.stest.ts --grep "node test"`
-  - Manual sanity: with the feature flag on, send a Copilot Chat prompt and open “Live Request Usage.” Dock it under the chat input and confirm the chips/token meter update when you send, edit, switch conversations, or change models. Click “Configure metadata” to toggle fields (including hiding them entirely) and use the chip copy buttons to verify clipboard feedback.
+  - Manual sanity: with the feature flag on, send a Copilot Chat prompt and open “Live Request Metadata.” Dock it under the chat input and confirm the chips/token meter update when you send, edit, switch conversations, or change models. Click “Configure metadata” to toggle fields (including hiding them entirely) and expand the outline nodes to inspect/copy JSON directly from the view.
 
   ### Remaining Scope / Next Steps
   - Task 2.4: HTML tracer enrichment.
@@ -40,8 +40,8 @@
   token counts if the renderer hasn’t filled totals yet, and display “awaiting data” in the footer when nothing
   is available.
   - Feature flag: everything stays behind `github.copilot.chat.advanced.livePromptEditorEnabled`. Chips hide if
-  `sessionMetadata.fields` is empty, but the footer still shows the token meter placeholder for clarity.
+  `sessionMetadata.fields` is empty, but the metadata view still shows the token meter placeholder for clarity.
   - Known console noise: similarity-matching warnings in tool tests and SQLite experimental warnings (documented above).
-  - If the “Live Request Usage” view looks blank, make sure the feature flag is on and the view is not collapsed; the webview updates only while the containing view is visible.
+  - If the “Live Request Metadata” view looks blank, make sure the feature flag is on and the view is not collapsed; the tree only updates while the containing view is visible.
 
   Ping me if you need a quick demo snippet or want the footer indicator to appear by default (e.g., we could auto-open/pin it the first time the feature is enabled).

@@ -14,14 +14,14 @@ import { IExtensionContribution } from '../../common/contributions';
 import { ILiveRequestEditorService, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
-import { LiveRequestUsageProvider } from './liveRequestUsageProvider';
+import { LiveRequestMetadataProvider } from './liveRequestMetadataProvider';
 
 export class LiveRequestEditorContribution implements IExtensionContribution {
 	readonly id = 'liveRequestEditor';
 
 	private readonly _disposables = new DisposableStore();
 	private _provider?: LiveRequestEditorProvider;
-	private _usageProvider?: LiveRequestUsageProvider;
+	private _metadataProvider?: LiveRequestMetadataProvider;
 	private readonly _statusBarItem: vscode.StatusBarItem;
 
 	constructor(
@@ -34,7 +34,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 	) {
 		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, false);
 		this._registerProvider();
-		this._registerUsageProvider();
+		this._registerMetadataProvider();
 		this._registerCommands();
 		this._statusBarItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10002));
 		this._statusBarItem.name = 'Copilot Prompt Interception';
@@ -75,25 +75,18 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		}
 	}
 
-	private _registerUsageProvider(): void {
+	private _registerMetadataProvider(): void {
 		try {
-			this._usageProvider = this._instantiationService.createInstance(
-				LiveRequestUsageProvider,
-				this._extensionContext.extensionUri
-			);
-			const registration = vscode.window.registerWebviewViewProvider(
-				LiveRequestUsageProvider.viewType,
-				this._usageProvider,
-				{
-					webviewOptions: {
-						retainContextWhenHidden: true
-					}
-				}
+			this._metadataProvider = this._instantiationService.createInstance(LiveRequestMetadataProvider);
+			this._disposables.add(this._metadataProvider);
+			const registration = vscode.window.registerTreeDataProvider(
+				LiveRequestMetadataProvider.viewId,
+				this._metadataProvider
 			);
 			this._disposables.add(registration);
-			this._logService.trace('Live Request Usage provider registered');
+			this._logService.trace('Live Request Metadata provider registered');
 		} catch (error) {
-			this._logService.error('Failed to register Live Request Usage provider', error);
+			this._logService.error('Failed to register Live Request Metadata provider', error);
 		}
 	}
 
@@ -127,9 +120,28 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const configureMetadataCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestMetadata.configureFields',
+			async () => {
+				if (!this._metadataProvider) {
+					return;
+				}
+				await this._metadataProvider.configureFields();
+			}
+		);
+
+		const copyMetadataValue = vscode.commands.registerCommand(
+			'github.copilot.liveRequestMetadata.copyValue',
+			async (value?: string, label?: string) => {
+				await this._metadataProvider?.copyValue(value ?? '', label ?? 'Metadata');
+			}
+		);
+
 		this._disposables.add(showCommand);
 		this._disposables.add(toggleCommand);
 		this._disposables.add(toggleInterceptionCommand);
+		this._disposables.add(configureMetadataCommand);
+		this._disposables.add(copyMetadataValue);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {

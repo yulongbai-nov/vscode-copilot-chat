@@ -353,7 +353,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private _readExtraSectionsSetting(): InspectorExtraSection[] {
 		const config = vscode.workspace.getConfiguration('github.copilot.chat.promptInspector');
 		const value = config.get<string[]>('extraSections', []);
-		const allowed: InspectorExtraSection[] = ['requestOptions', 'telemetry', 'rawRequest'];
+		const allowed: InspectorExtraSection[] = ['telemetry'];
 		const allowedSet = new Set(allowed);
 		return value.filter((entry): entry is InspectorExtraSection => allowedSet.has(entry as InspectorExtraSection));
 	}

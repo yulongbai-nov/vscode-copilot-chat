@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { Emitter } from '../../../../util/vs/base/common/event';
 import { ILiveRequestEditorService, LiveRequestMetadataEvent } from '../../common/liveRequestEditorService';
-import { LiveRequestUsageProvider } from '../liveRequestUsageProvider';
+import { LiveRequestMetadataProvider } from '../liveRequestMetadataProvider';
 
 type ConfigStub = {
 	get: Mock;
@@ -29,8 +29,33 @@ vi.mock('vscode', async () => {
 	const shim = await import('../../../../util/common/test/shims/vscodeTypesShim');
 	const onDidChangeConfiguration = vi.fn().mockReturnValue({ dispose: vi.fn() });
 	const configurationTarget = { Global: 2, Workspace: 1, WorkspaceFolder: 3 };
+	class ThemeIcon {
+		id: string;
+		constructor(id: string) {
+			this.id = id;
+		}
+	}
+
+	class TreeItem {
+		label?: string;
+		collapsibleState?: number;
+		constructor(label?: string, collapsibleState?: number) {
+			this.label = label;
+			this.collapsibleState = collapsibleState;
+		}
+	}
+
+	const TreeItemCollapsibleState = {
+		None: 0,
+		Collapsed: 1,
+		Expanded: 2
+	};
+
 	return {
 		...shim,
+		ThemeIcon,
+		TreeItem,
+		TreeItemCollapsibleState,
 		ConfigurationTarget: configurationTarget,
 		workspace: {
 			getConfiguration: vi.fn().mockReturnValue(configurationStub),
@@ -49,8 +74,8 @@ vi.mock('vscode', async () => {
 	};
 });
 
-describe('LiveRequestUsageProvider', () => {
-	let provider: LiveRequestUsageProvider;
+describe('LiveRequestMetadataProvider', () => {
+	let provider: LiveRequestMetadataProvider;
 	let logService: ILogService;
 	let service: ILiveRequestEditorService;
 
@@ -67,20 +92,24 @@ describe('LiveRequestUsageProvider', () => {
 		const metadataEmitter = new Emitter<LiveRequestMetadataEvent>();
 		service = {
 			_serviceBrand: undefined,
-			onDidChangeMetadata: metadataEmitter.event
+			onDidChangeMetadata: metadataEmitter.event,
+			onDidChange: new Emitter().event,
+			onDidRemoveRequest: new Emitter().event
 		} as unknown as ILiveRequestEditorService;
 
 		(configurationStub.get as Mock).mockImplementation((section: string) => {
 			if (section === 'sessionMetadata.fields') {
 				return ['sessionId', 'requestId'];
 			}
+			if (section === 'extraSections') {
+				return ['requestOptions', 'rawRequest'];
+			}
 			return undefined;
 		});
 
 		(configurationStub.update as Mock).mockResolvedValue(undefined);
 
-		const extensionUri = vscode.Uri.parse('file:///test');
-		provider = new LiveRequestUsageProvider(extensionUri, logService, service);
+		provider = new LiveRequestMetadataProvider(logService, service);
 	});
 
 	test('configure fields updates configuration and local state', async () => {
@@ -89,7 +118,7 @@ describe('LiveRequestUsageProvider', () => {
 			{ field: 'model' }
 		]);
 
-		await (provider as any)._configureFields();
+		await provider.configureFields();
 
 		expect(configurationStub.update).toHaveBeenCalledWith(
 			'sessionMetadata.fields',
@@ -99,22 +128,15 @@ describe('LiveRequestUsageProvider', () => {
 		expect((provider as any)._fields).toEqual(['sessionId', 'model']);
 	});
 
-	test('copy field writes to clipboard and posts acknowledgement', async () => {
-		const postMessage = vi.fn();
-		(provider as any)._view = {
-			webview: {
-				postMessage
-			}
-		};
-
-		await (provider as any)._copyField({ value: 'abc123', label: 'Session', field: 'sessionId' });
-
+	test('copy value writes to clipboard and shows status message', async () => {
+		await provider.copyValue('abc123', 'Session');
 		expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith('abc123');
 		expect(vscode.window.setStatusBarMessage).toHaveBeenCalledWith('Session copied to clipboard', 1500);
-		expect(postMessage).toHaveBeenCalledWith({
-			type: 'copyAck',
-			field: 'sessionId',
-			label: 'Session'
-		});
+	});
+
+	test('getChildren returns placeholder when no metadata present', () => {
+		const children = provider.getChildren();
+		expect(children).toHaveLength(1);
+		expect(children[0].label).toContain('Live Request Editor idle');
 	});
 });

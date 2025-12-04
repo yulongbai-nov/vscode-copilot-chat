@@ -172,14 +172,6 @@ function formatTimestamp(value?: number): string {
 	}
 }
 
-function safeStringify(data: unknown): string {
-	try {
-		return JSON.stringify(data, null, 2);
-	} catch (error) {
-		return String(error);
-	}
-}
-
 function copyToClipboard(text: string): void {
 	if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
 		void navigator.clipboard.writeText(text);
@@ -671,56 +663,6 @@ const CollapsiblePanel: React.FC<CollapsiblePanelProps> = ({
 	);
 };
 
-interface JsonPanelProps {
-	panelId: string;
-	title: string;
-	description?: string;
-	data: unknown;
-	emptyLabel: string;
-	onCopy?: (json: string) => void;
-	isCollapsed: boolean;
-	onToggleCollapse: (panelId: string) => void;
-}
-
-const JsonPanel: React.FC<JsonPanelProps> = ({ panelId, title, description, data, emptyLabel, onCopy, isCollapsed, onToggleCollapse }) => {
-	const serialized = React.useMemo(() => {
-		if (data === undefined || data === null) {
-			return undefined;
-		}
-		if (typeof data === 'object' && !Array.isArray(data) && Object.keys(data as Record<string, unknown>).length === 0) {
-			return undefined;
-		}
-		return safeStringify(data);
-	}, [data]);
-
-	const handleCopy = React.useCallback(() => {
-		if (serialized && onCopy) {
-			onCopy(serialized);
-		}
-	}, [serialized, onCopy]);
-
-	return (
-		<CollapsiblePanel
-			id={panelId}
-			title={title}
-			description={description}
-			isCollapsed={isCollapsed}
-			onToggleCollapse={onToggleCollapse}
-			actions={serialized && onCopy ? (
-				<vscode-button appearance="secondary" onClick={handleCopy}>Copy JSON</vscode-button>
-			) : undefined}
-		>
-			{serialized ? (
-				<pre className="json-preview">
-					<code>{serialized}</code>
-				</pre>
-			) : (
-				<div className="inspector-panel-empty">{emptyLabel}</div>
-			)}
-		</CollapsiblePanel>
-	);
-};
-
 interface TelemetryPanelProps {
 	panelId: string;
 	metadata?: EditableChatRequestMetadata;
@@ -941,29 +883,8 @@ const App: React.FC = () => {
 
 	const pinnedSections = orderedSections.filter(section => pinnedIdSet.has(section.id));
 	const unpinnedSections = orderedSections.filter(section => !pinnedIdSet.has(section.id));
-	const requestOptionsData = request?.metadata?.requestOptions;
-	const rawRequestPayload = React.useMemo(() => {
-		if (!request) {
-			return undefined;
-		}
-		return {
-			model: request.model,
-			location: request.location,
-			messages: request.messages ?? [],
-			requestOptions: requestOptionsData,
-			metadata: {
-				requestId: request.metadata?.requestId,
-				intentId: request.metadata?.intentId,
-				endpointUrl: request.metadata?.endpointUrl
-			}
-		};
-	}, [request, requestOptionsData]);
-
 	const sendMessage = React.useCallback((type: string, data?: Record<string, unknown>) => {
 		vscode.postMessage({ type, ...(data ?? {}) });
-	}, []);
-	const copyJson = React.useCallback((json: string) => {
-		copyToClipboard(json);
 	}, []);
 
 	const handleTogglePinned = React.useCallback((sectionId: string) => {
@@ -1143,30 +1064,6 @@ const App: React.FC = () => {
 								panelId="extra:telemetry"
 								metadata={request.metadata}
 								isCollapsed={collapsedIdSet.has('extra:telemetry')}
-								onToggleCollapse={handleToggleCollapse}
-							/>
-						) : null}
-						{extraSections.includes('requestOptions') ? (
-							<JsonPanel
-								panelId="extra:requestOptions"
-								title="Request Options"
-								description="Model parameters and tool declarations that accompany this prompt."
-								data={requestOptionsData}
-								emptyLabel="No request options available for this request."
-								onCopy={copyJson}
-								isCollapsed={collapsedIdSet.has('extra:requestOptions')}
-								onToggleCollapse={handleToggleCollapse}
-							/>
-						) : null}
-						{extraSections.includes('rawRequest') ? (
-							<JsonPanel
-								panelId="extra:rawRequest"
-								title="Raw Request Payload"
-								description="Matches the payload recorded by the Copilot Request Logger."
-								data={rawRequestPayload}
-								emptyLabel="The raw request will appear once a prompt is ready."
-								onCopy={copyJson}
-								isCollapsed={collapsedIdSet.has('extra:rawRequest')}
 								onToggleCollapse={handleToggleCollapse}
 							/>
 						) : null}
