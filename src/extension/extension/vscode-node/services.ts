@@ -212,14 +212,11 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(ITodoListContextProvider, new SyncDescriptor(TodoListContextProvider));
 	builder.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(GithubAvailableEmbeddingTypesService));
 	builder.define(IRerankerService, new SyncDescriptor(RerankerService));
-<<<<<<< HEAD
+	builder.define(IProxyModelsService, new SyncDescriptor(ProxyModelsService));
+	builder.define(IInlineEditsModelService, new SyncDescriptor(InlineEditsModelService));
 
 	// Prompt Section Visualizer services
 	registerPromptSectionVisualizerServices(builder);
-=======
-	builder.define(IProxyModelsService, new SyncDescriptor(ProxyModelsService));
-	builder.define(IInlineEditsModelService, new SyncDescriptor(InlineEditsModelService));
->>>>>>> upstream/main
 }
 
 function setupMSFTExperimentationService(builder: IInstantiationServiceBuilder, extensionContext: ExtensionContext) {

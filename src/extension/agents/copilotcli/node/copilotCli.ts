@@ -237,14 +237,11 @@ export class CopilotCLIAgents implements ICopilotCLIAgents {
 			this.logService.trace('[CopilotCLISession] No working directory available, cannot fetch custom agents');
 			return [];
 		}
-<<<<<<< HEAD
 		const { getCustomAgents } = sdkPackage as CopilotSDKCustomAgentsExports;
 		if (typeof getCustomAgents !== 'function') {
 			this.logService.warn('[CopilotCLISession] Copilot CLI SDK does not expose getCustomAgents, skipping custom agent discovery');
 			return [];
 		}
-		return getCustomAgents(auth, workingDirectory.fsPath, undefined, getCopilotLogger(this.logService));
-=======
 		const agents = await getCustomAgents(auth, workingDirectory.fsPath, undefined, getCopilotLogger(this.logService));
 		return agents.map(agent => this.cloneAgent(agent));
 	}
@@ -254,7 +251,6 @@ export class CopilotCLIAgents implements ICopilotCLIAgents {
 			...agent,
 			tools: agent.tools ? [...agent.tools] : agent.tools
 		};
->>>>>>> upstream/main
 	}
 }
 

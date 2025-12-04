@@ -3,11 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-<<<<<<< HEAD
-import type { SweCustomAgent } from '@github/copilot/sdk';
-=======
 import { Attachment, SweCustomAgent } from '@github/copilot/sdk';
->>>>>>> upstream/main
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ChatExtendedRequestHandler, Uri } from 'vscode';
@@ -290,12 +286,9 @@ export class CopilotCLIChatSessionContentProvider extends Disposable implements 
 		@ICopilotCLIModels private readonly copilotCLIModels: ICopilotCLIModels,
 		@ICopilotCLIAgents private readonly copilotCLIAgents: ICopilotCLIAgents,
 		@ICopilotCLISessionService private readonly sessionService: ICopilotCLISessionService,
-<<<<<<< HEAD
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ICopilotCLISDK private readonly copilotCLISDK: ICopilotCLISDK,
 		@ILogService private readonly logService: ILogService,
-	) { }
-=======
 	) {
 		super();
 	}
@@ -303,7 +296,6 @@ export class CopilotCLIChatSessionContentProvider extends Disposable implements 
 	public notifySessionOptionsChange(resource: vscode.Uri, updates: ReadonlyArray<{ optionId: string; value: string }>): void {
 		this._onDidChangeChatSessionOptions.fire({ resource, updates });
 	}
->>>>>>> upstream/main
 
 	async provideChatSessionContent(resource: Uri, token: vscode.CancellationToken): Promise<vscode.ChatSession> {
 		if (!this.copilotCLISDK.isAvailable()) {
