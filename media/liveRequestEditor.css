@@ -349,6 +349,11 @@ body {
 	text-transform: uppercase;
 }
 
+.section-kind.extra {
+	background: var(--vscode-input-background);
+	color: var(--vscode-foreground);
+}
+
 .section-kind.system {
 	background: var(--vscode-debugIcon-breakpointForeground);
 }
@@ -439,6 +444,10 @@ body {
 	opacity: 0;
 	transition: opacity 0.15s ease;
 	align-items: center;
+}
+
+.section-toolbar.section-toolbar-static {
+	opacity: 1;
 }
 
 .section:hover .section-toolbar,

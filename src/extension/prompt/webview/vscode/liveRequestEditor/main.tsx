@@ -614,33 +614,75 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	);
 };
 
-interface InspectorPanelProps {
+interface CollapsiblePanelProps {
+	id: string;
 	title: string;
 	description?: string;
 	actions?: React.ReactNode;
+	isCollapsed: boolean;
+	onToggleCollapse: (id: string) => void;
 	children: React.ReactNode;
 }
 
-const InspectorPanel: React.FC<InspectorPanelProps> = ({ title, description, actions, children }) => (
-	<div className="inspector-panel">
-		<div className="inspector-panel-header">
-			<h4>{title}</h4>
-			{actions ? <div className="inspector-panel-actions">{actions}</div> : null}
+const CollapsiblePanel: React.FC<CollapsiblePanelProps> = ({
+	id,
+	title,
+	description,
+	actions,
+	isCollapsed,
+	onToggleCollapse,
+	children
+}) => {
+	const bodyId = React.useMemo(() => `extra-panel-${id}`, [id]);
+	const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			onToggleCollapse(id);
+		}
+	}, [id, onToggleCollapse]);
+
+	return (
+		<div className={['section', 'section-kind-extra', isCollapsed ? 'collapsed' : ''].filter(Boolean).join(' ')} data-section-id={id}>
+			<div
+				className="section-header"
+				role="button"
+				tabIndex={0}
+				aria-expanded={!isCollapsed}
+				aria-controls={bodyId}
+				onClick={() => onToggleCollapse(id)}
+				onKeyDown={handleKeyDown}
+			>
+				<div className="section-title">
+					<span className="icon" aria-hidden="true">{isCollapsed ? '\u25B6' : '\u25BC'}</span>
+					<span className="section-kind extra">extra</span>
+					<span className="section-label">{title}</span>
+				</div>
+				{actions ? (
+					<div className="section-toolbar section-toolbar-static" role="toolbar" aria-label={`${title} actions`}>
+						{actions}
+					</div>
+				) : null}
+			</div>
+			<div className="section-content" id={bodyId} aria-hidden={isCollapsed}>
+				{description ? <p className="inspector-panel-description">{description}</p> : null}
+				{children}
+			</div>
 		</div>
-		{description ? <p className="inspector-panel-description">{description}</p> : null}
-		{children}
-	</div>
-);
+	);
+};
 
 interface JsonPanelProps {
+	panelId: string;
 	title: string;
 	description?: string;
 	data: unknown;
 	emptyLabel: string;
 	onCopy?: (json: string) => void;
+	isCollapsed: boolean;
+	onToggleCollapse: (panelId: string) => void;
 }
 
-const JsonPanel: React.FC<JsonPanelProps> = ({ title, description, data, emptyLabel, onCopy }) => {
+const JsonPanel: React.FC<JsonPanelProps> = ({ panelId, title, description, data, emptyLabel, onCopy, isCollapsed, onToggleCollapse }) => {
 	const serialized = React.useMemo(() => {
 		if (data === undefined || data === null) {
 			return undefined;
@@ -658,9 +700,12 @@ const JsonPanel: React.FC<JsonPanelProps> = ({ title, description, data, emptyLa
 	}, [serialized, onCopy]);
 
 	return (
-		<InspectorPanel
+		<CollapsiblePanel
+			id={panelId}
 			title={title}
 			description={description}
+			isCollapsed={isCollapsed}
+			onToggleCollapse={onToggleCollapse}
 			actions={serialized && onCopy ? (
 				<vscode-button appearance="secondary" onClick={handleCopy}>Copy JSON</vscode-button>
 			) : undefined}
@@ -672,11 +717,18 @@ const JsonPanel: React.FC<JsonPanelProps> = ({ title, description, data, emptyLa
 			) : (
 				<div className="inspector-panel-empty">{emptyLabel}</div>
 			)}
-		</InspectorPanel>
+		</CollapsiblePanel>
 	);
 };
 
-const TelemetryPanel: React.FC<{ metadata?: EditableChatRequestMetadata }> = ({ metadata }) => {
+interface TelemetryPanelProps {
+	panelId: string;
+	metadata?: EditableChatRequestMetadata;
+	isCollapsed: boolean;
+	onToggleCollapse: (panelId: string) => void;
+}
+
+const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ panelId, metadata, isCollapsed, onToggleCollapse }) => {
 	const rows = React.useMemo(() => ([
 		{ label: 'Request ID', value: metadata?.requestId },
 		{ label: 'Intent', value: metadata?.intentId },
@@ -697,9 +749,12 @@ const TelemetryPanel: React.FC<{ metadata?: EditableChatRequestMetadata }> = ({ 
 	const hasData = rows.some(row => row.value && row.value !== '—');
 
 	return (
-		<InspectorPanel
+		<CollapsiblePanel
+			id={panelId}
 			title="Telemetry"
 			description="Metadata recorded for parity checks and endpoint diagnostics."
+			isCollapsed={isCollapsed}
+			onToggleCollapse={onToggleCollapse}
 		>
 			{hasData ? (
 				<dl className="telemetry-grid">
@@ -713,7 +768,7 @@ const TelemetryPanel: React.FC<{ metadata?: EditableChatRequestMetadata }> = ({ 
 			) : (
 				<div className="inspector-panel-empty">No telemetry metadata available.</div>
 			)}
-		</InspectorPanel>
+		</CollapsiblePanel>
 	);
 };
 
@@ -1084,24 +1139,35 @@ const App: React.FC = () => {
 				{request && extraSections.length > 0 ? (
 					<div className="inspector-extra-panels">
 						{extraSections.includes('telemetry') ? (
-							<TelemetryPanel metadata={request.metadata} />
+							<TelemetryPanel
+								panelId="extra:telemetry"
+								metadata={request.metadata}
+								isCollapsed={collapsedIdSet.has('extra:telemetry')}
+								onToggleCollapse={handleToggleCollapse}
+							/>
 						) : null}
 						{extraSections.includes('requestOptions') ? (
 							<JsonPanel
+								panelId="extra:requestOptions"
 								title="Request Options"
 								description="Model parameters and tool declarations that accompany this prompt."
 								data={requestOptionsData}
 								emptyLabel="No request options available for this request."
 								onCopy={copyJson}
+								isCollapsed={collapsedIdSet.has('extra:requestOptions')}
+								onToggleCollapse={handleToggleCollapse}
 							/>
 						) : null}
 						{extraSections.includes('rawRequest') ? (
 							<JsonPanel
+								panelId="extra:rawRequest"
 								title="Raw Request Payload"
 								description="Matches the payload recorded by the Copilot Request Logger."
 								data={rawRequestPayload}
 								emptyLabel="The raw request will appear once a prompt is ready."
 								onCopy={copyJson}
+								isCollapsed={collapsedIdSet.has('extra:rawRequest')}
+								onToggleCollapse={handleToggleCollapse}
 							/>
 						) : null}
 					</div>
