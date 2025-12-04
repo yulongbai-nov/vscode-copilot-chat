@@ -314,6 +314,7 @@ export class DefaultIntentRequestHandler {
 				documentContext: this.documentContext,
 				streamParticipants: this.makeResponseStreamParticipants(intentInvocation),
 				temperature: this.handlerOptions.temperature ?? this.options.temperature,
+				topP: this.options.topP,
 				location: this.location,
 				overrideRequestLocation: this.handlerOptions.overrideRequestLocation,
 				interactionContext: this.documentContext?.document.uri,
@@ -545,6 +546,7 @@ interface IDefaultToolLoopOptions extends IToolCallingLoopOptions {
 	documentContext: IDocumentContext | undefined;
 	location: ChatLocation;
 	temperature: number;
+	topP: number;
 	overrideRequestLocation?: ChatLocation;
 }
 
@@ -727,6 +729,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	protected override async fetch(opts: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {
 		const messageSourcePrefix = this.options.location === ChatLocation.Editor ? 'inline' : 'chat';
 		const debugName = this.computeDebugName();
+		this.applyDefaultRequestOptions(opts.requestOptions);
 		return this.options.invocation.endpoint.makeChatRequest2({
 			...opts,
 			debugName,
@@ -744,8 +747,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 					(tool, rule) => {
 						this._logService.warn(`Tool ${tool} failed validation: ${rule}`);
 					},
-				),
-				temperature: this.calculateTemperature(),
+				)
 			},
 			telemetryProperties: {
 				messageId: this.telemetry.telemetryMessageId,
@@ -757,6 +759,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	}
 
 	protected override prepareLiveRequest(buildPromptResult: IBuildPromptResult, context: IBuildPromptContext, requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+		this.applyDefaultRequestOptions(requestOptions);
 		if (!this._liveRequestEditorService.isEnabled()) {
 			return undefined;
 		}
@@ -854,6 +857,19 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			return 'tool/runSubagent';
 		}
 		return `${ChatLocation.toStringShorter(this.options.location)}/${this.options.intent?.id ?? 'unknown'}`;
+	}
+
+	private applyDefaultRequestOptions(requestOptions: OptionalChatRequestParams): OptionalChatRequestParams {
+		if (typeof requestOptions.temperature !== 'number') {
+			requestOptions.temperature = this.calculateTemperature();
+		}
+		if (typeof requestOptions.top_p !== 'number') {
+			requestOptions.top_p = this.options.topP ?? 1;
+		}
+		if (typeof requestOptions.n !== 'number') {
+			requestOptions.n = 1;
+		}
+		return requestOptions;
 	}
 
 	private calculateTemperature(): number {
