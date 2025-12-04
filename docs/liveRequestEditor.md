@@ -241,3 +241,41 @@ For the core Live Chat Request Editor feature:
   - Treat that as an advanced escape hatch, not the primary workflow.
 
 This keeps the implementation aligned with the chat UX, minimizes surprise around saving, and makes it clear that editing is about **modifying the next request**, not about editing a file on disk.  
+
+---
+
+## 6. Inspecting and configuring sampling options
+
+The Request Inspector already captures the **exact request options** (`temperature`, `top_p`, `n`, tool schema, etc.) that Copilot will send to the LLM. With the new metadata view wiring you can surface these values without digging through `request.json`.
+
+1. Enable the extra outline panes once at the **application scope**:
+
+   ```json
+   {
+     "github.copilot.chat.promptInspector.extraSections": [
+       "requestOptions",
+       "rawRequest"
+     ],
+     "github.copilot.chat.promptInspector.sessionMetadata.fields": [
+       "sessionId",
+       "requestId",
+       "model"
+     ]
+   }
+   ```
+
+   Both settings are application-scoped now, so the choice sticks for every workspace (trusted or not) without per-folder overrides.
+
+2. While a request is pending, open the **Live Request Metadata** tree (View → Chat → Live Request Metadata) and expand the `Request Options` outline. The tree reuses VS Code’s outline viewer, so you can collapse nested JSON and copy any value. You should see the normalized sampling parameters (`temperature`, `top_p`, `n`), max token limits, and tool configuration exactly as they will appear in `request.json`.
+
+3. If you also enable the `rawRequest` outline, you can browse the full payload that is logged to `ccreq:*.request.json` without leaving the chat panel. This is a quick way to spot-check parity against the Request Logger output.
+
+4. To tweak the defaults for agent flows, use the existing Copilot settings such as:
+
+   ```json
+   {
+     "github.copilot.chat.agent.temperature": 0.15
+   }
+   ```
+
+   Any overrides you apply through settings (or future Live Request Editor features) will immediately show up in the `Request Options` outline, making it easy to verify that advanced sampling parameters are being honored.

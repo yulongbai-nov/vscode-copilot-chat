@@ -48,6 +48,8 @@ export function createResponsesRequestBody(accessor: ServicesAccessor, options: 
 			? { type: 'function', name: options.postOptions.tool_choice.function.name }
 			: options.postOptions.tool_choice,
 		top_logprobs: options.postOptions.logprobs ? 3 : undefined,
+		top_p: options.postOptions.top_p,
+		temperature: options.postOptions.temperature,
 		store: false,
 		text: verbosity ? { verbosity } : undefined,
 	};

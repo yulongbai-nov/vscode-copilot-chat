@@ -37,6 +37,7 @@ import { ContributedToolName } from '../../tools/common/toolNames';
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { Conversation, getGlobalContextCacheKey, GlobalContextMessageMetadata, ICopilotChatResult, ICopilotChatResultIn, normalizeSummariesOnRounds, RenderedUserMessageMetadata, Turn, TurnStatus } from '../common/conversation';
 import { InternalToolReference } from '../common/intents';
+import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 import { ChatTelemetryBuilder } from './chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from './defaultIntentRequestHandler';
 import { IDocumentContext } from './documentContext';
@@ -84,6 +85,7 @@ export class ChatParticipantRequestHandler {
 		@ILogService private readonly _logService: ILogService,
 		@IAuthenticationService private readonly _authService: IAuthenticationService,
 		@IAuthenticationChatUpgradeService private readonly _authenticationUpgradeService: IAuthenticationChatUpgradeService,
+		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
 	) {
 		this.location = this.getLocation(request);
 
@@ -201,6 +203,11 @@ export class ChatParticipantRequestHandler {
 	}
 
 	async getResult(): Promise<ICopilotChatResult> {
+		this._liveRequestEditorService.handleContextChange({
+			key: { sessionId: this.conversation.sessionId, location: this.location },
+			reason: 'contextChanged:newRequest'
+		});
+
 		if (await this._shouldAskForPermissiveAuth()) {
 			// Return a random response
 			return {

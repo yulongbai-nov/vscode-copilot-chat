@@ -7,6 +7,10 @@ import { Raw, RenderPromptResult } from '@vscode/prompt-tsx';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 
+export type LiveRequestEditorMode = 'off' | 'interceptOnce' | 'interceptAlways' | 'autoOverride';
+
+export type LiveRequestOverrideScope = 'session' | 'workspace' | 'global';
+
 export type LiveRequestSectionKind =
 	| 'system'
 	| 'user'
@@ -25,6 +29,7 @@ export interface LiveRequestSection {
 	readonly label: string;
 	message?: Raw.ChatMessage;
 	content: string;
+	readonly originalContent: string;
 	editedContent?: string;
 	collapsed: boolean;
 	readonly editable: boolean;
@@ -35,6 +40,13 @@ export interface LiveRequestSection {
 	deleted?: boolean;
 	hoverTitle?: string;
 	metadata?: Record<string, unknown>;
+	overrideState?: LiveRequestSectionOverrideState;
+}
+
+export interface LiveRequestSectionOverrideState {
+	readonly scope: LiveRequestOverrideScope;
+	readonly slotIndex: number;
+	readonly updatedAt: number;
 }
 
 export interface EditableChatRequestMetadata {
@@ -65,6 +77,7 @@ export interface EditableChatRequest {
 	readonly location: ChatLocation;
 	readonly debugName: string;
 	readonly model: string;
+	readonly isSubagent?: boolean;
 	messages: Raw.ChatMessage[];
 	sections: LiveRequestSection[];
 	readonly originalMessages: Raw.ChatMessage[];
@@ -83,6 +96,7 @@ export interface EditableChatRequestInit {
 	endpointUrl?: string;
 	modelFamily?: string;
 	requestOptions?: OptionalChatRequestParams;
+	isSubagent?: boolean;
 	maxPromptTokens?: number;
 	tokenCounts?: {
 		total?: number;

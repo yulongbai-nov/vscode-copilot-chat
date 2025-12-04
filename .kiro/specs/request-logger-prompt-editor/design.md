@@ -156,6 +156,45 @@ For this feature, the **Request Logger UI** is a reference only:
 - **VS Code contribution scaffolding**: the `LiveRequestEditorProvider` is registered as an experimental `webviewView`, commands exist for “show/toggle/reset”, and the feature remains fully gated behind the advanced flag.
 - **Still pending**: the Prompt Inspector drawer UI that lives inside the chat panel (section list, hover toolbar, inline editors, conversation selector, reset affordance) along with UX that blocks send when all sections are removed, dirty indicators, telemetry, and accessibility polish. These map directly to Tasks 4.x–7.x in the plan.
 
+### Session-alignment diagnostics in the native chat panel
+
+Users still need a fast way to confirm that the intercepted prompt belongs to the conversation they are staring at, especially when multiple turns or subagents are firing in parallel. Instead of relying on VS Code’s experimental chat status API, we now surface the diagnostics via a tree view that lives beside the chat panel:
+
+- Configuration still lives under `github.copilot.chat.promptInspector.sessionMetadata.fields` (ordered string array, default `["sessionId", "requestId"]`). When the array is empty we hide the metadata section while keeping the token budget entry available for quick status checks.
+- The `github.copilot.liveRequestMetadata` **tree view** replaces the old webview footer. Users dock it underneath the chat input (Work Bench “Chat” container) so it stays visible while stepping through intercepted prompts.
+- Metadata rows render as tree leaves with truncated labels, tooltips, and built-in copy commands. Advanced fields (`model`, `location`, `interception`, `dirty`) reuse the same component so we get consistent behavior across UI surfaces.
+- A toolbar-level “Configure metadata” command (`github.copilot.liveRequestMetadata.configureFields`) opens a Quick Pick that writes directly to `sessionMetadata.fields`, letting users curate the view without editing JSON.
+- Token awareness: the view exposes a “Token Budget” node that mirrors the inspector’s progress bar (% plus counts) when both `tokenCount` and `maxPromptTokens` are available, and falls back to “awaiting data” otherwise.
+- Outline surfaces: when users enable the `requestOptions` / `rawRequest` entries under `github.copilot.chat.promptInspector.extraSections`, the metadata view adds collapsible tree nodes that render those payloads with an outline-style hierarchy (objects → properties, arrays → indexed entries). Each child inherits copy support and truncation so browsing large JSON blobs remains manageable.
+- The tree subscribes to `ILiveRequestEditorService.onDidChangeMetadata` and recomputes its nodes synchronously, which keeps the metadata view in lockstep with whichever conversation is currently pending in the editor.
+- Empty state: when there is no metadata (idle app, interception disabled), the root node switches to “Live Request Editor idle — send a chat request to populate metadata.” ensuring the view doesn’t look broken.
+- Feature gate: the metadata view is only registered/visible when `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, keeping the extra UI confined to advanced workflows.
+- Configuration scope: both `github.copilot.chat.promptInspector.sessionMetadata.fields` and `.extraSections` are marked as **application-scoped** so users can trust/toggle the metadata UI once and have the preference follow every workspace, even when a folder is marked untrusted.
+
+### Auto Intercept & Prefix Override Mode
+
+We add a new “Auto Override” mode on top of the existing prompt-interception flow so power users can edit prefix sections once and have the edits applied automatically:
+
+- **State machine**
+  - A single `LiveRequestEditorMode` enum (`off`, `interceptOnce`, `interceptAlways`, `autoOverride`) plus a `paused` flag lives inside `ILiveRequestEditorService`. All UI (status bar, header toggle, banner, commands) calls `liveRequestEditorService.setMode(mode, options)` so there is only one source of truth.
+  - The service emits `onDidChangeMode` events containing `{ mode, paused, scope }`, enabling the inspector banner, status bar, and webview to update simultaneously.
+- **Initial interception**
+  - When Auto Override is enabled, the next pending request immediately intercepts. The inspector renders only the first `previewLimit` prefix sections (default 3, configurable via both a numeric setting and a Quick Pick surfaced in the inspector).
+  - A scoped Quick Pick prompts: “Apply overrides to… Session / Workspace / Global (remember choice).” We persist the selection in `github.copilot.chat.liveRequestEditor.autoOverride.scopePreference`; users can reopen the picker from the banner.
+- **Persistence & application**
+  - Edited sections are serialized as `{ scope, sectionId, content, updatedAt }` and stored via VS Code storage APIs: session scope in memory, workspace in `ExtensionContext.workspaceState`, global in `ExtensionContext.globalState`. The service loads them on activation and reapplies them to new `EditableChatRequest`s before send.
+  - After the first save, interception stops automatically; subsequent sends recompute the prompt, overlay the stored overrides, and continue without pausing unless the user presses “Pause & intercept next turn.”
+- **Inspector banner + commands**
+  - The Live Request Editor header gains a tri-segment toggle (Off / Intercept / Auto Override). The sticky banner shows `Auto Override · Workspace scope` with buttons: `Pause`, `Edit Overrides` (re-enters interception), `Clear Overrides`, `Change scope`.
+  - The existing status-bar command mirrors the mode and offers a quick toggle list so users can switch modes without focusing the inspector.
+- **Diff affordances**
+  - Each section with overrides renders a chip (“Edited · Show diff”). Clicking it runs `vscode.diff` with temp URIs pointing to the original intercepted content vs. the persisted override. We annotate the diff title with the scope (e.g., `System (workspace override)`).
+- **Settings / commands**
+  - New settings: `github.copilot.chat.liveRequestEditor.autoOverride.previewLimit` (number), `…scopePreference` (string), `…enabled` (boolean). We also add commands `github.copilot.liveRequestEditor.setMode`, `…clearOverrides`, `…showOverrideHistory`.
+  - Override history is tracked per scope (timestamp + snippet) so the Quick Pick can show recent snapshots and allow rollbacks.
+- **Telemetry**
+  - The service logs mode transitions and override saves/clears via the existing telemetry channel, tagging events with `mode`, `scope`, and `previewLimit` but never the contents of edits.
+
 ### Interim Webview Prompt Inspector (Existing Implementation Surface)
 
 Until the drawer experience lands inside the chat conversation surface, we rely on a dedicated `webviewView` contribution (`github.copilot.liveRequestEditor`). The design intent for this interim UI is:
@@ -172,6 +211,7 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - Additional **Stick** action pins a section to the top (beneath the status banner) until unstuck; pinned sections keep their order relative to each other and display a “Pinned” indicator.
   - Pinned sections are draggable so users can reorder them relative to other pinned sections without affecting the unpinned list.
   - Deleted sections get a dashed border + reduced opacity and expose a single `Restore` button inline.
+  - Tool sections include a metadata strip that surfaces the tool name (or ID) and the JSON arguments passed to the invocation so advanced users can audit exactly what inputs were provided. Arguments reuse the markdown/code styling but are rendered in a monospace block for readability.
 - **Editing flow**
   - `Edit` toggles an inline `<textarea>` editor (monospace, chat theme colors). Save posts `editSection` with the new value; cancel just hides the editor and reverts to the previous text.
   - `Delete` soft-deletes the section (marks `section.deleted = true`). Subsequent sends omit the message until restored.
@@ -184,6 +224,11 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
 - **Conversation targeting**
   - The interim webview always listens to `ILiveRequestEditorService.onDidChange`. The last-updated session automatically re-renders in the view.
   - A conversation drop-down is optional in this phase; instead we surface the session id + chat location in metadata and rely on one-active-session behaviour. Future drawer work will introduce the picker.
+- **Advanced extras (opt-in)**
+  - Some users need insight into the full HTTP payload (tool schemas, requestOptions, telemetry) that would otherwise clutter the default UI. We expose a configuration key `github.copilot.chat.promptInspector.extraSections` that accepts an array of identifiers (`requestOptions`, `telemetry`, `rawRequest`).
+  - When non-empty, the inspector appends read-only panels after the metadata strip: formatted JSON for request options and raw request body (with copy buttons), plus a telemetry table showing intent ID, endpoint URL, timestamps, and parity diagnostics.
+  - Extra panels reuse the same collapsible `SectionCard` chrome (caret, hover toolbar, keyboard focus) so they behave like standard prompt sections and do not overwhelm the page.
+  - This setting never hides existing controls—it only augments the view so power users can replicate what `request.json` contains without leaving the inspector, while the default experience stays streamlined.
 - **Empty/error states**
   - When no editable request exists, show a centered “Waiting for chat request” message with instructions (“Send a prompt with the feature flag enabled…”).
   - When the service is disabled via settings, the view collapses to a short explanation plus a settings gear link.
@@ -359,6 +404,37 @@ Architecturally this added:
 - New webview messages (`resumeSend`, `cancelIntercept`) and interception state in the React front-end.
 - Status bar contribution tied to the interception setting and pending state.
 - When enabled, `ToolCallingLoop` asks the service to await interception approval; `ChatMLFetcher.fetchMany` is only invoked after **edited** `EditableChatRequest.messages` are approved so the Request Logger continues to record exactly what was sent.
+
+#### Context-change cleanup
+
+Interceptions must also unwind automatically when the underlying session becomes invalid (e.g., user opens a new chat, switches the model picker, or VS Code disposes the session). The service now:
+
+- Subscribes to `IChatSessionService.onDidDisposeChatSession` and removes any cached requests for that session, firing a new `onDidRemoveRequest` event consumed by the webview provider to drop stale session cards.
+- Resolves any matching `PendingIntercept` entries with `action: 'cancel'` plus a `sessionDisposed` reason so both the chat pipeline and status bar clear without manual intervention.
+- Surfaces a human-readable banner message (“Context changed – request discarded”) when this happens, matching the new telemetry reason so diagnostics can distinguish user-initiated cancelations from automatic cleanup.
+- Treats “model changed” as a session reset because the VS Code chat host spins up a fresh session when the picker value changes; if future host changes deliver an explicit “model changed” event we can map it to the same cleanup helper.
+- Requests flagged as `isSubagent` (Plan/TODO sub-agents, runSubagent tool invocations) bypass interception entirely so automation does not stall waiting for user approval. The default intent handler short-circuits `interceptMessages`, and the service's `waitForInterceptionApproval` immediately returns for these requests so future entry points cannot accidentally pause automation. These requests still render in the editor for observability but proceed immediately through the fetcher.
+
+### Subagent Prompt Monitor
+
+Automated subagent flows (Plan’s TODO tool, `runSubagent`, background task runners) now skip interception, but power users still need visibility into what those agents send. Rather than reusing the full Live Request Editor, we add a lightweight **Subagent Prompt Monitor**:
+
+- **Data source**
+  - `LiveRequestEditorService` already builds `EditableChatRequest` objects for every turn. When `request.isSubagent` is true, we publish a new `onDidAddSubagentRequest` event with a trimmed payload (session key, debug name, createdAt, sections, model metadata).
+  - Requests are still stored internally so token counts and parity checks work, but they are never fed through interception.
+
+- **View implementation**
+  - A dedicated `SubagentPromptMonitorProvider` (likely a `TreeDataProvider` backed by the same React bundle or a compact `webviewView`) lives in the right sidebar next to the Request Logger.
+  - Root nodes represent recent subagent runs (labelled `Session · intent · hh:mm:ss`), and expanding a node reveals child items for each prompt section (system/user/context/tool) rendered using the existing markdown renderer for consistency.
+  - Entries auto-expire after N runs (configurable, default 10) or when their session is disposed; the provider listens to the existing `onDidRemoveRequest` event to prune stale nodes.
+
+- **UX considerations**
+  - Read-only: no edit/delete controls; clicking copies content or opens a detail pane.
+  - Keyboard accessible tree with context menu actions (“Copy section”, “Reveal in request log”).
+  - Matches VS Code theming; uses the same hover toolbar icons for familiarity, but actions simply copy or expand.
+
+- **Telemetry**
+  - Emit `liveRequestEditor.subagentMonitor.viewed` when users expand entries, and `liveRequestEditor.subagentMonitor.trimmed` when older entries are dropped, so we can size the backlog appropriately.
 
 ### UI / UX Considerations
 

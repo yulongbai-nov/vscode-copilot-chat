@@ -314,6 +314,7 @@ export class DefaultIntentRequestHandler {
 				documentContext: this.documentContext,
 				streamParticipants: this.makeResponseStreamParticipants(intentInvocation),
 				temperature: this.handlerOptions.temperature ?? this.options.temperature,
+				topP: this.options.topP,
 				location: this.location,
 				overrideRequestLocation: this.handlerOptions.overrideRequestLocation,
 				interactionContext: this.documentContext?.document.uri,
@@ -438,6 +439,8 @@ export class DefaultIntentRequestHandler {
 				return l10n.t('Prompt Interception Mode was disabled. Pending request discarded.');
 			case 'superseded':
 				return l10n.t('Previous pending request was discarded before sending.');
+			case 'sessionDisposed':
+				return l10n.t('Chat context changed (new session or model). Pending request was discarded.');
 			default:
 				return l10n.t('Pending request was discarded before sending.');
 		}
@@ -543,6 +546,7 @@ interface IDefaultToolLoopOptions extends IToolCallingLoopOptions {
 	documentContext: IDocumentContext | undefined;
 	location: ChatLocation;
 	temperature: number;
+	topP: number;
 	overrideRequestLocation?: ChatLocation;
 }
 
@@ -725,6 +729,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	protected override async fetch(opts: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {
 		const messageSourcePrefix = this.options.location === ChatLocation.Editor ? 'inline' : 'chat';
 		const debugName = this.computeDebugName();
+		this.applyDefaultRequestOptions(opts.requestOptions);
 		return this.options.invocation.endpoint.makeChatRequest2({
 			...opts,
 			debugName,
@@ -742,8 +747,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 					(tool, rule) => {
 						this._logService.warn(`Tool ${tool} failed validation: ${rule}`);
 					},
-				),
-				temperature: this.calculateTemperature(),
+				)
 			},
 			telemetryProperties: {
 				messageId: this.telemetry.telemetryMessageId,
@@ -755,6 +759,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	}
 
 	protected override prepareLiveRequest(buildPromptResult: IBuildPromptResult, context: IBuildPromptContext, requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+		this.applyDefaultRequestOptions(requestOptions);
 		if (!this._liveRequestEditorService.isEnabled()) {
 			return undefined;
 		}
@@ -765,6 +770,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			location: sessionKey.location,
 			debugName: this.computeDebugName(),
 			model: this.options.invocation.endpoint.model,
+			isSubagent: !!this.options.request.isSubagent,
 			renderResult: buildPromptResult,
 			requestId,
 			intentId: this.options.intent?.id,
@@ -822,7 +828,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	}
 
 	protected override async interceptMessages(messages: Raw.ChatMessage[], token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> {
-		if (!this._liveRequestEditorService.isInterceptionEnabled()) {
+		if (!this._liveRequestEditorService.isInterceptionEnabled() || this.options.request.isSubagent) {
 			return messages;
 		}
 		const key: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
@@ -851,6 +857,19 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			return 'tool/runSubagent';
 		}
 		return `${ChatLocation.toStringShorter(this.options.location)}/${this.options.intent?.id ?? 'unknown'}`;
+	}
+
+	private applyDefaultRequestOptions(requestOptions: OptionalChatRequestParams): OptionalChatRequestParams {
+		if (typeof requestOptions.temperature !== 'number') {
+			requestOptions.temperature = this.calculateTemperature();
+		}
+		if (typeof requestOptions.top_p !== 'number') {
+			requestOptions.top_p = this.options.topP ?? 1;
+		}
+		if (typeof requestOptions.n !== 'number') {
+			requestOptions.n = 1;
+		}
+		return requestOptions;
 	}
 
 	private calculateTemperature(): number {

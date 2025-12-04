@@ -153,6 +153,9 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 			ignoreStatefulMarker: opts.ignoreStatefulMarker
 		});
 		const sessionKey = telemetryProperties?.conversationId ? { sessionId: telemetryProperties.conversationId, location: opts.location } : undefined;
+		if (sessionKey) {
+			this._liveRequestEditorService.updateRequestOptions(sessionKey, postOptions);
+		}
 		this._liveRequestEditorService.recordLoggedRequest(sessionKey, opts.messages);
 		let tokenCount = -1;
 		const streamRecorder = new FetchStreamRecorder(finishedCb);

@@ -851,13 +851,14 @@ export namespace ConfigKey {
 	export const InlineEditsEnableDiagnosticsProvider = defineSetting<boolean>('nextEditSuggestions.fixes', ConfigType.ExperimentBased, { defaultValue: true, teamDefaultValue: true });
 	export const InlineEditsAllowWhitespaceOnlyChanges = defineSetting<boolean>('nextEditSuggestions.allowWhitespaceOnlyChanges', ConfigType.ExperimentBased, true);
 
-	/** Prompt Section Visualizer settings */
-	export const PromptSectionVisualizerEnabled = defineSetting<boolean>('chat.promptSectionVisualizer.enabled', ConfigType.Simple, false);
-	export const PromptSectionVisualizerRenderMode = defineSetting<'inline' | 'standalone' | 'auto'>('chat.promptSectionVisualizer.renderMode', ConfigType.Simple, 'auto');
-	export const PromptSectionVisualizerUseNativeRendering = defineSetting<boolean>('chat.promptSectionVisualizer.useNativeRendering', ConfigType.Simple, false);
-	export const PromptSectionVisualizerPersistCollapseState = defineSetting<boolean>('chat.promptSectionVisualizer.persistCollapseState', ConfigType.Simple, true);
-	export const PromptSectionVisualizerAutoCollapseLargeSections = defineSetting<boolean>('chat.promptSectionVisualizer.autoCollapseLargeSections', ConfigType.Simple, false);
-	export const PromptSectionVisualizerLargeSectionTokenThreshold = defineSetting<number>('chat.promptSectionVisualizer.largeSectionTokenThreshold', ConfigType.Simple, 500);
+	/** Prompt Inspector settings */
+	export const PromptInspectorExtraSections = defineSetting<string[]>('chat.promptInspector.extraSections', ConfigType.Simple, []);
+	export const PromptInspectorSessionMetadataFields = defineSetting<string[]>('chat.promptInspector.sessionMetadata.fields', ConfigType.Simple, ['sessionId', 'requestId']);
+
+	/** Live Request Editor Auto Override settings */
+	export const LiveRequestEditorAutoOverrideEnabled = defineSetting<boolean>('chat.liveRequestEditor.autoOverride.enabled', ConfigType.Simple, true);
+	export const LiveRequestEditorAutoOverridePreviewLimit = defineSetting<number>('chat.liveRequestEditor.autoOverride.previewLimit', ConfigType.Simple, 3);
+	export const LiveRequestEditorAutoOverrideScopePreference = defineSetting<'session' | 'workspace' | 'global' | undefined>('chat.liveRequestEditor.autoOverride.scopePreference', ConfigType.Simple, undefined);
 
 	export const NewWorkspaceCreationAgentEnabled = defineSetting<boolean>('chat.newWorkspaceCreation.enabled', ConfigType.Simple, true);
 	export const NewWorkspaceUseContext7 = defineSetting<boolean>('chat.newWorkspace.useContext7', ConfigType.Simple, false);

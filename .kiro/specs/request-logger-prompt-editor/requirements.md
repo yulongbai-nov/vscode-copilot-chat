@@ -55,6 +55,8 @@ As a developer inspecting a pending request, I want the full prompt broken into 
 2.4 THE Live Chat Request Editor SHALL support collapsing and expanding each section individually, with collapsed state clearly indicated and the body content hidden when collapsed.  
 2.5 WHEN a section contains markdown with code blocks or inline code, THEN the Live Chat Request Editor SHALL render it using the same or equivalent markdown and code block renderer as the chat panel.  
 2.6 THE Live Chat Request Editor SHOULD surface key request metadata (e.g., model, max tokens, location) adjacent to the sections, derived from the Chat Request.  
+2.7 WHEN a Prompt Section represents a tool invocation or tool result, THEN the Live Chat Request Editor SHALL display the invoked tool’s name and the exact arguments that were sent so power users can audit the call.  
+2.8 WHEN optional “extra detail” panels (request options, telemetry, raw request) are enabled via settings, THEN those panels SHALL share the same collapse/expand controls and accessibility affordances as the core prompt sections.  
 
 ### Requirement 3 – Section Hover Action Menu (Edit / Delete)
 
@@ -144,3 +146,54 @@ As a power user who wants to audit every prompt, I want to pause each send, revi
 8.8 THE status bar item SHALL reflect the current mode (“Prompt Interception: On/Off”) and, when a request is paused, indicate that action is required (e.g., warning icon, tooltip).  
 8.9 INTERCEPTION mode SHALL be conversation-aware; only the active conversation’s request is paused, and other conversations in the same window continue to work normally unless they also intercept.  
 8.10 ALL interception flows SHALL log telemetry (mode toggles, resume vs. cancel) for future analysis.  
+8.11 WHEN the active chat session ends, the user switches to a different conversation, or the selected model/context changes while a request is intercepted, THEN the Live Chat Request Editor SHALL automatically cancel the pending turn, dismiss the interception UI, and surface a reason such as “Context changed – request discarded.”  
+8.12 WHEN a request originates from an automated sub-agent/tool flow (e.g., `runSubagent`, background TODO tool execution), THEN the Live Chat Request Editor SHALL bypass interception so automation continues without manual approval.  
+
+### Requirement 9 – Subagent Prompt Monitor
+
+**User Story:**  
+As a developer running automated TODO/Plan subagents, I want a compact widget that shows the prompts those subagents send so I can audit or troubleshoot their work without blocking the main chat flow.
+
+#### Acceptance Criteria
+
+9.1 THE extension SHALL expose a read-only “Subagent Prompt Monitor” view (e.g., a tree pinned to the right side of the chat panel) whenever the live editor feature flag is enabled.  
+9.2 WHEN a subagent (`request.isSubagent === true`) issues a request, THEN the monitor SHALL add an entry containing its session label, tool invocation, and timestamp without pausing or intercepting the send.  
+9.3 EACH monitor entry SHALL expand into a tree that mirrors the prompt sections (system/user/context/tool) so users can inspect what was sent; markdown/code should use the same renderer as the main editor.  
+9.4 THE monitor SHALL keep only a bounded history (at least the most recent 10 subagent runs) and provide affordances to collapse/expand or clear entries.  
+9.5 THE monitor SHALL be keyboard accessible (focusable tree items, expand/collapse via keyboard) and respect VS Code theming.  
+9.6 THE monitor SHALL stay synchronized with session lifecycle events (removed when the chat session is disposed) so stale subagent prompts are not shown.  
+
+### Requirement 10 – Session Alignment Metadata View
+
+**User Story:**  
+As a power user validating intercepted prompts, I want a dedicated metadata view that mirrors the current session/request information (and, when I opt in, the raw request payload) so that I can immediately verify the Live Request Editor is targeting the correct conversation without relying on transient chat status entries.
+
+#### Acceptance Criteria
+
+10.1 WHEN `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, THEN the `github.copilot.liveRequestMetadata` tree view SHALL be registered in the Copilot Chat container and default to showing metadata for the most recent pending request.  
+10.2 THE metadata view SHALL subscribe to `ILiveRequestEditorService.onDidChangeMetadata`, refreshing its tree items within 500 ms of metadata or configuration changes.  
+10.3 Root metadata nodes SHALL mirror the fields specified by `github.copilot.chat.promptInspector.sessionMetadata.fields`, truncating long identifiers, exposing tooltips, and wiring the `github.copilot.liveRequestMetadata.copyValue` command so every entry can be copied to the clipboard.  
+10.4 A “Token Budget” node SHALL display the current usage percentage plus `used/max` token counts when `tokenCount` and `maxPromptTokens` are present; otherwise it SHALL render “Token Budget: awaiting data…”.  
+10.5 WHEN no metadata exists (no pending request, feature disabled, or interception idle), THEN the tree view SHALL render a placeholder node (“Live Request Editor idle — send a chat request to populate metadata.”).  
+10.6 WHEN `sessionMetadata.fields` is empty, THEN the metadata section SHALL hide while still exposing the token budget node/placeholder so the tree does not collapse unexpectedly.  
+10.7 THE tree SHALL expose a toolbar command (`github.copilot.liveRequestMetadata.configureFields`) that opens a Quick Pick for selecting metadata fields and persists the result via `github.copilot.chat.promptInspector.sessionMetadata.fields`.  
+10.8 EVERY metadata or outline leaf SHALL bind the copy command so users receive consistent clipboard behavior (and transient status feedback) when copying session IDs, request IDs, or JSON snippets.  
+10.9 WHEN `github.copilot.chat.promptInspector.extraSections` contains `requestOptions`, the metadata view SHALL add a “Request Options” outline node that renders the JSON payload hierarchically (object properties, array indices) with copy affordances on every node and truncation after a safety budget.  
+10.10 WHEN the extra sections contain `rawRequest`, the metadata view SHALL add a “Raw Request Payload” outline node that nests model, location, messages, and metadata exactly as they will be logged, again using the outline renderer + copy affordances.  
+10.11 Outline nodes SHALL respect the main feature flag, inherit VS Code theming/high-contrast styles, and avoid freezing the UI by truncating after a bounded number of entries with an explicit “…entries truncated…” indicator.
+
+### Requirement 11 – Auto Intercept & Prefix Override Mode
+
+**User Story:**  
+As an advanced Copilot user, I want to intercept the first turn of a chat session, tweak the system/prefix messages, and have those changes automatically applied to every later request without pausing the conversation, so that I can enforce custom instructions with minimal friction.
+
+#### Acceptance Criteria
+
+11.1 THE Live Request Editor SHALL expose a tri-state mode selector (Off, Intercept Once, Auto Override) surfaced in the inspector header, the status bar command, and via a Quick Pick command (`github.copilot.liveRequestEditor.setMode`). All entry points MUST stay in sync by listening to a single `onDidChangeInterceptionMode` event.  
+11.2 WHEN Auto Override is selected, the next pending request SHALL automatically intercept before send, display only the first `N` prefix sections (default 3), and allow the user to edit/save overrides. The preview count SHALL be configurable via a numeric setting (`github.copilot.chat.liveRequestEditor.autoOverride.previewLimit`, minimum 1) and a Quick Pick presented in the inspector.  
+11.3 AFTER the user saves overrides, subsequent requests SHALL send immediately with the persisted prefix edits applied unless the user explicitly pauses (via a “Pause & Intercept Next Turn” button in the inspector banner/status item).  
+11.4 THE user SHALL be prompted (via Quick Pick) to choose a persistence scope (Session only, Workspace, Global) the first time overrides are saved; the selection SHALL be stored and can be changed later from the banner menu. Overrides stored at the workspace/global scope MUST be applied across sessions and VS Code restarts until cleared.  
+11.5 EACH overridden section SHALL display a “Show diff” affordance in its hover toolbar that opens a standard VS Code diff editor (`vscode.diff`) comparing the original intercepted content to the persisted override. Tooltips SHALL indicate the last-updated timestamp and scope.  
+11.6 THE inspector banner SHALL summarize the active mode and scope, surface actions for `Pause`, `Edit Overrides`, and `Clear Overrides`, and MUST update immediately if the mode changes from any entry point.  
+11.7 Auto Override persistence SHALL be stored in extension global/workspace storage (depending on scope) using encrypted storage APIs when available; clearing overrides MUST remove the stored payload.  
+11.8 TELEMETRY SHALL record mode transitions (off/interceptOnce/autoOverride), scope selections, override saves/clears, and diff button usage with anonymized scope (session/workspace/global) but without storing user content.  
