@@ -163,19 +163,37 @@ As a developer running automated TODO/Plan subagents, I want a compact widget th
 9.5 THE monitor SHALL be keyboard accessible (focusable tree items, expand/collapse via keyboard) and respect VS Code theming.  
 9.6 THE monitor SHALL stay synchronized with session lifecycle events (removed when the chat session is disposed) so stale subagent prompts are not shown.  
 
-### Requirement 10 – Session Alignment Metadata Footer
+### Requirement 10 – Session Alignment Metadata View
 
 **User Story:**  
-As a power user validating intercepted prompts, I want a dedicated footer view that mirrors the current session/request metadata so that I can immediately verify the Live Request Editor is targeting the correct conversation without relying on transient chat status entries.
+As a power user validating intercepted prompts, I want a dedicated metadata view that mirrors the current session/request information (and, when I opt in, the raw request payload) so that I can immediately verify the Live Request Editor is targeting the correct conversation without relying on transient chat status entries.
 
 #### Acceptance Criteria
 
-10.1 WHEN `github.copilot.chat.advanced.livePromptEditorEnabled` is `true` AND `github.copilot.chat.promptInspector.sessionMetadata.fields` is non-empty, THEN the `github.copilot.liveRequestUsage` webview view SHALL render a stack of metadata chips (default: session id + request id) plus the token usage meter so users can pin it beneath the chat input for persistent visibility.  
-10.2 THE footer view SHALL subscribe to `ILiveRequestEditorService.onDidChangeMetadata`, updating its chips and token meter within 500 ms of new events and when the configuration changes.  
-10.3 EACH chip SHALL display the latest value for its field, truncate long identifiers with ellipses, expose a tooltip, and support copy-to-clipboard via the context/hover affordances baked into the footer view.  
-10.4 WHEN token metadata is available (`tokenCount` + `maxPromptTokens`), THEN the footer SHALL render the progress bar + percentage (same styling as the Live Request Editor) and update it live as counts change; when unavailable, it SHALL show “Token Budget: awaiting data…”.  
-10.5 WHEN no metadata exists (no pending request, feature disabled, or interception idle), THEN the footer SHALL show “Live Request Editor idle — send a chat request to populate metadata.” without stale chips.  
-10.6 WHEN `sessionMetadata.fields` is empty, THEN the footer SHALL hide the chip column while still showing the token meter/idle messaging so the view does not collapse unexpectedly.  
-10.7 THE footer SHALL remain keyboard accessible (focusable chips, readable token meter) and respect VS Code theming/high contrast requirements even when docked beside other chat views.  
-10.8 THE footer view SHALL expose an in-context “Configure metadata” action that lets users toggle the available fields (session, request, model, location, interception, dirty) without editing JSON settings; the action SHALL persist changes via `github.copilot.chat.promptInspector.sessionMetadata.fields`.  
-10.9 EVERY metadata chip rendered in the footer SHALL surface a copy affordance (hover or inline button) that copies the full value to the clipboard and provides visual feedback when the copy succeeds.  
+10.1 WHEN `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, THEN the `github.copilot.liveRequestMetadata` tree view SHALL be registered in the Copilot Chat container and default to showing metadata for the most recent pending request.  
+10.2 THE metadata view SHALL subscribe to `ILiveRequestEditorService.onDidChangeMetadata`, refreshing its tree items within 500 ms of metadata or configuration changes.  
+10.3 Root metadata nodes SHALL mirror the fields specified by `github.copilot.chat.promptInspector.sessionMetadata.fields`, truncating long identifiers, exposing tooltips, and wiring the `github.copilot.liveRequestMetadata.copyValue` command so every entry can be copied to the clipboard.  
+10.4 A “Token Budget” node SHALL display the current usage percentage plus `used/max` token counts when `tokenCount` and `maxPromptTokens` are present; otherwise it SHALL render “Token Budget: awaiting data…”.  
+10.5 WHEN no metadata exists (no pending request, feature disabled, or interception idle), THEN the tree view SHALL render a placeholder node (“Live Request Editor idle — send a chat request to populate metadata.”).  
+10.6 WHEN `sessionMetadata.fields` is empty, THEN the metadata section SHALL hide while still exposing the token budget node/placeholder so the tree does not collapse unexpectedly.  
+10.7 THE tree SHALL expose a toolbar command (`github.copilot.liveRequestMetadata.configureFields`) that opens a Quick Pick for selecting metadata fields and persists the result via `github.copilot.chat.promptInspector.sessionMetadata.fields`.  
+10.8 EVERY metadata or outline leaf SHALL bind the copy command so users receive consistent clipboard behavior (and transient status feedback) when copying session IDs, request IDs, or JSON snippets.  
+10.9 WHEN `github.copilot.chat.promptInspector.extraSections` contains `requestOptions`, the metadata view SHALL add a “Request Options” outline node that renders the JSON payload hierarchically (object properties, array indices) with copy affordances on every node and truncation after a safety budget.  
+10.10 WHEN the extra sections contain `rawRequest`, the metadata view SHALL add a “Raw Request Payload” outline node that nests model, location, messages, and metadata exactly as they will be logged, again using the outline renderer + copy affordances.  
+10.11 Outline nodes SHALL respect the main feature flag, inherit VS Code theming/high-contrast styles, and avoid freezing the UI by truncating after a bounded number of entries with an explicit “…entries truncated…” indicator.
+
+### Requirement 11 – Auto Intercept & Prefix Override Mode
+
+**User Story:**  
+As an advanced Copilot user, I want to intercept the first turn of a chat session, tweak the system/prefix messages, and have those changes automatically applied to every later request without pausing the conversation, so that I can enforce custom instructions with minimal friction.
+
+#### Acceptance Criteria
+
+11.1 THE Live Request Editor SHALL expose a tri-state mode selector (Off, Intercept Once, Auto Override) surfaced in the inspector header, the status bar command, and via a Quick Pick command (`github.copilot.liveRequestEditor.setMode`). All entry points MUST stay in sync by listening to a single `onDidChangeInterceptionMode` event.  
+11.2 WHEN Auto Override is selected, the next pending request SHALL automatically intercept before send, display only the first `N` prefix sections (default 3), and allow the user to edit/save overrides. The preview count SHALL be configurable via a numeric setting (`github.copilot.chat.liveRequestEditor.autoOverride.previewLimit`, minimum 1) and a Quick Pick presented in the inspector.  
+11.3 AFTER the user saves overrides, subsequent requests SHALL send immediately with the persisted prefix edits applied unless the user explicitly pauses (via a “Pause & Intercept Next Turn” button in the inspector banner/status item).  
+11.4 THE user SHALL be prompted (via Quick Pick) to choose a persistence scope (Session only, Workspace, Global) the first time overrides are saved; the selection SHALL be stored and can be changed later from the banner menu. Overrides stored at the workspace/global scope MUST be applied across sessions and VS Code restarts until cleared.  
+11.5 EACH overridden section SHALL display a “Show diff” affordance in its hover toolbar that opens a standard VS Code diff editor (`vscode.diff`) comparing the original intercepted content to the persisted override. Tooltips SHALL indicate the last-updated timestamp and scope.  
+11.6 THE inspector banner SHALL summarize the active mode and scope, surface actions for `Pause`, `Edit Overrides`, and `Clear Overrides`, and MUST update immediately if the mode changes from any entry point.  
+11.7 Auto Override persistence SHALL be stored in extension global/workspace storage (depending on scope) using encrypted storage APIs when available; clearing overrides MUST remove the stored payload.  
+11.8 TELEMETRY SHALL record mode transitions (off/interceptOnce/autoOverride), scope selections, override saves/clears, and diff button usage with anonymized scope (session/workspace/global) but without storing user content.  

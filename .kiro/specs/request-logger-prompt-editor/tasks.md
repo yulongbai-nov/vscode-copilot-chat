@@ -43,7 +43,7 @@
   - [x] 5.2 Wire the Send action to use edited messages when the request is dirty, and original messages otherwise. _Requirements: 4.2, 4.3_  
   - [x] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _Requirements: 4.4_  
   - [x] 5.4 Guard against invalid/empty requests (e.g., all sections deleted) by blocking send with explanatory error UI and offering reset. _Requirements: 4.5_  
-  - [ ] 5.5 Add a configuration-driven “extra detail” area in the Live Request Editor so advanced users can opt-in to view `requestOptions`, telemetry metadata, and the raw JSON payload that matches the Request Logger output. Do not hide existing UI; only append the additional panels when explicitly enabled. _Requirements: 5.6_  
+- [x] 5.5 Provide configuration-driven “extra detail” surfaces: keep telemetry as an optional panel inside the Live Request Editor and surface `requestOptions` / raw payload data through the Live Request Metadata view whenever the corresponding `extraSections` entries are enabled. _Requirements: 5.6, 10.9, 10.10_  
 
 - [ ] 6. Performance, reliability, and security hardening  
   - [ ] 6.1 Add lazy rendering or truncation for very large sections with “Show more” links to protect UI responsiveness. _Requirements: 6.3_  
@@ -71,13 +71,21 @@
 
 - [x] 9. Session-alignment metadata + collapsible extras
   - [x] 9.1 Add `github.copilot.chat.promptInspector.sessionMetadata.fields` (string array) setting, documenting defaults and gating behind the main feature flag. _Requirements: 10.1_  
-  - [x] 9.2 Extend `ILiveRequestEditorService` to publish per-session metadata snapshots (session id, request id, model, location, interception state) and expose an event the Live Request Usage view can subscribe to. _Requirements: 10.2_  
-  - [x] 9.3 Implement the `github.copilot.liveRequestUsage` footer view (webview) that renders metadata chips + placeholders using the configured fields and mirrors the Live Request Editor styling. _Requirements: 10.1–10.3, 10.5, 10.6_  
-  - [x] 9.4 Keep the footer reactive when fields are removed/flag is off, ensuring chips hide while token + idle messaging continue to work. _Requirements: 10.4–10.6_  
-  - [x] 9.5 Render the token occupancy meter (percentage + progress bar) inside the footer view so users can see prompt budget usage without opening the inspector. _Requirements: 10.4_  
-  - [x] 9.6 Refactor the optional extra panels (`requestOptions`, `telemetry`, `rawRequest`) in the webview to reuse the standard collapsible section container, persisting collapse state and keyboard affordances. _Requirements: 2.8_  
-  - [x] 9.7 Add an in-view “Configure metadata” affordance that opens a Quick Pick and persists `sessionMetadata.fields` updates without manually editing settings JSON. _Requirements: 10.8_  
-  - [x] 9.8 Add per-chip copy buttons in the footer that leverage the extension host clipboard and surface inline confirmation of success. _Requirements: 10.9_  
+- [x] 9.2 Extend `ILiveRequestEditorService` to publish per-session metadata snapshots (session id, request id, model, location, interception state) and expose an event the Live Request Metadata view can subscribe to. _Requirements: 10.2_  
+- [x] 9.3 Implement the `github.copilot.liveRequestMetadata` tree view that lists metadata rows, the token budget entry, and optional outline nodes for request options/raw payloads when enabled via `extraSections`. _Requirements: 10.1–10.11_  
+- [x] 9.4 Keep the metadata view reactive when fields are removed/flag is off, ensuring metadata nodes hide while token + idle messaging continue to work. _Requirements: 10.4–10.6_  
+- [x] 9.5 Surface the “Configure metadata” toolbar command and persist Quick Pick selections back into `sessionMetadata.fields`. _Requirements: 10.7_  
+- [x] 9.6 Wire the metadata/outline leaves to `github.copilot.liveRequestMetadata.copyValue`, ensuring clipboard operations provide status feedback. _Requirements: 10.8_  
+- [x] 9.7 Keep telemetry as the only optional “extra” panel inside the webview inspector and move `requestOptions` / `rawRequest` rendering to the metadata outline nodes. _Requirements: 2.8, 10.9, 10.10_  
+
+- [ ] 10. Auto intercept & prefix override
+  - [x] 10.1 Extend `ILiveRequestEditorService` with a `LiveRequestEditorMode` enum/state, persistence helpers for overrides (session/workspace/global scopes), and events for mode/scope changes. _Requirements: 11.1, 11.4, 11.7_  
+  - [x] 10.2 Add new settings + commands (`autoOverride.previewLimit`, `…scopePreference`, `liveRequestEditor.setMode`, etc.) and plumb them through the configuration service. _Requirements: 11.2, 11.4_  
+  - [x] 10.3 Update the Live Request Editor UI (header toggle, banner, status bar) to reflect the new mode, expose Pause/Edit/Clear actions, and prompt for scope via Quick Pick. _Requirements: 11.1, 11.6_  
+  - [x] 10.4 Implement auto-override preview limiting (first `N` sections) during the initial interception and resume automatic sends once overrides are saved. _Requirements: 11.2, 11.3_  
+  - [x] 10.5 Add per-section “Show diff” buttons that invoke `vscode.diff` with temp documents plus tooltips showing scope + timestamps. _Requirements: 11.5_  
+  - [x] 10.6 Persist overrides across reloads (global/workspace storage) and ensure clearing overrides removes the stored payload + returns to normal interception. _Requirements: 11.4, 11.7_  
+  - [x] 10.7 Emit telemetry for mode/scope transitions, override saves/clears, and diff launches; document the new behavior in docs/handoff. _Requirements: 11.8_  
 
 ## Implementation Notes
 

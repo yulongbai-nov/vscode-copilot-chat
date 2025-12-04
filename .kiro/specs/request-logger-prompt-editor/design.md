@@ -158,17 +158,42 @@ For this feature, the **Request Logger UI** is a reference only:
 
 ### Session-alignment diagnostics in the native chat panel
 
-Users still need a fast way to confirm that the intercepted prompt belongs to the conversation they are staring at, especially when multiple turns or subagents are firing in parallel. Instead of relying on VS Code’s experimental chat status API, we now surface the diagnostics via a dedicated footer webview that users can pin directly under the chat input:
+Users still need a fast way to confirm that the intercepted prompt belongs to the conversation they are staring at, especially when multiple turns or subagents are firing in parallel. Instead of relying on VS Code’s experimental chat status API, we now surface the diagnostics via a tree view that lives beside the chat panel:
 
-- Configuration still lives under `github.copilot.chat.promptInspector.sessionMetadata.fields` (ordered string array, default `["sessionId", "requestId"]`). Setting it to an empty array hides the metadata chips but keeps the token meter available for budget tracking.
-- The new `github.copilot.liveRequestUsage` view reuses the Live Request Editor’s CSS, stacks metadata chips vertically, and renders the animated token meter so it mirrors what the inspector shows. Users dock it underneath the chat input by dragging the view (the Webview View API already lets us retain layout).
-- Each chip truncates long identifiers, exposes a tooltip, and uses the same copy-to-clipboard affordances as the inspector (inline buttons inside the webview). Extra fields (`model`, `location`, `interception`, `dirty`) are rendered using the same chip component, so power users can expand the data set without code changes.
-- A small in-view toolbar (gear icon) opens a Quick Pick that lists all metadata fields; selections update `sessionMetadata.fields` immediately so users can curate the footer without touching JSON. We still respect workspace/global scopes via the configuration service.
-- Chips expose an inline copy button that posts back to the extension host, which in turn writes to the clipboard and flashes a transient toast to acknowledge success.
-- The footer subscribes to `ILiveRequestEditorService.onDidChangeMetadata` and broadcasts updates into the webview through `postMessage`, so it automatically reflows when the active chat session switches, the model changes, or a request becomes dirty.
-- Token awareness: the metadata payload includes `tokenCount` and `maxPromptTokens`, letting the footer reuse the inspector’s progress bar. When counts are missing the footer shows “Token Budget: awaiting data…” rather than stale percentages.
-- Empty state: when there is no metadata (idle app, interception disabled), the footer shows “Live Request Editor idle — send a chat request to populate metadata.” ensuring the view doesn’t look broken.
-- Feature gate: the footer is only registered/visible when `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, keeping the extra UI confined to advanced workflows.
+- Configuration still lives under `github.copilot.chat.promptInspector.sessionMetadata.fields` (ordered string array, default `["sessionId", "requestId"]`). When the array is empty we hide the metadata section while keeping the token budget entry available for quick status checks.
+- The `github.copilot.liveRequestMetadata` **tree view** replaces the old webview footer. Users dock it underneath the chat input (Work Bench “Chat” container) so it stays visible while stepping through intercepted prompts.
+- Metadata rows render as tree leaves with truncated labels, tooltips, and built-in copy commands. Advanced fields (`model`, `location`, `interception`, `dirty`) reuse the same component so we get consistent behavior across UI surfaces.
+- A toolbar-level “Configure metadata” command (`github.copilot.liveRequestMetadata.configureFields`) opens a Quick Pick that writes directly to `sessionMetadata.fields`, letting users curate the view without editing JSON.
+- Token awareness: the view exposes a “Token Budget” node that mirrors the inspector’s progress bar (% plus counts) when both `tokenCount` and `maxPromptTokens` are available, and falls back to “awaiting data” otherwise.
+- Outline surfaces: when users enable the `requestOptions` / `rawRequest` entries under `github.copilot.chat.promptInspector.extraSections`, the metadata view adds collapsible tree nodes that render those payloads with an outline-style hierarchy (objects → properties, arrays → indexed entries). Each child inherits copy support and truncation so browsing large JSON blobs remains manageable.
+- The tree subscribes to `ILiveRequestEditorService.onDidChangeMetadata` and recomputes its nodes synchronously, which keeps the metadata view in lockstep with whichever conversation is currently pending in the editor.
+- Empty state: when there is no metadata (idle app, interception disabled), the root node switches to “Live Request Editor idle — send a chat request to populate metadata.” ensuring the view doesn’t look broken.
+- Feature gate: the metadata view is only registered/visible when `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, keeping the extra UI confined to advanced workflows.
+- Configuration scope: both `github.copilot.chat.promptInspector.sessionMetadata.fields` and `.extraSections` are marked as **application-scoped** so users can trust/toggle the metadata UI once and have the preference follow every workspace, even when a folder is marked untrusted.
+
+### Auto Intercept & Prefix Override Mode
+
+We add a new “Auto Override” mode on top of the existing prompt-interception flow so power users can edit prefix sections once and have the edits applied automatically:
+
+- **State machine**
+  - A single `LiveRequestEditorMode` enum (`off`, `interceptOnce`, `interceptAlways`, `autoOverride`) plus a `paused` flag lives inside `ILiveRequestEditorService`. All UI (status bar, header toggle, banner, commands) calls `liveRequestEditorService.setMode(mode, options)` so there is only one source of truth.
+  - The service emits `onDidChangeMode` events containing `{ mode, paused, scope }`, enabling the inspector banner, status bar, and webview to update simultaneously.
+- **Initial interception**
+  - When Auto Override is enabled, the next pending request immediately intercepts. The inspector renders only the first `previewLimit` prefix sections (default 3, configurable via both a numeric setting and a Quick Pick surfaced in the inspector).
+  - A scoped Quick Pick prompts: “Apply overrides to… Session / Workspace / Global (remember choice).” We persist the selection in `github.copilot.chat.liveRequestEditor.autoOverride.scopePreference`; users can reopen the picker from the banner.
+- **Persistence & application**
+  - Edited sections are serialized as `{ scope, sectionId, content, updatedAt }` and stored via VS Code storage APIs: session scope in memory, workspace in `ExtensionContext.workspaceState`, global in `ExtensionContext.globalState`. The service loads them on activation and reapplies them to new `EditableChatRequest`s before send.
+  - After the first save, interception stops automatically; subsequent sends recompute the prompt, overlay the stored overrides, and continue without pausing unless the user presses “Pause & intercept next turn.”
+- **Inspector banner + commands**
+  - The Live Request Editor header gains a tri-segment toggle (Off / Intercept / Auto Override). The sticky banner shows `Auto Override · Workspace scope` with buttons: `Pause`, `Edit Overrides` (re-enters interception), `Clear Overrides`, `Change scope`.
+  - The existing status-bar command mirrors the mode and offers a quick toggle list so users can switch modes without focusing the inspector.
+- **Diff affordances**
+  - Each section with overrides renders a chip (“Edited · Show diff”). Clicking it runs `vscode.diff` with temp URIs pointing to the original intercepted content vs. the persisted override. We annotate the diff title with the scope (e.g., `System (workspace override)`).
+- **Settings / commands**
+  - New settings: `github.copilot.chat.liveRequestEditor.autoOverride.previewLimit` (number), `…scopePreference` (string), `…enabled` (boolean). We also add commands `github.copilot.liveRequestEditor.setMode`, `…clearOverrides`, `…showOverrideHistory`.
+  - Override history is tracked per scope (timestamp + snippet) so the Quick Pick can show recent snapshots and allow rollbacks.
+- **Telemetry**
+  - The service logs mode transitions and override saves/clears via the existing telemetry channel, tagging events with `mode`, `scope`, and `previewLimit` but never the contents of edits.
 
 ### Interim Webview Prompt Inspector (Existing Implementation Surface)
 

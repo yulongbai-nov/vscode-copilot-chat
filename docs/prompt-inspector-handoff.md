@@ -10,14 +10,17 @@
      - `ILiveRequestEditorService` now emits `onDidChangeMetadata` snapshots containing session/request IDs, model,
   dirty state, interception state, and token counts that any UI surface can subscribe to.
   2. **Live metadata view**
-     - The standalone chat status widget was removed; instead, we drive all metadata visuals through the `github.copilot.liveRequestMetadata` tree view so users can dock it beneath the chat input. The view mirrors the animated token meter, exposes chip-style metadata as collapsible nodes, and now includes outline renderings of the request options and raw payload.
-     - Users can toggle the chips without editing JSON: the Quick Pick writes to `github.copilot.chat.promptInspector.sessionMetadata.fields`, we immediately refresh the tree, and selecting a leaf copies the underlying value to the clipboard while flashing inline confirmation.
+     - The status widget was removed; instead, metadata/token visuals route through the `github.copilot.liveRequestMetadata` tree view so users can pin it beneath the chat input. The tree mirrors the animated token bar, exposes copy-enabled metadata leaves, and now includes outline nodes for `requestOptions` + `rawRequest` when the corresponding `extraSections` entries are enabled.
+     - Both `github.copilot.chat.promptInspector.sessionMetadata.fields` and `.extraSections` are application-scoped settings now, so advanced users can trust the view once and reuse the same configuration across every workspace (even untrusted folders).
+     - The toolbar hosts a “Configure metadata” Quick Pick that updates `sessionMetadata.fields` without touching settings JSON, and every node (metadata or outline) shares the same clipboard/status feedback affordances.
   3. **Inspector extras**
-     - Opt-in panels (`requestOptions`, `telemetry`, `rawRequest`) reuse the same collapsible section chrome as core
-  prompt sections, so they inherit keyboard/ARIA behavior and persist collapse state per session. Request Options and Raw Request now live exclusively inside the Live Request Metadata view, where they render via outline-style trees for easier navigation.
-  4. **Specs & docs**
-     - `.kiro/specs/request-logger-prompt-editor/{design,requirements,tasks}.md` updated to cover the metadata footer and inspector extras.
-     - `docs/prompt-inspector-handoff.md` refreshed with the latest verification status (current `npm run test:unit` clean) and pointers to the metadata features.
+     - Telemetry remains the sole optional panel inside the webview inspector; request options and raw payload rendering moved to the metadata tree so the inspector stays lightweight while still honoring the config knobs.
+  4. **Prompt Section Visualizer sunset**
+     - The legacy Prompt Section Visualizer feature (specs, commands, settings, services, tests, docs) has been fully removed. All prompt-inspection investment now flows through the Live Request Editor + Subagent Prompt Monitor stack.
+  5. **Auto Override mode**
+     - The Live Request Editor header now hosts a tri-segment mode selector (Off / Interception / Auto). Auto Override pauses the next turn, limits the inspector to the first `previewLimit` sections (Quick Pick configurable), and persists edits across session/workspace/global scopes so future turns send immediately with overrides applied.
+     - The banner summarizes the active scope, shows `Pause next turn`, `Edit overrides`, `Clear overrides`, `Change scope`, and `Preview limit` actions, and displays an inline note whenever sections are being hidden during capture.
+     - Sections that carry overrides render an “Override · Show diff” chip that opens a `vscode.diff` view comparing the original intercepted content with the persisted override. Diff launches, saves, clears, and scope transitions all emit telemetry tagged by scope.
 
   ### Verification
   - `npm run lint`
@@ -27,17 +30,20 @@
   vscode-node/test/liveRequestMetadataProvider.spec.ts src/extension/prompt/node/test/liveRequestEditorService.spec.ts src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts`
   - `npm run test:unit` (pass; historical flaky suites noted in handoff doc)
   - `npm run simulate -- --scenario-test debugCommandToConfig.stest.ts --grep "node test"`
-  - Manual sanity: with the feature flag on, send a Copilot Chat prompt and open “Live Request Metadata.” Dock it under the chat input and confirm the chips/token meter update when you send, edit, switch conversations, or change models. Click “Configure metadata” to toggle fields (including hiding them entirely) and expand the outline nodes to inspect/copy JSON directly from the view.
+  - Manual sanity:
+    1. With the feature flag on, send a prompt, open “Live Request Metadata,” and verify the metadata nodes/token meter update when you send, edit, switch conversations, or change models. Use “Configure metadata” to toggle fields and expand outline nodes for copy.
+    2. Switch the mode toggle to **Auto**, send another prompt, edit one of the first three sections, and press **Resume**. Subsequent turns should send immediately with the override applied, the banner should display the chosen scope, and the section card should show the “Override · Show diff” chip. Use the banner actions (Pause next turn, Edit overrides, Clear overrides, Change scope, Preview limit) to confirm they dispatch correctly.
 
   ### Remaining Scope / Next Steps
   - Task 2.4: HTML tracer enrichment.
   - Task 6.x/7.x: performance, accessibility, and testing backlog.
-  - Task 9.x follow-ups: once VS Code exposes drawer APIs, embed this usage strip directly inside the native chat UI (instead of the auxiliary view) and expose richer cues (model budgets, quota warnings).
+  - Task 9.x follow-ups: once VS Code exposes drawer APIs, embed the metadata/usage UI directly inside the native chat surface and expose richer cues (model budgets, quota warnings).
+  - Task 10.x: **done** (mode selector, scope persistence, diff tooling, telemetry).
   - Longer-term: migrate drafted webview UX to the native chat drawer when first-party APIs allow.
 
   ### Gotchas / Notes
-  - Token usage in the footer comes from `request.metadata.tokenCount`; we fall back to summed section
-  token counts if the renderer hasn’t filled totals yet, and display “awaiting data” in the footer when nothing
+  - Token usage in the metadata view comes from `request.metadata.tokenCount`; we fall back to summed section
+  token counts if the renderer hasn’t filled totals yet, and display “awaiting data” in the token node when nothing
   is available.
   - Feature flag: everything stays behind `github.copilot.chat.advanced.livePromptEditorEnabled`. Chips hide if
   `sessionMetadata.fields` is empty, but the metadata view still shows the token meter placeholder for clarity.
