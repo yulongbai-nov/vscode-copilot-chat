@@ -1,37 +1,47 @@
-# Prompt Inspector Handoff
+  ## Prompt Inspector / Live Request Editor – Handoff (4 Dec 2025)
 
-## Summary
+  ### Branch / Scope
+  - Branch: `feature/prompt-interception-mode`
+  - Focus: Prompt Inspector extras + chat-surface metadata (Tasks 5.5 & 9.x in `.kiro/specs/request-logger-prompt-
+  editor/tasks.md`)
 
-- Feature: Prompt Inspector extras (Task 5.5) & Live Request Editor polish on `feature/prompt-interception-mode`.
-- Latest work:
-  - Specs/tasks updated to cover the new configurable extras.
-  - Introduced `github.copilot.chat.promptInspector.extraSections` (`requestOptions`, `telemetry`, `rawRequest`) with hot-reload support in the provider.
-  - Webview renders optional panels (JSON previews + copy buttons; telemetry grid).
-  - Added provider coverage and styling to support the new panels.
+  ### Latest Work
+  1. **Metadata stream**
+     - `ILiveRequestEditorService` now emits `onDidChangeMetadata` snapshots containing session/request IDs, model,
+  dirty state, interception state, and token counts that any UI surface can subscribe to.
+  2. **Live usage footer**
+     - The standalone chat status widget was removed; instead, we drive all metadata visuals through the `github.copilot.liveRequestUsage` webview view so users can dock it beneath the chat input. The footer reuses the inspector’s CSS, stacks chips vertically, mirrors the animated token meter, and now includes an inline “Configure metadata” button.
+     - Users can toggle the chips without editing JSON: the Quick Pick writes to `github.copilot.chat.promptInspector.sessionMetadata.fields`, we immediately re-render the footer, and the copy buttons next to each chip write the underlying value to the clipboard while flashing inline confirmation.
+  3. **Inspector extras**
+     - Opt-in panels (`requestOptions`, `telemetry`, `rawRequest`) reuse the same collapsible section chrome as core
+  prompt sections, so they inherit keyboard/ARIA behavior and persist collapse state per session.
+  4. **Specs & docs**
+     - `.kiro/specs/request-logger-prompt-editor/{design,requirements,tasks}.md` updated to cover the metadata footer and inspector extras.
+     - `docs/prompt-inspector-handoff.md` refreshed with the latest verification status (current `npm run test:unit` clean) and pointers to the metadata features.
 
-## Outstanding Scope
+  ### Verification
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run compile`
+  - `npx vitest run src/extension/prompt/vscode-node/test/liveRequestEditorProvider.spec.ts src/extension/prompt/
+  vscode-node/test/liveRequestUsageProvider.spec.ts src/extension/prompt/node/test/liveRequestEditorService.spec.ts src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts`
+  - `npm run test:unit` (pass; historical flaky suites noted in handoff doc)
+  - `npm run simulate -- --scenario-test debugCommandToConfig.stest.ts --grep "node test"`
+  - Manual sanity: with the feature flag on, send a Copilot Chat prompt and open “Live Request Usage.” Dock it under the chat input and confirm the chips/token meter update when you send, edit, switch conversations, or change models. Click “Configure metadata” to toggle fields (including hiding them entirely) and use the chip copy buttons to verify clipboard feedback.
 
-- Task 2.4 (HTML tracer enrichment) still pending.
-- Tasks 6.x/7.x (performance hardening, accessibility passes, automated + manual tests) untouched.
-- Consider exposing extras in the eventual native drawer once VS Code allows it.
+  ### Remaining Scope / Next Steps
+  - Task 2.4: HTML tracer enrichment.
+  - Task 6.x/7.x: performance, accessibility, and testing backlog.
+  - Task 9.x follow-ups: once VS Code exposes drawer APIs, embed this usage strip directly inside the native chat UI (instead of the auxiliary view) and expose richer cues (model budgets, quota warnings).
+  - Longer-term: migrate drafted webview UX to the native chat drawer when first-party APIs allow.
 
-## Known Test Failures (`npm run test:unit`)
+  ### Gotchas / Notes
+  - Token usage in the footer comes from `request.metadata.tokenCount`; we fall back to summed section
+  token counts if the renderer hasn’t filled totals yet, and display “awaiting data” in the footer when nothing
+  is available.
+  - Feature flag: everything stays behind `github.copilot.chat.advanced.livePromptEditorEnabled`. Chips hide if
+  `sessionMetadata.fields` is empty, but the footer still shows the token meter placeholder for clarity.
+  - Known console noise: similarity-matching warnings in tool tests and SQLite experimental warnings (documented above).
+  - If the “Live Request Usage” view looks blank, make sure the feature flag is on and the view is not collapsed; the webview updates only while the containing view is visible.
 
-These suites/timeouts predate the current changes and continue to fail upstream:
-
-1. `src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts` — “makes a successful request with a single turn” + “makes a tool call turn”.
-2. Tool suite timeouts: `findTextInFilesResult`, `getErrorsResult`, `getErrorsTool`, `readFile`, `memoryTool`, `multiReplaceStringTool`, `testFailure`, `toolCalling`.
-3. Notebook/agent suites: `notebookPromptRendering`, `platform/notebook/.../alternativeContent`, `summarizedDocumentRendering`, `agentPrompt`, `parseAttachments`, `summarization`.
-4. TypeScript server plugin suite: `src/extension/typescriptContext/serverPlugin/src/node/test/simple.spec.ts` (multiple cases).
-5. General `[vitest-worker]: Timeout calling "onTaskUpdate"` warning persists.
-
-Re-run and mention these in future handoffs until upstream fixes land.
-
-## Verification Regimen
-
-- `npm run lint`
-- `npm run typecheck`
-- `npm run compile`
-- `npx vitest run src/extension/prompt/vscode-node/test/liveRequestEditorProvider.spec.ts src/extension/prompt/node/test/liveRequestEditorService.spec.ts src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts`
-- `npm run test:unit` (fails as listed above)
-- `npm run simulate -- --scenario-test debugCommandToConfig.stest.ts --grep "node test"`
+  Ping me if you need a quick demo snippet or want the footer indicator to appear by default (e.g., we could auto-open/pin it the first time the feature is enabled).

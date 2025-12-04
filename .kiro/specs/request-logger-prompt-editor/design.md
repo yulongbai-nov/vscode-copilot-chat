@@ -156,6 +156,20 @@ For this feature, the **Request Logger UI** is a reference only:
 - **VS Code contribution scaffolding**: the `LiveRequestEditorProvider` is registered as an experimental `webviewView`, commands exist for “show/toggle/reset”, and the feature remains fully gated behind the advanced flag.
 - **Still pending**: the Prompt Inspector drawer UI that lives inside the chat panel (section list, hover toolbar, inline editors, conversation selector, reset affordance) along with UX that blocks send when all sections are removed, dirty indicators, telemetry, and accessibility polish. These map directly to Tasks 4.x–7.x in the plan.
 
+### Session-alignment diagnostics in the native chat panel
+
+Users still need a fast way to confirm that the intercepted prompt belongs to the conversation they are staring at, especially when multiple turns or subagents are firing in parallel. Instead of relying on VS Code’s experimental chat status API, we now surface the diagnostics via a dedicated footer webview that users can pin directly under the chat input:
+
+- Configuration still lives under `github.copilot.chat.promptInspector.sessionMetadata.fields` (ordered string array, default `["sessionId", "requestId"]`). Setting it to an empty array hides the metadata chips but keeps the token meter available for budget tracking.
+- The new `github.copilot.liveRequestUsage` view reuses the Live Request Editor’s CSS, stacks metadata chips vertically, and renders the animated token meter so it mirrors what the inspector shows. Users dock it underneath the chat input by dragging the view (the Webview View API already lets us retain layout).
+- Each chip truncates long identifiers, exposes a tooltip, and uses the same copy-to-clipboard affordances as the inspector (inline buttons inside the webview). Extra fields (`model`, `location`, `interception`, `dirty`) are rendered using the same chip component, so power users can expand the data set without code changes.
+- A small in-view toolbar (gear icon) opens a Quick Pick that lists all metadata fields; selections update `sessionMetadata.fields` immediately so users can curate the footer without touching JSON. We still respect workspace/global scopes via the configuration service.
+- Chips expose an inline copy button that posts back to the extension host, which in turn writes to the clipboard and flashes a transient toast to acknowledge success.
+- The footer subscribes to `ILiveRequestEditorService.onDidChangeMetadata` and broadcasts updates into the webview through `postMessage`, so it automatically reflows when the active chat session switches, the model changes, or a request becomes dirty.
+- Token awareness: the metadata payload includes `tokenCount` and `maxPromptTokens`, letting the footer reuse the inspector’s progress bar. When counts are missing the footer shows “Token Budget: awaiting data…” rather than stale percentages.
+- Empty state: when there is no metadata (idle app, interception disabled), the footer shows “Live Request Editor idle — send a chat request to populate metadata.” ensuring the view doesn’t look broken.
+- Feature gate: the footer is only registered/visible when `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, keeping the extra UI confined to advanced workflows.
+
 ### Interim Webview Prompt Inspector (Existing Implementation Surface)
 
 Until the drawer experience lands inside the chat conversation surface, we rely on a dedicated `webviewView` contribution (`github.copilot.liveRequestEditor`). The design intent for this interim UI is:
@@ -188,6 +202,7 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
 - **Advanced extras (opt-in)**
   - Some users need insight into the full HTTP payload (tool schemas, requestOptions, telemetry) that would otherwise clutter the default UI. We expose a configuration key `github.copilot.chat.promptInspector.extraSections` that accepts an array of identifiers (`requestOptions`, `telemetry`, `rawRequest`).
   - When non-empty, the inspector appends read-only panels after the metadata strip: formatted JSON for request options and raw request body (with copy buttons), plus a telemetry table showing intent ID, endpoint URL, timestamps, and parity diagnostics.
+  - Extra panels reuse the same collapsible `SectionCard` chrome (caret, hover toolbar, keyboard focus) so they behave like standard prompt sections and do not overwhelm the page.
   - This setting never hides existing controls—it only augments the view so power users can replicate what `request.json` contains without leaving the inspector, while the default experience stays streamlined.
 - **Empty/error states**
   - When no editable request exists, show a centered “Waiting for chat request” message with instructions (“Send a prompt with the feature flag enabled…”).

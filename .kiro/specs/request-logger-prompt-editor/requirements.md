@@ -56,6 +56,7 @@ As a developer inspecting a pending request, I want the full prompt broken into 
 2.5 WHEN a section contains markdown with code blocks or inline code, THEN the Live Chat Request Editor SHALL render it using the same or equivalent markdown and code block renderer as the chat panel.  
 2.6 THE Live Chat Request Editor SHOULD surface key request metadata (e.g., model, max tokens, location) adjacent to the sections, derived from the Chat Request.  
 2.7 WHEN a Prompt Section represents a tool invocation or tool result, THEN the Live Chat Request Editor SHALL display the invoked tool’s name and the exact arguments that were sent so power users can audit the call.  
+2.8 WHEN optional “extra detail” panels (request options, telemetry, raw request) are enabled via settings, THEN those panels SHALL share the same collapse/expand controls and accessibility affordances as the core prompt sections.  
 
 ### Requirement 3 – Section Hover Action Menu (Edit / Delete)
 
@@ -161,3 +162,20 @@ As a developer running automated TODO/Plan subagents, I want a compact widget th
 9.4 THE monitor SHALL keep only a bounded history (at least the most recent 10 subagent runs) and provide affordances to collapse/expand or clear entries.  
 9.5 THE monitor SHALL be keyboard accessible (focusable tree items, expand/collapse via keyboard) and respect VS Code theming.  
 9.6 THE monitor SHALL stay synchronized with session lifecycle events (removed when the chat session is disposed) so stale subagent prompts are not shown.  
+
+### Requirement 10 – Session Alignment Metadata Footer
+
+**User Story:**  
+As a power user validating intercepted prompts, I want a dedicated footer view that mirrors the current session/request metadata so that I can immediately verify the Live Request Editor is targeting the correct conversation without relying on transient chat status entries.
+
+#### Acceptance Criteria
+
+10.1 WHEN `github.copilot.chat.advanced.livePromptEditorEnabled` is `true` AND `github.copilot.chat.promptInspector.sessionMetadata.fields` is non-empty, THEN the `github.copilot.liveRequestUsage` webview view SHALL render a stack of metadata chips (default: session id + request id) plus the token usage meter so users can pin it beneath the chat input for persistent visibility.  
+10.2 THE footer view SHALL subscribe to `ILiveRequestEditorService.onDidChangeMetadata`, updating its chips and token meter within 500 ms of new events and when the configuration changes.  
+10.3 EACH chip SHALL display the latest value for its field, truncate long identifiers with ellipses, expose a tooltip, and support copy-to-clipboard via the context/hover affordances baked into the footer view.  
+10.4 WHEN token metadata is available (`tokenCount` + `maxPromptTokens`), THEN the footer SHALL render the progress bar + percentage (same styling as the Live Request Editor) and update it live as counts change; when unavailable, it SHALL show “Token Budget: awaiting data…”.  
+10.5 WHEN no metadata exists (no pending request, feature disabled, or interception idle), THEN the footer SHALL show “Live Request Editor idle — send a chat request to populate metadata.” without stale chips.  
+10.6 WHEN `sessionMetadata.fields` is empty, THEN the footer SHALL hide the chip column while still showing the token meter/idle messaging so the view does not collapse unexpectedly.  
+10.7 THE footer SHALL remain keyboard accessible (focusable chips, readable token meter) and respect VS Code theming/high contrast requirements even when docked beside other chat views.  
+10.8 THE footer view SHALL expose an in-context “Configure metadata” action that lets users toggle the available fields (session, request, model, location, interception, dirty) without editing JSON settings; the action SHALL persist changes via `github.copilot.chat.promptInspector.sessionMetadata.fields`.  
+10.9 EVERY metadata chip rendered in the footer SHALL surface a copy affordance (hover or inline button) that copies the full value to the clipboard and provides visual feedback when the copy succeeds.  

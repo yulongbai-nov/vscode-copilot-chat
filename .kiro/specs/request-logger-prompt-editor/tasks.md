@@ -69,6 +69,16 @@
 - [x] 8.7 Auto-cancel pending interceptions when the backing chat session or model context changes, removing stale requests from the editor and surfacing a “context changed” reason. _Requirements: 8.7, 8.11_  
 - [x] 8.8 Skip interception for subagent/tool (`isSubagent`) requests so automation never pauses; guard both the request handler and service layer to guarantee these turns proceed immediately. _Requirements: 9.2_  
 
+- [x] 9. Session-alignment metadata + collapsible extras
+  - [x] 9.1 Add `github.copilot.chat.promptInspector.sessionMetadata.fields` (string array) setting, documenting defaults and gating behind the main feature flag. _Requirements: 10.1_  
+  - [x] 9.2 Extend `ILiveRequestEditorService` to publish per-session metadata snapshots (session id, request id, model, location, interception state) and expose an event the Live Request Usage view can subscribe to. _Requirements: 10.2_  
+  - [x] 9.3 Implement the `github.copilot.liveRequestUsage` footer view (webview) that renders metadata chips + placeholders using the configured fields and mirrors the Live Request Editor styling. _Requirements: 10.1–10.3, 10.5, 10.6_  
+  - [x] 9.4 Keep the footer reactive when fields are removed/flag is off, ensuring chips hide while token + idle messaging continue to work. _Requirements: 10.4–10.6_  
+  - [x] 9.5 Render the token occupancy meter (percentage + progress bar) inside the footer view so users can see prompt budget usage without opening the inspector. _Requirements: 10.4_  
+  - [x] 9.6 Refactor the optional extra panels (`requestOptions`, `telemetry`, `rawRequest`) in the webview to reuse the standard collapsible section container, persisting collapse state and keyboard affordances. _Requirements: 2.8_  
+  - [x] 9.7 Add an in-view “Configure metadata” affordance that opens a Quick Pick and persists `sessionMetadata.fields` updates without manually editing settings JSON. _Requirements: 10.8_  
+  - [x] 9.8 Add per-chip copy buttons in the footer that leverage the extension host clipboard and surface inline confirmation of success. _Requirements: 10.9_  
+
 ## Implementation Notes
 
 - Start by plumbing the editable request model (without UI) and verifying that edited messages can flow through `ChatMLFetcher` and `IRequestLogger` correctly and safely.

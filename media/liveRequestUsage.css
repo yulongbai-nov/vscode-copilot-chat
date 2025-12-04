@@ -1,0 +1,152 @@
+:root {
+	color-scheme: light dark;
+}
+
+body {
+	margin: 0;
+	padding: 8px;
+	font-family: var(--vscode-font-family);
+	font-size: 12px;
+	background: transparent;
+}
+
+.usage-root {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.usage-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.usage-button {
+	background: none;
+	border: 1px solid transparent;
+	color: var(--vscode-textLink-foreground);
+	font-size: 11px;
+	padding: 2px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.usage-button:hover,
+.usage-button:focus-visible {
+	text-decoration: underline;
+}
+
+.usage-content {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.metadata-column {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.metadata-chip {
+	display: flex;
+	justify-content: space-between;
+	align-items: stretch;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: 4px;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border);
+	font-size: 11px;
+}
+
+.chip-main {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.chip-label {
+	font-weight: 500;
+	color: var(--vscode-descriptionForeground);
+}
+
+.chip-value {
+	font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+	word-break: break-all;
+}
+
+.chip-copy {
+	align-self: center;
+	border-radius: 4px;
+	border: 1px solid var(--vscode-input-border);
+	background: transparent;
+	color: var(--vscode-textLink-foreground);
+	font-size: 10px;
+	padding: 2px 8px;
+	cursor: pointer;
+	transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.chip-copy:hover:not(:disabled),
+.chip-copy:focus-visible:not(:disabled) {
+	border-color: var(--vscode-textLink-activeForeground);
+}
+
+.chip-copy:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.chip-copy--copied {
+	border-color: var(--vscode-charts-green);
+	color: var(--vscode-charts-green);
+}
+
+.usage-empty {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+.token-meter {
+	position: relative;
+	height: 12px;
+	border-radius: 999px;
+	background: var(--vscode-editorLineNumber-foreground);
+	overflow: hidden;
+}
+
+.token-meter-fill {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	border-radius: 999px;
+	background: linear-gradient(90deg, var(--vscode-charts-blue) 0%, var(--vscode-charts-green) 100%);
+	transition: width 0.2s ease;
+}
+
+.token-meter-label {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	font-size: 10px;
+	color: var(--vscode-editor-background);
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.copy-toast {
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+	min-height: 12px;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+}
+
+.copy-toast--visible {
+	opacity: 1;
+}
