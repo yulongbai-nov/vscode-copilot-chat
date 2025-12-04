@@ -4,12 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
+import { Raw } from '@vscode/prompt-tsx';
 import * as vscode from 'vscode';
 import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { Emitter } from '../../../../util/vs/base/common/event';
-import { EditableChatRequest } from '../../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, LiveRequestMetadataEvent, PromptInterceptionState } from '../../common/liveRequestEditorService';
+import { EditableChatRequest, LiveRequestSessionKey } from '../../common/liveRequestEditorModel';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestOverrideScope, PromptInterceptionState } from '../../common/liveRequestEditorService';
+import { OptionalChatRequestParams } from '../../../../platform/networking/common/fetch';
 import { LiveRequestEditorProvider } from '../liveRequestEditorProvider';
 
 const mockExtraSectionsValue: string[] = [];
@@ -51,13 +53,13 @@ describe('LiveRequestEditorProvider', () => {
 	});
 
 	test('activates the request associated with the pending interception when updated', () => {
-		const { provider, emitRequest, emitInterception } = createProvider(logService);
+		const { provider, emitRequest, emitInterception, buildState } = createProvider(logService);
 		const initial = createRequest('session-initial');
 		emitRequest(initial);
 		expect(currentRequest(provider)).toBe(initial);
 
 		const pendingSessionId = 'session-pending';
-		emitInterception({
+		emitInterception(buildState({
 			enabled: true,
 			pending: {
 				key: { sessionId: pendingSessionId, location: ChatLocation.Panel },
@@ -66,7 +68,7 @@ describe('LiveRequestEditorProvider', () => {
 				requestedAt: Date.now(),
 				nonce: 1
 			}
-		});
+		}));
 
 		const pendingRequest = createRequest(pendingSessionId);
 		emitRequest(pendingRequest);
@@ -76,9 +78,9 @@ describe('LiveRequestEditorProvider', () => {
 	});
 
 	test('resolvePendingIntercept targets the pending session if available', () => {
-		const { provider, service, emitInterception } = createProvider(logService);
+		const { provider, service, emitInterception, buildState } = createProvider(logService);
 		const pendingKey = { sessionId: 'pending-session', location: ChatLocation.Panel };
-		emitInterception({
+		emitInterception(buildState({
 			enabled: true,
 			pending: {
 				key: pendingKey,
@@ -87,7 +89,7 @@ describe('LiveRequestEditorProvider', () => {
 				requestedAt: Date.now(),
 				nonce: 2
 			}
-		});
+		}));
 
 		(provider as any)._resolvePendingIntercept('resume');
 
@@ -99,7 +101,7 @@ describe('LiveRequestEditorProvider', () => {
 
 		// When no pending request remains we fall back to the current session
 		(service.resolvePendingIntercept as Mock).mockClear();
-		emitInterception({ enabled: true });
+		emitInterception(buildState({ enabled: true }));
 		(provider as any)._currentRequest = createRequest('fallback-session');
 
 		(provider as any)._resolvePendingIntercept('cancel', 'user');
@@ -111,8 +113,8 @@ describe('LiveRequestEditorProvider', () => {
 		);
 	});
 
-	test('includes configured extra sections when posting state', () => {
-		mockExtraSectionsValue.push('rawRequest');
+	test('includes telemetry extra section when posting state', () => {
+		mockExtraSectionsValue.push('telemetry');
 		const { provider } = createProvider(logService);
 		const postMessage = vi.fn().mockResolvedValue(undefined);
 		(provider as any)._view = {
@@ -124,7 +126,7 @@ describe('LiveRequestEditorProvider', () => {
 		(provider as any)._postStateToWebview();
 
 		expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({
-			extraSections: ['rawRequest']
+			extraSections: ['telemetry']
 		}));
 	});
 	function createProvider(logSvc: ILogService) {
@@ -132,6 +134,19 @@ describe('LiveRequestEditorProvider', () => {
 		const onDidRemove = new Emitter<{ sessionId: string; location: ChatLocation }>();
 		const onDidInterception = new Emitter<PromptInterceptionState>();
 		const onDidMetadata = new Emitter<LiveRequestMetadataEvent>();
+		let currentMode: LiveRequestEditorMode = 'off';
+		let currentScope: LiveRequestOverrideScope | undefined;
+		let previewLimit = 3;
+
+		const baseAutoOverride = () => ({
+			enabled: true,
+			capturing: false,
+			hasOverrides: false,
+			scope: currentScope,
+			previewLimit
+		});
+
+		let currentInterceptionState: PromptInterceptionState;
 
 		const service: ILiveRequestEditorService = {
 			_serviceBrand: undefined,
@@ -149,8 +164,42 @@ describe('LiveRequestEditorProvider', () => {
 			restoreSection: () => undefined,
 			resetRequest: () => undefined,
 			updateTokenCounts: () => undefined,
-			getMessagesForSend: () => ({ messages: [] }),
+			updateRequestOptions: (_key: LiveRequestSessionKey, _requestOptions: OptionalChatRequestParams | undefined) => undefined,
+			getMessagesForSend: (_key: LiveRequestSessionKey, _fallback: Raw.ChatMessage[]) => ({ messages: [] as Raw.ChatMessage[] }),
 			getInterceptionState: () => currentInterceptionState,
+			setMode: async mode => {
+				currentMode = mode;
+				currentInterceptionState = { ...currentInterceptionState, mode };
+			},
+			getMode: () => currentMode,
+			setAutoOverrideScope: async scope => {
+				currentScope = scope;
+				currentInterceptionState = {
+					...currentInterceptionState,
+					autoOverride: { ...(currentInterceptionState.autoOverride ?? baseAutoOverride()), scope }
+				};
+			},
+			getAutoOverrideScope: () => currentScope,
+			configureAutoOverridePreviewLimit: async limit => {
+				previewLimit = limit;
+				currentInterceptionState = {
+					...currentInterceptionState,
+					autoOverride: { ...(currentInterceptionState.autoOverride ?? baseAutoOverride()), previewLimit }
+				};
+			},
+			clearAutoOverrides: async (_scope?: LiveRequestOverrideScope) => {
+				currentInterceptionState = {
+					...currentInterceptionState,
+					autoOverride: { ...(currentInterceptionState.autoOverride ?? baseAutoOverride()), hasOverrides: false }
+				};
+			},
+			beginAutoOverrideCapture: (_key: LiveRequestSessionKey) => {
+				currentInterceptionState = {
+					...currentInterceptionState,
+					autoOverride: { ...(currentInterceptionState.autoOverride ?? baseAutoOverride()), capturing: true }
+				};
+			},
+			getAutoOverrideEntry: () => undefined,
 			waitForInterceptionApproval: async () => undefined,
 			resolvePendingIntercept: vi.fn(),
 			handleContextChange: () => undefined,
@@ -159,8 +208,20 @@ describe('LiveRequestEditorProvider', () => {
 			clearSubagentHistory: () => undefined,
 			getMetadataSnapshot: () => undefined,
 		};
+		const buildState = (overrides: Partial<PromptInterceptionState> = {}): PromptInterceptionState => {
+			const autoOverride = overrides.autoOverride
+				? { ...baseAutoOverride(), ...overrides.autoOverride }
+				: baseAutoOverride();
+			return {
+				enabled: overrides.enabled ?? false,
+				mode: overrides.mode ?? currentMode,
+				paused: overrides.paused ?? false,
+				pending: overrides.pending,
+				autoOverride
+			};
+		};
 
-		let currentInterceptionState: PromptInterceptionState = { enabled: false };
+		currentInterceptionState = buildState();
 		const extensionUri = { toString: () => 'test', with: () => extensionUri } as unknown as vscode.Uri;
 
 		const provider = new LiveRequestEditorProvider(extensionUri, logSvc, service);
@@ -171,7 +232,7 @@ describe('LiveRequestEditorProvider', () => {
 			(provider as any)._handleInterceptionStateChanged(state);
 		};
 
-		return { provider, service, emitRequest, emitInterception };
+		return { provider, service, emitRequest, emitInterception, buildState };
 	}
 
 	function createRequest(sessionId: string): EditableChatRequest {

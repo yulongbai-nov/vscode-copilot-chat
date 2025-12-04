@@ -22,6 +22,8 @@ import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyi
 import { ITestingServicesAccessor } from '../../../../platform/test/node/services';
 import { NullWorkspaceFileIndex } from '../../../../platform/workspaceChunkSearch/node/nullWorkspaceFileIndex';
 import { IWorkspaceFileIndex } from '../../../../platform/workspaceChunkSearch/node/workspaceFileIndex';
+import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
+import { MockExtensionContext } from '../../../../platform/test/node/extensionContext';
 import { ChatResponseStreamImpl } from '../../../../util/common/chatResponseStreamImpl';
 import { DeferredPromise } from '../../../../util/vs/base/common/async';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
@@ -41,7 +43,7 @@ import { ChatTelemetryBuilder } from '../chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
-import { ILiveRequestEditorService, LiveRequestMetadataSnapshot, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
 import { EditableChatRequest, EditableChatRequestInit, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
@@ -167,6 +169,9 @@ suite('defaultIntentRequestHandler', () => {
 
 		public enabled = true;
 		public interceptionEnabled = true;
+		public mode: LiveRequestEditorMode = 'off';
+		public overrideScope: LiveRequestOverrideScope | undefined;
+		public previewLimit = 3;
 		public isInterceptionEnabledCalls = 0;
 		public waitCount = 0;
 		public resumeCalls = 0;
@@ -182,7 +187,57 @@ suite('defaultIntentRequestHandler', () => {
 			this.isInterceptionEnabledCalls++;
 			return this.enabled && this.interceptionEnabled;
 		}
-		getInterceptionState() { return { enabled: this.isInterceptionEnabled(), pending: undefined }; }
+		getInterceptionState() {
+			return {
+				enabled: this.isInterceptionEnabled(),
+				pending: undefined,
+				mode: this.mode,
+				paused: false,
+				autoOverride: {
+					enabled: true,
+					capturing: false,
+					hasOverrides: false,
+					scope: this.overrideScope,
+					previewLimit: this.previewLimit,
+				}
+			};
+		}
+
+		async setMode(mode: LiveRequestEditorMode): Promise<void> {
+			this.mode = mode;
+		}
+
+		getMode(): LiveRequestEditorMode {
+			return this.mode;
+		}
+
+		async setAutoOverrideScope(scope: LiveRequestOverrideScope): Promise<void> {
+			this.overrideScope = scope;
+		}
+
+		getAutoOverrideScope(): LiveRequestOverrideScope | undefined {
+			return this.overrideScope;
+		}
+
+		async configureAutoOverridePreviewLimit(limit: number): Promise<void> {
+			this.previewLimit = limit;
+		}
+
+		async clearAutoOverrides(): Promise<void> {
+			// no-op
+		}
+
+		beginAutoOverrideCapture(): void {
+			// no-op
+		}
+
+		getAutoOverrideEntry(): undefined {
+			return undefined;
+		}
+
+		updateRequestOptions(): EditableChatRequest | undefined {
+			return undefined;
+		}
 
 		prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
 			this.prepareRequestCalls.push(init);
@@ -279,7 +334,8 @@ suite('defaultIntentRequestHandler', () => {
 		await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
 		const telemetry = new SpyingTelemetryService();
 		const chatSessions = new IntegrationChatSessionService();
-		const service = new LiveRequestEditorService(config, telemetry, chatSessions);
+		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
+		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext);
 		return { service, chatSessions };
 	}
 

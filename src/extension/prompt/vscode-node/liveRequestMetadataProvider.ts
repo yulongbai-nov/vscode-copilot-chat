@@ -97,7 +97,7 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 		return element;
 	}
 
-	getChildren(element?: LiveRequestTreeItem): Thenable<LiveRequestTreeItem[]> | LiveRequestTreeItem[] {
+	getChildren(element?: LiveRequestTreeItem): LiveRequestTreeItem[] {
 		if (!this._metadata) {
 			return [new PlaceholderTreeItem('Live Request Editor idle — send a chat request to populate metadata.')];
 		}
@@ -209,7 +209,9 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 		} else if (field === 'model') {
 			value = this._metadata.model ?? '';
 		} else if (field === 'location') {
-			value = this._metadata.location ?? '';
+			value = typeof this._metadata.location === 'number'
+				? ChatLocation.toString(this._metadata.location)
+				: (this._metadata.location ?? '');
 		} else if (field === 'interception') {
 			value = this._metadata.interceptionState === 'pending' ? 'Pending' : 'Idle';
 		} else if (field === 'dirty') {
@@ -230,19 +232,28 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 		const roots: OutlineRootTreeItem[] = [];
 		if (this._outlineSections.has('requestOptions')) {
 			const data = request.metadata?.requestOptions ? deepClone(request.metadata.requestOptions) : undefined;
-			const children = data !== undefined ? this._buildOutlineChildren(data, ['requestOptions']) : [];
-			roots.push(new OutlineRootTreeItem('requestOptions', OUTLINE_SECTION_LABELS.requestOptions, children));
+			const childNodes = data !== undefined ? this._buildOutlineNodes(data, ['requestOptions']) : [];
+			roots.push(new OutlineRootTreeItem(
+				'requestOptions',
+				OUTLINE_SECTION_LABELS.requestOptions,
+				childNodes.map(node => OutlineEntryTreeItem.fromNode(node))
+			));
 		}
 
 		if (this._outlineSections.has('rawRequest')) {
 			const payload = {
 				model: request.model,
-				location: request.location,
+				location: ChatLocation.toString(request.location),
 				messages: deepClone(request.messages ?? []),
 				requestOptions: request.metadata?.requestOptions ? deepClone(request.metadata.requestOptions) : undefined,
 				metadata: this._buildRawMetadata(request.metadata)
 			};
-			roots.push(new OutlineRootTreeItem('rawRequest', OUTLINE_SECTION_LABELS.rawRequest, this._buildOutlineChildren(payload, ['rawRequest'])));
+			const childNodes = this._buildOutlineNodes(payload, ['rawRequest']);
+			roots.push(new OutlineRootTreeItem(
+				'rawRequest',
+				OUTLINE_SECTION_LABELS.rawRequest,
+				childNodes.map(node => OutlineEntryTreeItem.fromNode(node))
+			));
 		}
 		return roots;
 	}
@@ -264,42 +275,42 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 		return Object.keys(trimmed).length ? trimmed : undefined;
 	}
 
-	private _buildOutlineChildren(value: unknown, path: string[], budgetState?: { remaining: number; truncated: boolean }): OutlineEntryTreeItem[] {
+	private _buildOutlineNodes(value: unknown, path: string[], budgetState?: { remaining: number; truncated: boolean }): OutlineNodeData[] {
 		const budget = budgetState ?? { remaining: MAX_OUTLINE_ENTRIES, truncated: false };
 		if (budget.remaining <= 0) {
 			budget.truncated = true;
-			return [OutlineEntryTreeItem.truncated()];
+			return [this._createTruncatedNode(path)];
 		}
 
 		if (Array.isArray(value)) {
-			const entries: OutlineEntryTreeItem[] = [];
+			const entries: OutlineNodeData[] = [];
 			for (let index = 0; index < value.length; index++) {
 				if (budget.remaining <= 0) {
 					budget.truncated = true;
-					entries.push(OutlineEntryTreeItem.truncated());
+					entries.push(this._createTruncatedNode(path));
 					break;
 				}
-				entries.push(this._createOutlineEntry(`[${index}]`, value[index], [...path, String(index)], budget));
+				entries.push(this._createOutlineNode(`[${index}]`, value[index], [...path, String(index)], budget));
 			}
 			if (!entries.length) {
-				entries.push(new PlaceholderTreeItem('Empty array'));
+				entries.push(this._createPlaceholderNode('Empty array', path));
 			}
 			return entries;
 		}
 
 		if (value && typeof value === 'object') {
-			const entries: OutlineEntryTreeItem[] = [];
+			const entries: OutlineNodeData[] = [];
 			for (const key of Object.keys(value as Record<string, unknown>)) {
 				if (budget.remaining <= 0) {
 					budget.truncated = true;
-					entries.push(OutlineEntryTreeItem.truncated());
+					entries.push(this._createTruncatedNode(path));
 					break;
 				}
 				const entryValue = (value as Record<string, unknown>)[key];
-				entries.push(this._createOutlineEntry(key, entryValue, [...path, key], budget));
+				entries.push(this._createOutlineNode(key, entryValue, [...path, key], budget));
 			}
 			if (!entries.length) {
-				entries.push(new PlaceholderTreeItem('Empty object'));
+				entries.push(this._createPlaceholderNode('Empty object', path));
 			}
 			return entries;
 		}
@@ -307,7 +318,7 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 		return [];
 	}
 
-	private _createOutlineEntry(label: string, value: unknown, path: string[], budget: { remaining: number; truncated: boolean }): OutlineEntryTreeItem {
+	private _createOutlineNode(label: string, value: unknown, path: string[], budget: { remaining: number; truncated: boolean }): OutlineNodeData {
 		budget.remaining--;
 		const node: OutlineNodeData = {
 			id: path.join('.'),
@@ -318,14 +329,32 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 		};
 
 		if (value && typeof value === 'object') {
-			const children = this._buildOutlineChildren(value, path, budget);
+			const children = this._buildOutlineNodes(value, path, budget);
 			node.children = children;
 			node.copyValue = this._stringifyValue(value);
 		} else if (value === null || typeof value !== 'object') {
 			node.copyValue = this._stringifyValue(value);
 		}
 
-		return OutlineEntryTreeItem.fromNode(node);
+		return node;
+	}
+
+	private _createPlaceholderNode(label: string, path: string[]): OutlineNodeData {
+		return {
+			id: `${path.join('.')}::${label}`,
+			label,
+			description: undefined,
+			icon: OUTLINE_ICONS.unknown
+		};
+	}
+
+	private _createTruncatedNode(path: string[]): OutlineNodeData {
+		return {
+			id: `${path.join('.')}::truncated`,
+			label: '… entries truncated …',
+			description: 'Outline truncated for brevity',
+			icon: new vscode.ThemeIcon('warning')
+		};
 	}
 
 	private _describeValue(value: unknown): string {
@@ -469,8 +498,9 @@ class MetadataRootTreeItem extends LiveRequestTreeItem {
 	}
 }
 
+
 class MetadataFieldTreeItem extends LiveRequestTreeItem {
-	constructor(label: string, displayValue: string, private readonly rawValue: string) {
+	constructor(label: string, displayValue: string, rawValue: string) {
 		super(label, vscode.TreeItemCollapsibleState.None);
 		this.description = displayValue;
 		this.tooltip = rawValue || '—';
@@ -484,8 +514,9 @@ class MetadataFieldTreeItem extends LiveRequestTreeItem {
 	}
 }
 
+
 class TokenBudgetTreeItem extends LiveRequestTreeItem {
-	constructor(private readonly used: number, private readonly max: number) {
+	constructor(used: number, max: number) {
 		super('Token Budget', vscode.TreeItemCollapsibleState.None);
 		const percent = max > 0 ? Math.min(Math.max(Math.round((used / max) * 100), 0), 999) : undefined;
 		this.description = max > 0 ? `${percent}% · ${used.toLocaleString()}/${max.toLocaleString()} tokens` : `${used.toLocaleString()} tokens (awaiting budget)`;

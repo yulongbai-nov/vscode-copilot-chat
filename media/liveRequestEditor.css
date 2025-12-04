@@ -124,6 +124,39 @@ body {
 	align-items: center;
 }
 
+.mode-toggle {
+	display: inline-flex;
+	align-items: center;
+	background: var(--vscode-sideBar-background);
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.mode-toggle-button {
+	border: none;
+	background: transparent;
+	color: var(--vscode-foreground);
+	padding: 4px 10px;
+	font-size: 12px;
+	cursor: pointer;
+	border-right: 1px solid var(--vscode-panel-border);
+}
+
+.mode-toggle-button:last-child {
+	border-right: none;
+}
+
+.mode-toggle-button.active {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}
+
+.mode-toggle-button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
 .session-selector {
 	display: flex;
 	flex-direction: column;
@@ -144,6 +177,41 @@ body {
 	font-size: 12px;
 	color: var(--vscode-descriptionForeground);
 	margin-bottom: 12px;
+}
+
+.auto-override-banner {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 10px 12px;
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 6px;
+	margin-bottom: 12px;
+	background: rgba(111, 195, 223, 0.08);
+}
+
+.auto-override-banner.capturing {
+	border-color: var(--vscode-testing-iconQueued);
+	background: rgba(255, 204, 102, 0.12);
+}
+
+.auto-override-text {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.auto-override-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.auto-override-note {
+	margin-bottom: 12px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
 }
 
 .metadata-row {
@@ -322,6 +390,22 @@ body {
 
 .section-header:hover {
 	background: var(--vscode-list-hoverBackground);
+}
+
+.override-chip {
+	margin-left: 8px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	border: 1px solid var(--vscode-button-border, rgba(111, 195, 223, 0.6));
+	background: transparent;
+	color: var(--vscode-foreground);
+	font-size: 11px;
+	line-height: 1.4;
+	cursor: pointer;
+}
+
+.override-chip:hover {
+	background: rgba(111, 195, 223, 0.12);
 }
 
 .section-title {
@@ -591,13 +675,15 @@ body {
 
 .section-actions vscode-button,
 .editor-actions vscode-button,
-.header-actions vscode-button {
+.header-actions vscode-button,
+.auto-override-actions vscode-button {
 	min-width: auto;
 }
 
 .section-actions vscode-button::part(control),
 .editor-actions vscode-button::part(control),
-.header-actions vscode-button::part(control) {
+.header-actions vscode-button::part(control),
+.auto-override-actions vscode-button::part(control) {
 	font-size: 12px;
 	padding: 4px 10px;
 }

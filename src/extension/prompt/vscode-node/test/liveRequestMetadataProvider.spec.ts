@@ -5,8 +5,10 @@
 
 import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 import * as vscode from 'vscode';
+import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { Emitter } from '../../../../util/vs/base/common/event';
+import { EditableChatRequest } from '../../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, LiveRequestMetadataEvent } from '../../common/liveRequestEditorService';
 import { LiveRequestMetadataProvider } from '../liveRequestMetadataProvider';
 
@@ -78,6 +80,8 @@ describe('LiveRequestMetadataProvider', () => {
 	let provider: LiveRequestMetadataProvider;
 	let logService: ILogService;
 	let service: ILiveRequestEditorService;
+	let metadataEmitter: Emitter<LiveRequestMetadataEvent>;
+	let requestEmitter: Emitter<EditableChatRequest>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -89,11 +93,12 @@ describe('LiveRequestMetadataProvider', () => {
 			error: vi.fn(),
 		} as unknown as ILogService;
 
-		const metadataEmitter = new Emitter<LiveRequestMetadataEvent>();
+		metadataEmitter = new Emitter<LiveRequestMetadataEvent>();
+		requestEmitter = new Emitter<EditableChatRequest>();
 		service = {
 			_serviceBrand: undefined,
 			onDidChangeMetadata: metadataEmitter.event,
-			onDidChange: new Emitter().event,
+			onDidChange: requestEmitter.event,
 			onDidRemoveRequest: new Emitter().event
 		} as unknown as ILiveRequestEditorService;
 
@@ -138,5 +143,57 @@ describe('LiveRequestMetadataProvider', () => {
 		const children = provider.getChildren();
 		expect(children).toHaveLength(1);
 		expect(children[0].label).toContain('Live Request Editor idle');
+	});
+
+	test('request options outline renders sampling parameters', () => {
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		const request: EditableChatRequest = {
+			id: 'req',
+			sessionId: key.sessionId,
+			location: key.location,
+			debugName: 'debug',
+			model: 'gpt',
+			messages: [],
+			sections: [],
+			originalMessages: [],
+			isDirty: false,
+			metadata: {
+				requestId: 'req',
+				createdAt: Date.now(),
+				tokenCount: 10,
+				maxPromptTokens: 1000,
+				modelFamily: 'gpt',
+				requestOptions: {
+					temperature: 0.2,
+					top_p: 0.9,
+					n: 1,
+					tools: []
+				}
+			}
+		};
+		requestEmitter.fire(request);
+		metadataEmitter.fire({
+			key,
+			metadata: {
+				sessionId: key.sessionId,
+				location: key.location,
+				requestId: 'req',
+				debugName: 'debug',
+				model: 'gpt',
+				isDirty: false,
+				createdAt: Date.now(),
+				lastUpdated: Date.now(),
+				interceptionState: 'idle',
+				tokenCount: 10,
+				maxPromptTokens: 1000
+			}
+		});
+
+		const roots = provider.getChildren();
+		const requestOptionsRoot = roots.find(root => root.label === 'Request Options');
+		expect(requestOptionsRoot).toBeDefined();
+		const outlineChildren = provider.getChildren(requestOptionsRoot as vscode.TreeItem);
+		const labels = outlineChildren.map(child => child.label);
+		expect(labels).toEqual(expect.arrayContaining(['temperature', 'top_p', 'n']));
 	});
 });

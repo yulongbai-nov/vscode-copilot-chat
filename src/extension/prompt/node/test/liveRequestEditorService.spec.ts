@@ -10,6 +10,9 @@ import { IChatSessionService } from '../../../../platform/chat/common/chatSessio
 import { ConfigKey } from '../../../../platform/configuration/common/configurationService';
 import { DefaultsOnlyConfigurationService } from '../../../../platform/configuration/common/defaultsOnlyConfigurationService';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/test/common/inMemoryConfigurationService';
+import { OptionalChatRequestParams } from '../../../../platform/networking/common/fetch';
+import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
+import { MockExtensionContext } from '../../../../platform/test/node/extensionContext';
 import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyingTelemetryService';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { Emitter } from '../../../../util/vs/base/common/event';
@@ -42,15 +45,15 @@ class TestChatSessionService implements IChatSessionService {
 	}
 }
 
-async function createService() {
+async function createService(extensionContext: IVSCodeExtensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext) {
 	const defaults = new DefaultsOnlyConfigurationService();
 	const config = new InMemoryConfigurationService(defaults);
 	await config.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, true);
 	await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
 	const telemetry = new SpyingTelemetryService();
 	const chatSessions = new TestChatSessionService();
-	const service = new LiveRequestEditorService(config, telemetry, chatSessions);
-	return { service, telemetry, chatSessions };
+	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext);
+	return { service, telemetry, chatSessions, extensionContext, config };
 }
 
 describe('LiveRequestEditorService interception', () => {
@@ -159,6 +162,38 @@ describe('LiveRequestEditorService interception', () => {
 
 		chatSessions.fireDidDispose(init.sessionId);
 		expect(events[events.length - 1]?.metadata).toBeUndefined();
+	});
+
+	test('updateRequestOptions stores cloned payloads and emits change notifications', async () => {
+		const { service } = await createService();
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		service.prepareRequest(createServiceInit());
+		let didFire = false;
+		service.onDidChange(request => {
+			if (request.sessionId === key.sessionId && request.location === key.location) {
+				didFire = true;
+			}
+		});
+
+		const options: OptionalChatRequestParams = { temperature: 0.2, top_p: 0.9, n: 1, tools: [] };
+		service.updateRequestOptions(key, options);
+
+		const stored = service.getRequest(key)?.metadata.requestOptions;
+		expect(stored).toEqual(options);
+		expect(stored).not.toBe(options);
+		expect(didFire).toBe(true);
+	});
+
+	test('updateRequestOptions clears previously stored options', async () => {
+		const { service } = await createService();
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		service.prepareRequest(createServiceInit());
+
+		service.updateRequestOptions(key, { temperature: 0.3 });
+		expect(service.getRequest(key)?.metadata.requestOptions).toBeDefined();
+
+		service.updateRequestOptions(key, undefined);
+		expect(service.getRequest(key)?.metadata.requestOptions).toBeUndefined();
 	});
 
 	test('tool sections expose invocation metadata', async () => {
@@ -353,6 +388,56 @@ describe('LiveRequestEditorService interception', () => {
 		expect(decisionA).toEqual({ action: 'cancel', reason: 'contextChanged:sessionSwitch' });
 		expect(decisionB).toEqual({ action: 'cancel', reason: 'contextChanged:sessionSwitch' });
 		expect(service.getInterceptionState().pending).toBeUndefined();
+	});
+
+	test('auto override captures and reapplies edits for the session scope', async () => {
+		const { service } = await createService();
+		await service.setMode('autoOverride');
+		const init = createServiceInit();
+		service.prepareRequest(init);
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		const decisionPromise = service.waitForInterceptionApproval(key, CancellationToken.None);
+		const request = service.getRequest(key)!;
+		const section = request.sections[0];
+		service.updateSectionContent(key, section.id, 'modified by override');
+		service.resolvePendingIntercept(key, 'resume');
+		await decisionPromise;
+
+		const followUp = createServiceInit({ sessionId: init.sessionId, requestId: 'req-2' });
+		service.prepareRequest(followUp);
+		const nextRequest = service.getRequest(key)!;
+		expect(nextRequest.sections[0].content).toBe('modified by override');
+		expect(nextRequest.sections[0].overrideState?.scope).toBe('session');
+	});
+
+	test('workspace auto overrides persist across service instances', async () => {
+		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
+		const first = await createService(extensionContext);
+		await first.service.setMode('autoOverride');
+		await first.service.setAutoOverrideScope('workspace');
+		const initialInit = createServiceInit({ sessionId: 'workspace-session' });
+		first.service.prepareRequest(initialInit);
+		const key: LiveRequestSessionKey = { sessionId: initialInit.sessionId, location: initialInit.location };
+		const decisionPromise = first.service.waitForInterceptionApproval(key, CancellationToken.None);
+		const initialRequest = first.service.getRequest(key)!;
+		first.service.updateSectionContent(key, initialRequest.sections[0].id, 'workspace override');
+		first.service.resolvePendingIntercept(key, 'resume');
+		await decisionPromise;
+
+		const followUpInit = createServiceInit({ sessionId: 'another-session', requestId: 'req-follow' });
+		first.service.prepareRequest(followUpInit);
+		const followKey: LiveRequestSessionKey = { sessionId: followUpInit.sessionId, location: followUpInit.location };
+		const followRequest = first.service.getRequest(followKey)!;
+		expect(followRequest.sections[0].content).toBe('workspace override');
+		expect(followRequest.sections[0].overrideState?.scope).toBe('workspace');
+
+		const second = await createService(extensionContext);
+		const rehydratedInit = createServiceInit({ sessionId: 'rehydrated-session', requestId: 'req-rehydrated' });
+		second.service.prepareRequest(rehydratedInit);
+		const rehydratedKey: LiveRequestSessionKey = { sessionId: rehydratedInit.sessionId, location: rehydratedInit.location };
+		const rehydratedRequest = second.service.getRequest(rehydratedKey)!;
+		expect(rehydratedRequest.sections[0].content).toBe('workspace override');
+		expect(rehydratedRequest.sections[0].overrideState?.scope).toBe('workspace');
 	});
 
 });

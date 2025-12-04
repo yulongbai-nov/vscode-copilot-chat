@@ -8,7 +8,10 @@ import { createServiceIdentifier } from '../../../util/common/services';
 import { Event } from '../../../util/vs/base/common/event';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey } from './liveRequestEditorModel';
+import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey } from './liveRequestEditorModel';
+
+export type { LiveRequestEditorMode, LiveRequestOverrideScope } from './liveRequestEditorModel';
 
 export const ILiveRequestEditorService = createServiceIdentifier<ILiveRequestEditorService>('ILiveRequestEditorService');
 
@@ -20,9 +23,30 @@ export interface PendingPromptInterceptSummary {
 	readonly nonce: number;
 }
 
+export interface AutoOverrideSummary {
+	readonly enabled: boolean;
+	readonly capturing: boolean;
+	readonly hasOverrides: boolean;
+	readonly scope?: LiveRequestOverrideScope;
+	readonly previewLimit: number;
+	readonly lastUpdated?: number;
+}
+
+export interface AutoOverrideDiffEntry {
+	readonly scope: LiveRequestOverrideScope;
+	readonly label: string;
+	readonly originalContent: string;
+	readonly overrideContent: string;
+	readonly deleted: boolean;
+	readonly updatedAt: number;
+}
+
 export interface PromptInterceptionState {
 	readonly enabled: boolean;
 	readonly pending?: PendingPromptInterceptSummary;
+	readonly mode: LiveRequestEditorMode;
+	readonly paused: boolean;
+	readonly autoOverride?: AutoOverrideSummary;
 }
 
 export type PromptInterceptionAction = 'resume' | 'cancel';
@@ -76,9 +100,27 @@ export interface ILiveRequestEditorService {
 
 	updateTokenCounts(key: LiveRequestSessionKey, tokenCounts: { total?: number; perMessage?: number[] }): EditableChatRequest | undefined;
 
+	updateRequestOptions(key: LiveRequestSessionKey, requestOptions: OptionalChatRequestParams | undefined): EditableChatRequest | undefined;
+
 	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): LiveRequestSendResult;
 
 	getInterceptionState(): PromptInterceptionState;
+
+	setMode(mode: LiveRequestEditorMode): Promise<void>;
+
+	getMode(): LiveRequestEditorMode;
+
+	setAutoOverrideScope(scope: LiveRequestOverrideScope): Promise<void>;
+
+	getAutoOverrideScope(): LiveRequestOverrideScope | undefined;
+
+	configureAutoOverridePreviewLimit(limit: number): Promise<void>;
+
+	clearAutoOverrides(scope?: LiveRequestOverrideScope): Promise<void>;
+
+	beginAutoOverrideCapture(key: LiveRequestSessionKey): void;
+
+	getAutoOverrideEntry(scope: LiveRequestOverrideScope, slotIndex: number, key?: LiveRequestSessionKey): AutoOverrideDiffEntry | undefined;
 
 	waitForInterceptionApproval(key: LiveRequestSessionKey, token: CancellationToken): Promise<PromptInterceptionDecision | undefined>;
 

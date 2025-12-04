@@ -4,17 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../platform/log/common/logService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { IExtensionContribution } from '../../common/contributions';
-import { ILiveRequestEditorService, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestOverrideScope, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
 import { LiveRequestMetadataProvider } from './liveRequestMetadataProvider';
+
+type ModePickItem = vscode.QuickPickItem & { mode: LiveRequestEditorMode; disabled?: boolean };
+type ScopePickItem = vscode.QuickPickItem & { scope: LiveRequestOverrideScope };
+type PreviewLimitPickItem = vscode.QuickPickItem & { value?: number; custom?: boolean };
 
 export class LiveRequestEditorContribution implements IExtensionContribution {
 	readonly id = 'liveRequestEditor';
@@ -29,7 +32,6 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		@ILogService private readonly _logService: ILogService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
-		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 	) {
 		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, false);
@@ -106,6 +108,34 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const setModeCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.setMode',
+			async () => {
+				await this._pickMode();
+			}
+		);
+
+		const configureScopeCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.configureAutoOverrideScope',
+			async () => {
+				await this._configureAutoOverrideScope();
+			}
+		);
+
+		const configurePreviewLimitCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.configureAutoOverridePreviewLimit',
+			async () => {
+				await this._configureAutoOverridePreviewLimit();
+			}
+		);
+
+		const clearOverridesCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.clearAutoOverrides',
+			async () => {
+				await this._clearAutoOverrideOverrides();
+			}
+		);
+
 		const toggleCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestEditor.toggle',
 			async () => {
@@ -140,20 +170,24 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(showCommand);
 		this._disposables.add(toggleCommand);
 		this._disposables.add(toggleInterceptionCommand);
+		this._disposables.add(setModeCommand);
+		this._disposables.add(configureScopeCommand);
+		this._disposables.add(configurePreviewLimitCommand);
+		this._disposables.add(clearOverridesCommand);
 		this._disposables.add(configureMetadataCommand);
 		this._disposables.add(copyMetadataValue);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {
-		if (!this._liveRequestEditorService.isEnabled()) {
-			vscode.window.showWarningMessage('Enable the Live Request Editor to use Prompt Interception Mode.');
+		if (!this._ensureLiveRequestEditorEnabled()) {
 			return;
 		}
-		const next = !this._liveRequestEditorService.isInterceptionEnabled();
+		const currentMode = this._liveRequestEditorService.getMode();
+		const next: LiveRequestEditorMode = currentMode === 'interceptAlways' ? 'off' : 'interceptAlways';
 		try {
-			await this._configurationService.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, next);
-			this._recordInterceptionTelemetry(next, source);
-			if (next) {
+			await this._liveRequestEditorService.setMode(next);
+			this._recordModeTelemetry(next, source);
+			if (next !== 'off') {
 				await vscode.commands.executeCommand('github.copilot.liveRequestEditor.show');
 			}
 		} catch (error) {
@@ -162,11 +196,138 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		}
 	}
 
-	private _recordInterceptionTelemetry(enabled: boolean, source: 'command' | 'statusBar'): void {
-		this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.promptInterception.toggle', {
+	private _recordModeTelemetry(mode: LiveRequestEditorMode, source: 'command' | 'statusBar' | 'picker'): void {
+		this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.modeChanged', {
 			source,
-			enabled: enabled ? '1' : '0',
+			mode,
 		});
+	}
+
+	private _ensureLiveRequestEditorEnabled(): boolean {
+		if (!this._liveRequestEditorService.isEnabled()) {
+			vscode.window.showWarningMessage('Enable the Live Request Editor to configure Prompt Interception.');
+			return false;
+		}
+		return true;
+	}
+
+	private async _pickMode(): Promise<void> {
+		if (!this._ensureLiveRequestEditorEnabled()) {
+			return;
+		}
+		const state = this._liveRequestEditorService.getInterceptionState();
+		const autoOverride = state.autoOverride;
+		const picks: ModePickItem[] = [
+			{ label: 'Off', description: 'Send requests immediately without pausing.', mode: 'off' },
+			{ label: 'Prompt Interception', description: 'Pause every request for manual approval.', mode: 'interceptAlways' }
+		];
+		if (autoOverride?.enabled) {
+			const previewLabel = autoOverride.previewLimit === 1 ? 'first section' : `first ${autoOverride.previewLimit} sections`;
+			picks.push({
+				label: 'Auto Override',
+				description: `Intercept once, edit ${previewLabel}, then auto-apply overrides.`,
+				mode: 'autoOverride'
+			});
+		} else {
+			picks.push({
+				label: 'Auto Override (disabled)',
+				description: 'Enable github.copilot.chat.liveRequestEditor.autoOverride.enabled to unlock override persistence.',
+				mode: 'autoOverride',
+				disabled: true
+			});
+		}
+
+		const selection = await vscode.window.showQuickPick<ModePickItem>(picks, {
+			placeHolder: 'Select the Live Request Editor mode',
+			canPickMany: false
+		});
+		if (!selection || selection.disabled) {
+			return;
+		}
+		await this._liveRequestEditorService.setMode(selection.mode);
+		this._recordModeTelemetry(selection.mode, 'picker');
+		if (selection.mode !== 'off') {
+			await vscode.commands.executeCommand('github.copilot.liveRequestEditor.show');
+		}
+	}
+
+	private async _configureAutoOverrideScope(): Promise<void> {
+		if (!this._ensureLiveRequestEditorEnabled()) {
+			return;
+		}
+		const autoOverride = this._liveRequestEditorService.getInterceptionState().autoOverride;
+		if (!autoOverride?.enabled) {
+			vscode.window.showInformationMessage('Auto Override is disabled in settings. Enable it to configure scope.');
+			return;
+		}
+		const current = this._liveRequestEditorService.getAutoOverrideScope() ?? 'session';
+		const picks: ScopePickItem[] = [
+			{ label: 'Session', description: 'Apply overrides only to the active chat session.', scope: 'session' },
+			{ label: 'Workspace', description: 'Reuse overrides across all chat sessions in this workspace.', scope: 'workspace' },
+			{ label: 'Global', description: 'Reuse overrides across every workspace on this machine.', scope: 'global' }
+		];
+		const selection = await vscode.window.showQuickPick<ScopePickItem>(picks.map(pick => ({
+			...pick,
+			detail: pick.scope === current ? 'Current selection' : undefined
+		})), {
+			placeHolder: 'Choose how Auto Override persists your edits',
+			canPickMany: false
+		});
+		if (!selection) {
+			return;
+		}
+		await this._liveRequestEditorService.setAutoOverrideScope(selection.scope);
+		vscode.window.showInformationMessage(`Auto Override scope set to ${selection.label}.`);
+	}
+
+	private async _configureAutoOverridePreviewLimit(): Promise<void> {
+		if (!this._ensureLiveRequestEditorEnabled()) {
+			return;
+		}
+		const autoOverride = this._liveRequestEditorService.getInterceptionState().autoOverride;
+		if (!autoOverride?.enabled) {
+			vscode.window.showInformationMessage('Auto Override is disabled in settings. Enable it to configure the preview limit.');
+			return;
+		}
+		const current = autoOverride.previewLimit;
+		const presets = [1, 2, 3, 4, 5];
+		const picks: PreviewLimitPickItem[] = presets.map(value => ({
+			label: value === 1 ? '1 section' : `${value} sections`,
+			detail: value === current ? 'Current selection' : undefined,
+			value
+		}));
+		picks.push({ label: 'Custom…', description: 'Enter a custom number of sections', custom: true });
+		const selection = await vscode.window.showQuickPick<PreviewLimitPickItem>(picks, {
+			placeHolder: 'How many prefix sections should Auto Override capture?',
+			canPickMany: false
+		});
+		if (!selection) {
+			return;
+		}
+		let nextValue = selection.value ?? current;
+		if (selection.custom) {
+			const input = await vscode.window.showInputBox({
+				prompt: 'Enter the number of sections to capture (minimum 1)',
+				validateInput: value => {
+					const parsed = Number(value);
+					return Number.isInteger(parsed) && parsed >= 1 ? undefined : 'Enter an integer greater than or equal to 1';
+				}
+			});
+			if (!input) {
+				return;
+			}
+			nextValue = Math.max(1, Math.floor(Number(input)));
+		}
+		await this._liveRequestEditorService.configureAutoOverridePreviewLimit(nextValue);
+		vscode.window.showInformationMessage(`Auto Override preview limit set to ${nextValue}.`);
+	}
+
+	private async _clearAutoOverrideOverrides(): Promise<void> {
+		if (!this._ensureLiveRequestEditorEnabled()) {
+			return;
+		}
+		await this._liveRequestEditorService.clearAutoOverrides();
+		vscode.window.showInformationMessage('Cleared saved Auto Override overrides.');
 	}
 
 	private async _toggleInspectorVisibility(): Promise<void> {
@@ -193,24 +354,40 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		}
 
 		const pending = state.pending;
-		const icon = pending ? '$(warning)' : state.enabled ? '$(debug-pause)' : '$(circle-slash)';
-		const suffix = pending ? 'On (request paused)' : state.enabled ? 'On' : 'Off';
-		this._statusBarItem.text = `${icon} Prompt Interception: ${suffix}`;
-
+		const mode = state.mode ?? 'off';
+		let icon = '$(circle-slash)';
+		let label = 'Prompt Interception: Off';
 		const tooltip = new vscode.MarkdownString(undefined, true);
-		const lines: string[] = [
-			'**Prompt Interception Mode**',
-			state.enabled
-				? 'Requests pause before sending so you can edit them in the Live Request Editor.'
-				: 'Requests send immediately without pausing in the Live Request Editor.'
-		];
-		if (pending) {
-			const pausedLabel = pending.debugName.replace(/`/g, '\\`');
-			lines.push('', `Paused turn: \`${pausedLabel}\``);
-			lines.push('', 'Click to review the pending request.');
+		const lines: string[] = ['**Prompt Inspector Mode**'];
+
+		if (mode === 'autoOverride') {
+			const auto = state.autoOverride;
+			icon = auto?.hasOverrides ? '$(symbol-namespace)' : '$(plug)';
+			label = auto?.capturing ? 'Auto Override: capturing…' : 'Auto Override: Active';
+			lines.push(auto?.capturing
+				? 'Auto Override is capturing prefix sections before sending.'
+				: auto?.hasOverrides ? 'Auto Override is applying saved prefix edits.' : 'Enable Auto Override to capture custom prefixes.');
+			if (auto?.scope) {
+				lines.push('', `Scope: **${auto.scope}**`);
+			}
+			lines.push('', 'Use the mode picker to change modes.');
+		} else if (mode === 'interceptAlways' || state.enabled) {
+			icon = pending ? '$(warning)' : '$(debug-pause)';
+			label = pending ? 'Prompt Interception: paused' : 'Prompt Interception: On';
+			lines.push('Requests pause before sending so you can edit them in the Live Request Editor.');
+			if (pending) {
+				const pausedLabel = pending.debugName.replace(/`/g, '\\`');
+				lines.push('', `Paused turn: \`${pausedLabel}\``);
+				lines.push('', 'Click to review the pending request.');
+			} else {
+				lines.push('', 'Click to disable.');
+			}
 		} else {
-			lines.push('', state.enabled ? 'Click to disable.' : 'Click to enable.');
+			lines.push('Requests send immediately without pausing in the Live Request Editor.');
+			lines.push('', 'Click to enable Prompt Interception.');
 		}
+
+		this._statusBarItem.text = `${icon} ${label}`;
 		tooltip.appendMarkdown(lines.join('\n\n'));
 		tooltip.supportThemeIcons = true;
 		tooltip.isTrusted = true;

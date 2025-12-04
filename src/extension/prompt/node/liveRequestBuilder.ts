@@ -70,6 +70,7 @@ function createSection(message: Raw.ChatMessage, index: number, tokenCount?: num
 		label,
 		message,
 		content,
+		originalContent: content,
 		collapsed: kind === 'history',
 		editable,
 		deletable,

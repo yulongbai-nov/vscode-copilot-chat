@@ -13,12 +13,48 @@ import { stringHash } from '../../../util/vs/base/common/hash';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
+import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
+import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestValidationError } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
+import { AutoOverrideDiffEntry, AutoOverrideSummary, ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
 import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
 
 const SUBAGENT_HISTORY_LIMIT = 10;
+const WORKSPACE_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.workspace';
+const GLOBAL_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.global';
+
+interface StoredAutoOverrideEntry {
+	slotIndex: number;
+	kind: LiveRequestSectionKind;
+	label: string;
+	originalContent: string;
+	overrideContent: string;
+	deleted: boolean;
+	updatedAt: number;
+	scope: LiveRequestOverrideScope;
+}
+
+interface AutoOverrideSet {
+	scope: LiveRequestOverrideScope;
+	entries: StoredAutoOverrideEntry[];
+	updatedAt: number;
+}
+
+interface AutoOverrideStoragePayload {
+	readonly entries: SerializedAutoOverrideEntry[];
+	readonly updatedAt: number;
+}
+
+interface SerializedAutoOverrideEntry {
+	readonly slotIndex: number;
+	readonly kind: LiveRequestSectionKind;
+	readonly label: string;
+	readonly originalContent: string;
+	readonly overrideContent: string;
+	readonly deleted: boolean;
+	readonly updatedAt: number;
+}
 
 export class LiveRequestEditorService extends Disposable implements ILiveRequestEditorService {
 	declare readonly _serviceBrand: undefined;
@@ -37,7 +73,18 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private readonly _subagentHistory: SubagentRequestEntry[] = [];
 	private _enabled: boolean;
-	private _interceptionEnabled: boolean;
+	private _mode: LiveRequestEditorMode;
+	private _modeUpdateFromConfig = false;
+	private _modeBeforeInterceptOnce: LiveRequestEditorMode = 'off';
+	private _autoOverrideFeatureEnabled: boolean;
+	private _autoOverridePreviewLimit: number;
+	private _autoOverrideScopePreference: LiveRequestOverrideScope | undefined;
+	private _autoOverrideCapturing = false;
+	private _autoOverrideHasOverrides = false;
+	private _autoOverrideLastUpdated: number | undefined;
+	private readonly _sessionAutoOverrides = new Map<string, AutoOverrideSet>();
+	private _workspaceAutoOverride?: AutoOverrideSet;
+	private _globalAutoOverride?: AutoOverrideSet;
 	private readonly _pendingIntercepts = new Map<string, PendingIntercept>();
 	private _interceptNonce = 0;
 	private _interceptionState: PromptInterceptionState;
@@ -46,11 +93,23 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 		@IChatSessionService private readonly _chatSessionService: IChatSessionService,
+		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 	) {
 		super();
 		this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
-		this._interceptionEnabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorInterception);
-		this._interceptionState = { enabled: this.isInterceptionEnabled() };
+		this._mode = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorInterception) ? 'interceptAlways' : 'off';
+		this._autoOverrideFeatureEnabled = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideEnabled);
+		this._autoOverridePreviewLimit = this.clampPreviewLimit(this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverridePreviewLimit));
+		this._autoOverrideScopePreference = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideScopePreference);
+		this._workspaceAutoOverride = this.loadPersistedOverride('workspace');
+		this._globalAutoOverride = this.loadPersistedOverride('global');
+		this.refreshAutoOverrideFlags();
+		this._interceptionState = {
+			enabled: this.isInterceptionEnabled(),
+			mode: this._mode,
+			paused: false,
+			autoOverride: this.buildAutoOverrideSummary()
+		};
 		this._register(this._configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration(ConfigKey.Advanced.LivePromptEditorEnabled.fullyQualifiedId)) {
 				this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
@@ -61,10 +120,33 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				this.emitInterceptionState();
 			}
 			if (e.affectsConfiguration(ConfigKey.Advanced.LivePromptEditorInterception.fullyQualifiedId)) {
-				this._interceptionEnabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorInterception);
-				if (!this.isInterceptionEnabled()) {
-					this.cancelAllIntercepts('modeDisabled');
+				const next = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorInterception) ? 'interceptAlways' : 'off';
+				if (!this._modeUpdateFromConfig) {
+					this._mode = next;
+					if (next === 'off') {
+						this._autoOverrideCapturing = false;
+						this._autoOverrideHasOverrides = false;
+						this._autoOverrideLastUpdated = undefined;
+						this.cancelAllIntercepts('modeDisabled');
+					}
+					this.emitInterceptionState();
 				}
+			}
+			if (e.affectsConfiguration(ConfigKey.LiveRequestEditorAutoOverrideEnabled.fullyQualifiedId)) {
+				this._autoOverrideFeatureEnabled = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideEnabled);
+				if (!this._autoOverrideFeatureEnabled) {
+					this._autoOverrideCapturing = false;
+				} else if (this._mode === 'autoOverride') {
+					this._autoOverrideCapturing = true;
+				}
+				this.emitInterceptionState();
+			}
+			if (e.affectsConfiguration(ConfigKey.LiveRequestEditorAutoOverridePreviewLimit.fullyQualifiedId)) {
+				this._autoOverridePreviewLimit = this.clampPreviewLimit(this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverridePreviewLimit));
+				this.emitInterceptionState();
+			}
+			if (e.affectsConfiguration(ConfigKey.LiveRequestEditorAutoOverrideScopePreference.fullyQualifiedId)) {
+				this._autoOverrideScopePreference = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideScopePreference);
 				this.emitInterceptionState();
 			}
 		}));
@@ -79,7 +161,18 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	}
 
 	isInterceptionEnabled(): boolean {
-		return this._enabled && !!this._interceptionEnabled;
+		if (!this._enabled) {
+			return false;
+		}
+		switch (this._mode) {
+			case 'interceptAlways':
+			case 'interceptOnce':
+				return true;
+			case 'autoOverride':
+				return this._autoOverrideFeatureEnabled && this._autoOverrideCapturing;
+			default:
+				return false;
+		}
 	}
 
 	prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
@@ -88,6 +181,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return undefined;
 		}
 		const request = buildEditableChatRequest(init);
+		this.applyAutoOverridesForRequest(request);
 		this._requests.set(this.toKey(init.sessionId, init.location), request);
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
@@ -171,6 +265,17 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}, false);
 	}
 
+	updateRequestOptions(key: LiveRequestSessionKey, requestOptions: OptionalChatRequestParams | undefined): EditableChatRequest | undefined {
+		return this.withRequest(key, request => {
+			const next = requestOptions ? deepClone(requestOptions) : undefined;
+			if (equals(request.metadata.requestOptions, next)) {
+				return false;
+			}
+			request.metadata.requestOptions = next;
+			return true;
+		}, false);
+	}
+
 	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): LiveRequestSendResult {
 		if (!this._enabled) {
 			return { messages: fallback };
@@ -195,6 +300,145 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 	getInterceptionState(): PromptInterceptionState {
 		return this._interceptionState;
+	}
+
+	async setMode(mode: LiveRequestEditorMode): Promise<void> {
+		if (this._mode === mode) {
+			return;
+		}
+		const previousMode = this._mode;
+		this._mode = mode;
+		if (mode === 'interceptOnce') {
+			this._modeBeforeInterceptOnce = previousMode === 'interceptOnce' ? 'off' : previousMode;
+		}
+		this._autoOverrideCapturing = mode === 'autoOverride'
+			&& this._autoOverrideFeatureEnabled
+			&& !this._autoOverrideHasOverrides;
+		const shouldPersist = mode === 'interceptAlways';
+		const previouslyPersisted = previousMode === 'interceptAlways';
+		if (shouldPersist) {
+			await this.updateInterceptionSetting(true);
+		} else if (previouslyPersisted) {
+			await this.updateInterceptionSetting(false);
+		}
+		if (!this.isInterceptionEnabled()) {
+			this.cancelAllIntercepts('modeDisabled');
+		}
+		this.emitInterceptionState();
+	}
+
+	getMode(): LiveRequestEditorMode {
+		return this._mode;
+	}
+
+	async setAutoOverrideScope(scope: LiveRequestOverrideScope): Promise<void> {
+		if (this._autoOverrideScopePreference === scope) {
+			return;
+		}
+		this._autoOverrideScopePreference = scope;
+		await this._configurationService.setConfig(ConfigKey.LiveRequestEditorAutoOverrideScopePreference, scope);
+		this.emitInterceptionState();
+	}
+
+	getAutoOverrideScope(): LiveRequestOverrideScope | undefined {
+		return this._autoOverrideScopePreference;
+	}
+
+	async configureAutoOverridePreviewLimit(limit: number): Promise<void> {
+		const sanitized = this.clampPreviewLimit(limit);
+		if (sanitized === this._autoOverridePreviewLimit) {
+			return;
+		}
+		this._autoOverridePreviewLimit = sanitized;
+		await this._configurationService.setConfig(ConfigKey.LiveRequestEditorAutoOverridePreviewLimit, sanitized);
+		this.emitInterceptionState();
+	}
+
+	async clearAutoOverrides(scope?: LiveRequestOverrideScope): Promise<void> {
+		let changed = false;
+		let clearedSession = false;
+		let clearedWorkspace = false;
+		let clearedGlobal = false;
+		if (!scope || scope === 'session') {
+			if (this._sessionAutoOverrides.size) {
+				this._sessionAutoOverrides.clear();
+				changed = true;
+				clearedSession = true;
+			}
+		}
+		if (!scope || scope === 'workspace') {
+			if (this._workspaceAutoOverride) {
+				this._workspaceAutoOverride = undefined;
+				changed = true;
+				clearedWorkspace = true;
+				void this._extensionContext.workspaceState.update(WORKSPACE_AUTO_OVERRIDE_KEY, undefined);
+			}
+		}
+		if (!scope || scope === 'global') {
+			if (this._globalAutoOverride) {
+				this._globalAutoOverride = undefined;
+				changed = true;
+				clearedGlobal = true;
+				void this._extensionContext.globalState.update(GLOBAL_AUTO_OVERRIDE_KEY, undefined);
+			}
+		}
+		if (!changed) {
+			return;
+		}
+		this.refreshAutoOverrideFlags();
+		if (this._mode === 'autoOverride' && this._autoOverrideFeatureEnabled) {
+			this._autoOverrideCapturing = !this._autoOverrideHasOverrides;
+		}
+		if (clearedSession) {
+			this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.autoOverride.cleared', { scope: 'session' });
+		}
+		if (clearedWorkspace) {
+			this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.autoOverride.cleared', { scope: 'workspace' });
+		}
+		if (clearedGlobal) {
+			this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.autoOverride.cleared', { scope: 'global' });
+		}
+		this.emitInterceptionState();
+	}
+
+	beginAutoOverrideCapture(_key: LiveRequestSessionKey): void {
+		if (this._mode !== 'autoOverride' || !this._autoOverrideFeatureEnabled) {
+			return;
+		}
+		this._autoOverrideCapturing = true;
+		this.emitInterceptionState();
+	}
+
+	getAutoOverrideEntry(scope: LiveRequestOverrideScope, slotIndex: number, key?: LiveRequestSessionKey): AutoOverrideDiffEntry | undefined {
+		let target: AutoOverrideSet | undefined;
+		if (scope === 'session') {
+			if (!key) {
+				return undefined;
+			}
+			target = this._sessionAutoOverrides.get(this.toKey(key.sessionId, key.location));
+		} else if (scope === 'workspace') {
+			target = this._workspaceAutoOverride;
+		} else {
+			target = this._globalAutoOverride;
+		}
+		if (!target) {
+			return undefined;
+		}
+		const entry = target.entries.find(e => e.slotIndex === slotIndex);
+		if (!entry) {
+			return undefined;
+		}
+		this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.autoOverride.diff', {
+			scope: entry.scope,
+		});
+		return {
+			scope: entry.scope,
+			label: entry.label,
+			originalContent: entry.originalContent,
+			overrideContent: entry.overrideContent,
+			deleted: entry.deleted,
+			updatedAt: entry.updatedAt,
+		};
 	}
 
 	async waitForInterceptionApproval(key: LiveRequestSessionKey, token: CancellationToken): Promise<PromptInterceptionDecision | undefined> {
@@ -253,6 +497,9 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		let loggedAction: PromptInterceptionAction = action;
 		if (!pending.deferred.isSettled) {
 			if (action === 'resume') {
+				if (this._mode === 'autoOverride' && this._autoOverrideCapturing) {
+					this.captureAutoOverrideForRequest(key);
+				}
 				const request = this.getRequest(key);
 				const result = request ? this.getMessagesForSend(key, request.messages) : { messages: pending.fallbackMessages };
 				if (result.error) {
@@ -272,6 +519,9 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 
 		this._logInterceptionOutcome(loggedAction, outcomeReason, pending.key);
+		if (this._mode === 'interceptOnce') {
+			this._mode = this._modeBeforeInterceptOnce;
+		}
 		this.emitInterceptionState();
 	}
 
@@ -332,6 +582,20 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		const request = this.getRequest(key);
 		return request ? this.buildMetadataSnapshot(request) : undefined;
+	}
+
+	private clampPreviewLimit(value: number | undefined): number {
+		if (typeof value !== 'number' || Number.isNaN(value)) {
+			return 3;
+		}
+		const clamped = Math.floor(value);
+		if (clamped < 1) {
+			return 1;
+		}
+		if (clamped > 10) {
+			return 10;
+		}
+		return clamped;
 	}
 
 	private withRequest(
@@ -525,6 +789,17 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				this.resolvePendingIntercept(pending.key, 'cancel', { reason: 'sessionDisposed' });
 			}
 		}
+		const sessionPrefix = `${sessionId}::`;
+		let removedOverrides = false;
+		for (const compositeKey of Array.from(this._sessionAutoOverrides.keys())) {
+			if (compositeKey.startsWith(sessionPrefix)) {
+				this._sessionAutoOverrides.delete(compositeKey);
+				removedOverrides = true;
+			}
+		}
+		if (removedOverrides) {
+			this.refreshAutoOverrideFlags();
+		}
 	}
 
 	private emitInterceptionState(): void {
@@ -549,7 +824,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			}
 		}
 
-		const nextState: PromptInterceptionState = pendingSummary ? { enabled, pending: pendingSummary } : { enabled };
+		const nextState: PromptInterceptionState = {
+			enabled,
+			pending: pendingSummary,
+			mode: this._mode,
+			paused: false,
+			autoOverride: this.buildAutoOverrideSummary()
+		};
 		this._interceptionState = nextState;
 		this._onDidChangeInterception.fire(this._interceptionState);
 
@@ -558,6 +839,30 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		if (pendingSummary) {
 			this.emitMetadataForKey(pendingSummary.key);
+		}
+	}
+
+	private buildAutoOverrideSummary(): AutoOverrideSummary {
+		return {
+			enabled: this._autoOverrideFeatureEnabled,
+			capturing: this._autoOverrideCapturing,
+			hasOverrides: this._autoOverrideHasOverrides,
+			scope: this._autoOverrideScopePreference,
+			previewLimit: this._autoOverridePreviewLimit,
+			lastUpdated: this._autoOverrideLastUpdated,
+		};
+	}
+
+	private async updateInterceptionSetting(enabled: boolean): Promise<void> {
+		const current = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorInterception);
+		if (current === enabled) {
+			return;
+		}
+		this._modeUpdateFromConfig = true;
+		try {
+			await this._configurationService.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, enabled);
+		} finally {
+			this._modeUpdateFromConfig = false;
 		}
 	}
 
@@ -665,6 +970,201 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			}
 		}
 		return total;
+	}
+
+	private loadPersistedOverride(scope: LiveRequestOverrideScope): AutoOverrideSet | undefined {
+		const key = scope === 'workspace' ? WORKSPACE_AUTO_OVERRIDE_KEY : GLOBAL_AUTO_OVERRIDE_KEY;
+		const memento = scope === 'workspace' ? this._extensionContext.workspaceState : this._extensionContext.globalState;
+		const payload = memento.get<AutoOverrideStoragePayload | undefined>(key);
+		if (!payload || !Array.isArray(payload.entries) || !payload.entries.length) {
+			return undefined;
+		}
+		return {
+			scope,
+			updatedAt: payload.updatedAt ?? Date.now(),
+			entries: payload.entries.map(entry => ({
+				slotIndex: entry.slotIndex,
+				kind: entry.kind,
+				label: entry.label,
+				originalContent: entry.originalContent,
+				overrideContent: entry.overrideContent,
+				deleted: entry.deleted,
+				updatedAt: entry.updatedAt,
+				scope,
+			}))
+		};
+	}
+
+	private serializeAutoOverrideSet(set: AutoOverrideSet): AutoOverrideStoragePayload {
+		return {
+			updatedAt: set.updatedAt,
+			entries: set.entries.map(entry => ({
+				slotIndex: entry.slotIndex,
+				kind: entry.kind,
+				label: entry.label,
+				originalContent: entry.originalContent,
+				overrideContent: entry.overrideContent,
+				deleted: entry.deleted,
+				updatedAt: entry.updatedAt,
+			}))
+		};
+	}
+
+	private refreshAutoOverrideFlags(): void {
+		let hasOverrides = false;
+		let latest: number | undefined;
+		const consider = (set: AutoOverrideSet | undefined): void => {
+			if (!set || !set.entries.length) {
+				return;
+			}
+			hasOverrides = true;
+			latest = latest === undefined ? set.updatedAt : Math.max(latest, set.updatedAt);
+		};
+		consider(this._globalAutoOverride);
+		consider(this._workspaceAutoOverride);
+		for (const set of this._sessionAutoOverrides.values()) {
+			consider(set);
+		}
+		this._autoOverrideHasOverrides = hasOverrides;
+		this._autoOverrideLastUpdated = hasOverrides ? latest : undefined;
+	}
+
+	private applyAutoOverridesForRequest(request: EditableChatRequest): void {
+		if (request.isSubagent) {
+			return;
+		}
+		for (const section of request.sections) {
+			section.overrideState = undefined;
+		}
+		const overrideSets = this.getAutoOverrideSetsForRequest(request);
+		if (!overrideSets.length) {
+			return;
+		}
+		const appliedSlots = new Set<number>();
+		let didMutate = false;
+		for (const set of overrideSets) {
+			for (const entry of set.entries) {
+				if (appliedSlots.has(entry.slotIndex)) {
+					continue;
+				}
+				const section = request.sections[entry.slotIndex];
+				if (!section) {
+					continue;
+				}
+				if (section.kind !== entry.kind) {
+					continue;
+				}
+				appliedSlots.add(entry.slotIndex);
+				section.overrideState = {
+					scope: set.scope,
+					slotIndex: entry.slotIndex,
+					updatedAt: entry.updatedAt,
+				};
+				if (entry.deleted) {
+					if (!section.deleted) {
+						section.deleted = true;
+						didMutate = true;
+					}
+					section.content = '';
+					section.editedContent = '';
+					continue;
+				}
+				if (section.content !== entry.overrideContent) {
+					section.content = entry.overrideContent;
+					section.editedContent = entry.overrideContent;
+					didMutate = true;
+				}
+				section.deleted = false;
+			}
+		}
+		if (didMutate) {
+			this.recomputeMessages(request);
+		}
+	}
+
+	private getAutoOverrideSetsForRequest(request: EditableChatRequest): AutoOverrideSet[] {
+		const sets: AutoOverrideSet[] = [];
+		if (this._globalAutoOverride?.entries.length) {
+			sets.push(this._globalAutoOverride);
+		}
+		if (this._workspaceAutoOverride?.entries.length) {
+			sets.push(this._workspaceAutoOverride);
+		}
+		const sessionSet = this._sessionAutoOverrides.get(this.toKey(request.sessionId, request.location));
+		if (sessionSet?.entries.length) {
+			sets.push(sessionSet);
+		}
+		return sets;
+	}
+
+	private captureAutoOverrideForRequest(key: LiveRequestSessionKey): void {
+		const request = this.getRequest(key);
+		if (!request) {
+			return;
+		}
+		const limit = Math.max(1, this._autoOverridePreviewLimit);
+		const timestamp = Date.now();
+		const entries: StoredAutoOverrideEntry[] = [];
+		for (const section of request.sections.slice(0, limit)) {
+			const original = section.originalContent ?? '';
+			const current = section.deleted ? '' : (section.content ?? '');
+			const deleted = !!section.deleted && !!original.length;
+			if (!deleted && original === current) {
+				continue;
+			}
+			if (deleted || original !== current) {
+				entries.push({
+					slotIndex: section.sourceMessageIndex,
+					kind: section.kind,
+					label: section.label,
+					originalContent: original,
+					overrideContent: current,
+					deleted,
+					updatedAt: timestamp,
+					scope: this._autoOverrideScopePreference ?? 'session',
+				});
+			}
+		}
+		const scope = this._autoOverrideScopePreference ?? 'session';
+		this.persistAutoOverrideEntries(scope, key, entries, timestamp);
+		this._autoOverrideCapturing = false;
+		this.emitInterceptionState();
+	}
+
+	private persistAutoOverrideEntries(scope: LiveRequestOverrideScope, key: LiveRequestSessionKey, entries: StoredAutoOverrideEntry[], updatedAt: number): void {
+		const sessionCompositeKey = this.toKey(key.sessionId, key.location);
+		if (!entries.length) {
+			if (scope === 'session') {
+				this._sessionAutoOverrides.delete(sessionCompositeKey);
+			} else if (scope === 'workspace') {
+				this._workspaceAutoOverride = undefined;
+				void this._extensionContext.workspaceState.update(WORKSPACE_AUTO_OVERRIDE_KEY, undefined);
+			} else {
+				this._globalAutoOverride = undefined;
+				void this._extensionContext.globalState.update(GLOBAL_AUTO_OVERRIDE_KEY, undefined);
+			}
+			this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.autoOverride.cleared', { scope });
+			this.refreshAutoOverrideFlags();
+			return;
+		}
+
+		const normalizedEntries = entries.map(entry => ({ ...entry, scope }));
+		const set: AutoOverrideSet = { scope, entries: normalizedEntries, updatedAt };
+		if (scope === 'session') {
+			this._sessionAutoOverrides.set(sessionCompositeKey, set);
+		} else if (scope === 'workspace') {
+			this._workspaceAutoOverride = set;
+			void this._extensionContext.workspaceState.update(WORKSPACE_AUTO_OVERRIDE_KEY, this.serializeAutoOverrideSet(set));
+		} else {
+			this._globalAutoOverride = set;
+			void this._extensionContext.globalState.update(GLOBAL_AUTO_OVERRIDE_KEY, this.serializeAutoOverrideSet(set));
+		}
+		this.refreshAutoOverrideFlags();
+		this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.autoOverride.saved', {
+			scope,
+			entries: String(entries.length),
+			previewLimit: String(this._autoOverridePreviewLimit),
+		});
 	}
 
 	private keysEqual(a: LiveRequestSessionKey | undefined, b: LiveRequestSessionKey | undefined): boolean {

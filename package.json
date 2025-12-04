@@ -2078,16 +2078,40 @@
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
 			},
-			{
-				"command": "github.copilot.liveRequestEditor.reset",
-				"title": "Live Request Editor: Reset",
-				"icon": "$(refresh)",
-				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-				"category": "Chat"
-			},
-			{
-				"command": "github.copilot.liveRequestMetadata.configureFields",
-				"title": "Live Request Metadata: Configure Fields",
+		{
+			"command": "github.copilot.liveRequestEditor.reset",
+			"title": "Live Request Editor: Reset",
+			"icon": "$(refresh)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.setMode",
+			"title": "%github.copilot.command.liveRequestEditor.setMode%",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.configureAutoOverrideScope",
+			"title": "%github.copilot.command.liveRequestEditor.configureAutoOverrideScope%",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.configureAutoOverridePreviewLimit",
+			"title": "%github.copilot.command.liveRequestEditor.configureAutoOverridePreviewLimit%",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.clearAutoOverrides",
+			"title": "%github.copilot.command.liveRequestEditor.clearAutoOverrides%",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestMetadata.configureFields",
+			"title": "Live Request Metadata: Configure Fields",
 				"icon": "$(gear)",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
@@ -2587,6 +2611,7 @@
 					},
 					"github.copilot.chat.promptInspector.extraSections": {
 						"type": "array",
+						"scope": "application",
 						"default": [],
 						"items": {
 							"type": "string",
@@ -2605,6 +2630,7 @@
 					},
 					"github.copilot.chat.promptInspector.sessionMetadata.fields": {
 						"type": "array",
+						"scope": "application",
 						"default": [
 							"sessionId",
 							"requestId"
@@ -2628,10 +2654,35 @@
 								"Display whether the current request has unsaved edits (dirty state)."
 							]
 						},
-						"markdownDescription": "Configure which metadata fields render inside the Live Request Metadata view when the Live Request Editor is enabled. Leave empty to hide the metadata section."
-					}
+				"markdownDescription": "Configure which metadata fields render inside the Live Request Metadata view when the Live Request Editor is enabled. Leave empty to hide the metadata section."
+				},
+				"github.copilot.chat.liveRequestEditor.autoOverride.enabled": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.enabled%"
+				},
+				"github.copilot.chat.liveRequestEditor.autoOverride.previewLimit": {
+					"type": "number",
+					"default": 3,
+					"minimum": 1,
+					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.previewLimit%"
+				},
+				"github.copilot.chat.liveRequestEditor.autoOverride.scopePreference": {
+					"type": "string",
+					"enum": [
+						"session",
+						"workspace",
+						"global"
+					],
+					"enumDescriptions": [
+						"%github.copilot.config.liveRequestEditor.autoOverride.scope.session%",
+						"%github.copilot.config.liveRequestEditor.autoOverride.scope.workspace%",
+						"%github.copilot.config.liveRequestEditor.autoOverride.scope.global%"
+					],
+					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.scopePreference%"
 				}
-			},
+			}
+		},
 			{
 				"id": "preview",
 				"properties": {

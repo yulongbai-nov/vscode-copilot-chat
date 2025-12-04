@@ -855,6 +855,11 @@ export namespace ConfigKey {
 	export const PromptInspectorExtraSections = defineSetting<string[]>('chat.promptInspector.extraSections', ConfigType.Simple, []);
 	export const PromptInspectorSessionMetadataFields = defineSetting<string[]>('chat.promptInspector.sessionMetadata.fields', ConfigType.Simple, ['sessionId', 'requestId']);
 
+	/** Live Request Editor Auto Override settings */
+	export const LiveRequestEditorAutoOverrideEnabled = defineSetting<boolean>('chat.liveRequestEditor.autoOverride.enabled', ConfigType.Simple, true);
+	export const LiveRequestEditorAutoOverridePreviewLimit = defineSetting<number>('chat.liveRequestEditor.autoOverride.previewLimit', ConfigType.Simple, 3);
+	export const LiveRequestEditorAutoOverrideScopePreference = defineSetting<'session' | 'workspace' | 'global' | undefined>('chat.liveRequestEditor.autoOverride.scopePreference', ConfigType.Simple, undefined);
+
 	export const NewWorkspaceCreationAgentEnabled = defineSetting<boolean>('chat.newWorkspaceCreation.enabled', ConfigType.Simple, true);
 	export const NewWorkspaceUseContext7 = defineSetting<boolean>('chat.newWorkspace.useContext7', ConfigType.Simple, false);
 	export const SummarizeAgentConversationHistory = defineSetting<boolean>('chat.summarizeAgentConversationHistory.enabled', ConfigType.Simple, true);
