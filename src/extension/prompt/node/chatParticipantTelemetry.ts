@@ -8,17 +8,20 @@ import type * as vscode from 'vscode';
 import { ChatFetchResponseType, ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { roleToString } from '../../../platform/chat/common/globalStringUtils';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
+import { isAutoModel } from '../../../platform/endpoint/node/autoChatEndpoint';
 import { ILanguageDiagnosticsService } from '../../../platform/languages/common/languageDiagnosticsService';
 import { IChatEndpoint } from '../../../platform/networking/common/networking';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { isNotebookCellOrNotebookChatInput } from '../../../util/common/notebooks';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { isBYOKModel } from '../../byok/node/openAIEndpoint';
 import { Intent } from '../../common/constants';
 import { DiagnosticsTelemetryData, findDiagnosticsTelemetry } from '../../inlineChat/node/diagnosticsTelemetry';
 import { InteractionOutcome } from '../../inlineChat/node/promptCraftingTypes';
 import { AgentIntent } from '../../intents/node/agentIntent';
 import { EditCodeIntent } from '../../intents/node/editCodeIntent';
 import { EditCode2Intent } from '../../intents/node/editCodeIntent2';
+import { DocumentToAstSelectionData } from '../../prompts/node/inline/inlineChatEditCodePrompt';
 import { getCustomInstructionTelemetry } from '../../prompts/node/panel/customInstructions';
 import { PATCH_PREFIX } from '../../tools/node/applyPatch/parseApplyPatch';
 import { Conversation } from '../common/conversation';
@@ -161,6 +164,8 @@ type RequestPanelTelemetryMeasurements = RequestTelemetryMeasurements & {
 	maybeOffTopic: number;
 	userPromptCount: number;
 	summarizationEnabled: number;
+	isBYOK: number;
+	isAuto: number;
 };
 
 // EVENT: inline.request
@@ -189,6 +194,8 @@ type RequestInlineTelemetryMeasurements = RequestTelemetryMeasurements & {
 	selectionProblemsCount: number;
 	diagnosticsCount: number;
 	selectionDiagnosticsCount: number;
+	userSelectionLength: number;
+	adjustedSelectionLength: number;
 };
 
 //#endregion
@@ -639,7 +646,9 @@ export class PanelChatTelemetry extends ChatTelemetry<IDocumentContext | undefin
 				"toolCounts": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": false, "comment": "The number of times each tool was used" },
 				"numToolCalls": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "The total number of tool calls" },
 				"availableToolCount": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "How number of tools that were available." },
-				"summarizationEnabled" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true, "comment": "Whether summarization is enabled (the default) or disabled (via user setting)" }
+				"summarizationEnabled" : { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "isMeasurement": true, "comment": "Whether summarization is enabled (the default) or disabled (via user setting)" },
+				"isBYOK": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "Whether the request was for a BYOK model" },
+				"isAuto": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "Whether the request was for an Auto model" }
 			}
 		*/
 		this._telemetryService.sendMSFTTelemetryEvent('panel.request', {
@@ -672,7 +681,9 @@ export class PanelChatTelemetry extends ChatTelemetry<IDocumentContext | undefin
 			...getCustomInstructionTelemetry(turn.references),
 			numToolCalls: toolCalls.length,
 			availableToolCount: this._availableToolCount,
-			summarizationEnabled: this._configurationService.getConfig(ConfigKey.SummarizeAgentConversationHistory) ? 1 : 0
+			summarizationEnabled: this._configurationService.getConfig(ConfigKey.SummarizeAgentConversationHistory) ? 1 : 0,
+			isBYOK: isBYOKModel(this._endpoint),
+			isAuto: isAutoModel(this._endpoint)
 		} satisfies RequestPanelTelemetryMeasurements);
 
 		const modeName = this._getModeName();
@@ -811,6 +822,10 @@ export class InlineChatTelemetry extends ChatTelemetry<IDocumentContext> {
 		}, {} as Record<string, number>);
 
 
+		const selectionData = this._getTelemetryData(DocumentToAstSelectionData);
+		const userSelectionLength = selectionData?.original.length ?? -1;
+		const adjustedSelectionLength = selectionData?.adjusted.length ?? -1;
+
 		/* __GDPR__
 			"inline.request" : {
 				"owner": "digitarald",
@@ -855,7 +870,9 @@ export class InlineChatTelemetry extends ChatTelemetry<IDocumentContext> {
 				"codeGenInstructionSettingsCount": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "How many code generation instructions originated from settings." },
 				"toolCounts": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": false, "comment": "The number of times each tool was used" },
 				"numToolCalls": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "The total number of tool calls" },
-				"availableToolCount": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "How number of tools that were available." }
+				"availableToolCount": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "How number of tools that were available." },
+				"userSelectionLength": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "The length of the user selection" },
+				"adjustedSelectionLength": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true, "comment": "The length of the adjusted user selection" }
 			}
 		*/
 		this._telemetryService.sendMSFTTelemetryEvent('inline.request', {
@@ -898,6 +915,8 @@ export class InlineChatTelemetry extends ChatTelemetry<IDocumentContext> {
 			...getCustomInstructionTelemetry(this._references),
 			numToolCalls: toolCalls.length,
 			availableToolCount: this._availableToolCount,
+			userSelectionLength,
+			adjustedSelectionLength,
 		} satisfies RequestInlineTelemetryMeasurements);
 	}
 
