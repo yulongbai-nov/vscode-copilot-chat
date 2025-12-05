@@ -2,7 +2,7 @@
 	"name": "copilot-chat",
 	"displayName": "GitHub Copilot Chat",
 	"description": "AI chat features powered by Copilot",
-	"version": "0.34.0",
+	"version": "0.35.0",
 	"build": "1",
 	"internalAIKey": "1058ec22-3c95-4951-8443-f26c1f325911",
 	"completionsCoreVersion": "1.378.1799",
@@ -83,7 +83,8 @@
 		"onLanguageModelChat:copilot",
 		"onUri",
 		"onFileSystem:ccreq",
-		"onFileSystem:ccsettings"
+		"onFileSystem:ccsettings",
+		"onCustomAgentsProvider"
 	],
 	"main": "./dist/extension",
 	"l10n": "./l10n",
@@ -1214,6 +1215,7 @@
 				"icon": "$(eye)",
 				"tools": [
 					"getNotebookSummary",
+					"problems",
 					"readFile",
 					"readNotebookCellOutput"
 				]
@@ -1227,7 +1229,6 @@
 					"codebase",
 					"fileSearch",
 					"listDirectory",
-					"problems",
 					"searchResults",
 					"textSearch",
 					"usages"
@@ -1318,7 +1319,7 @@
 				"commands": [
 					{
 						"name": "generate",
-						"when": "!config.chat.edits2.enabled",
+						"when": "!config.inlineChat.enableV2",
 						"description": "%copilot.workspace.generate.description%",
 						"disambiguation": [
 							{
@@ -1332,7 +1333,7 @@
 					},
 					{
 						"name": "edit",
-						"when": "!config.chat.edits2.enabled",
+						"when": "!config.inlineChat.enableV2",
 						"description": "%copilot.workspace.edit.inline.description%",
 						"disambiguation": [
 							{
@@ -1346,7 +1347,7 @@
 					},
 					{
 						"name": "doc",
-						"when": "!config.chat.edits2.enabled",
+						"when": "!config.inlineChat.enableV2",
 						"description": "%copilot.workspace.doc.description%",
 						"disambiguation": [
 							{
@@ -1360,7 +1361,7 @@
 					},
 					{
 						"name": "fix",
-						"when": "!config.chat.edits2.enabled",
+						"when": "!config.inlineChat.enableV2",
 						"description": "%copilot.workspace.fix.description%",
 						"disambiguation": [
 							{
@@ -1374,7 +1375,7 @@
 					},
 					{
 						"name": "tests",
-						"when": "!config.chat.edits2.enabled",
+						"when": "!config.inlineChat.enableV2",
 						"description": "%copilot.workspace.tests.description%",
 						"disambiguation": [
 							{
@@ -2154,6 +2155,11 @@
 				"category": "Developer"
 			},
 			{
+				"command": "github.copilot.debug.validateNesRename",
+				"title": "%github.copilot.command.validateNesRename%",
+				"category": "Developer"
+			},
+			{
 				"command": "github.copilot.debug.resetVirtualToolGroups",
 				"title": "%github.copilot.command.resetVirtualToolGroups%",
 				"icon": "$(inspect)",
@@ -2442,6 +2448,12 @@
 				"title": "%github.copilot.command.applyCopilotCLIAgentSessionChanges%",
 				"icon": "$(git-stash-pop)",
 				"category": "GitHub Copilot"
+			},
+			{
+				"command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply",
+				"title": "%github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply%",
+				"icon": "$(git-stash-pop)",
+				"category": "GitHub Copilot"
 			}
 		],
 		"configuration": [
@@ -2605,11 +2617,6 @@
 						"type": "boolean",
 						"default": true,
 						"description": "%github.copilot.config.agent.currentEditorContext.enabled%"
-					},
-					"github.copilot.chat.agent.delegate.autoCommitAndPush": {
-						"type": "boolean",
-						"default": false,
-						"markdownDescription": "%github.copilot.config.agent.delegate.autoCommitAndPush%"
 					},
 					"github.copilot.enable": {
 						"type": "object",
@@ -3439,7 +3446,7 @@
 							"null"
 						],
 						"markdownDescription": "%github.copilot.config.anthropic.thinking.budgetTokens%",
-						"minimum": 1024,
+						"minimum": 0,
 						"maximum": 32000,
 						"tags": [
 							"experimental",
@@ -3585,16 +3592,6 @@
 						"tags": [
 							"advanced",
 							"experimental"
-						]
-					},
-					"github.copilot.chat.edits.gemini3ReplaceStringOnly": {
-						"type": "boolean",
-						"default": false,
-						"markdownDescription": "Use only the modern `replace_string_in_file` edit tool when generating edits with Gemini 3 models.",
-						"tags": [
-							"advanced",
-							"experimental",
-							"onExp"
 						]
 					},
 					"github.copilot.chat.edits.gemini3MultiReplaceString": {
@@ -3786,10 +3783,10 @@
 							"experimental"
 						]
 					},
-					"github.copilot.chat.temporalContext.maxAge": {
+					"github.copilot.chat.inlineChat.selectionRatioThreshold": {
 						"type": "number",
-						"default": 100,
-						"markdownDescription": "%github.copilot.config.temporalContext.maxAge%",
+						"default": 0,
+						"markdownDescription": "%github.copilot.config.inlineChat.selectionRatioThreshold%",
 						"tags": [
 							"advanced",
 							"experimental",
@@ -3809,16 +3806,6 @@
 						"type": "boolean",
 						"default": false,
 						"markdownDescription": "%github.copilot.config.inlineEdits.diagnosticsContextProvider.enabled%",
-						"tags": [
-							"advanced",
-							"experimental",
-							"onExp"
-						]
-					},
-					"github.copilot.chat.temporalContext.preferSameLang": {
-						"type": "boolean",
-						"default": false,
-						"markdownDescription": "%github.copilot.config.temporalContext.preferSameLang%",
 						"tags": [
 							"advanced",
 							"experimental",
@@ -3975,15 +3962,6 @@
 							"experimental"
 						]
 					},
-					"github.copilot.chat.copilotCLI.enabled": {
-						"type": "boolean",
-						"default": true,
-						"markdownDescription": "%github.copilot.config.copilotCLI.enabled%",
-						"tags": [
-							"advanced",
-							"experimental"
-						]
-					},
 					"github.copilot.chat.gpt5AlternativePatch": {
 						"type": "boolean",
 						"default": false,
@@ -4036,19 +4014,20 @@
 							"onExp"
 						]
 					},
+					"github.copilot.nextEditSuggestions.preferredModel": {
+						"type": "string",
+						"default": "none",
+						"markdownDescription": "%github.copilot.config.nextEditSuggestions.preferredModel%",
+						"tags": [
+							"advanced",
+							"experimental",
+							"onExp"
+						]
+					},
 					"github.copilot.chat.suggestRelatedFilesFromGitHistory.useEmbeddings": {
 						"type": "boolean",
 						"default": false,
 						"markdownDescription": "%github.copilot.config.suggestRelatedFilesFromGitHistory.useEmbeddings%",
-						"tags": [
-							"advanced",
-							"experimental"
-						]
-					},
-					"github.copilot.chat.cli.isolation.enabled": {
-						"type": "boolean",
-						"default": false,
-						"markdownDescription": "%github.copilot.config.cli.isolation.enabled%",
 						"tags": [
 							"advanced",
 							"experimental"
@@ -4165,6 +4144,13 @@
 					"command": "github.copilot.chat.generateTests",
 					"when": "!github.copilot.interactiveSession.disabled && !editorReadonly",
 					"group": "copilotGenerate@2"
+				}
+			],
+			"chat/input/editing/sessionToolbar": [
+				{
+					"command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply",
+					"when": "chatSessionType == copilotcli",
+					"group": "navigation@0"
 				}
 			],
 			"testing/item/result": [
@@ -4396,6 +4382,10 @@
 				},
 				{
 					"command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges",
+					"when": "false"
+				},
+				{
+					"command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply",
 					"when": "false"
 				},
 				{
@@ -4715,6 +4705,11 @@
 				}
 			],
 			"chat/chatSessions": [
+				{
+					"command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges",
+					"when": "chatSessionType == copilotcli",
+					"group": "inline@0"
+				},
 				{
 					"command": "github.copilot.cli.sessions.resumeInTerminal",
 					"when": "chatSessionType == copilotcli",
@@ -5108,7 +5103,7 @@
 				"inputPlaceholder": "Describe your task, type `#` for adding context",
 				"order": 3,
 				"description": "The Claude Code Agent works on your local machine",
-				"when": "config.github.copilot.chat.advanced.claudeCode.enabled",
+				"when": "config.github.copilot.chat.claudeCode.enabled",
 				"canDelegate": false,
 				"capabilities": {
 					"supportsFileAttachments": true
@@ -5143,14 +5138,14 @@
 				"icon": "$(collection)",
 				"welcomeTitle": "Background Agent",
 				"welcomeMessage": "Run tasks in the background",
-				"inputPlaceholder": "Describe your task, type `#` for adding context",
+				"inputPlaceholder": "Run tasks in the background, type `#` for adding context",
 				"order": 2,
+				"canDelegate": true,
 				"description": "Delegate tasks to a background agent.",
 				"capabilities": {
 					"supportsFileAttachments": true,
 					"supportsProblemAttachments": true,
 					"supportsToolAttachments": false,
-					"supportsImageAttachments": true,
 					"supportsSymbolAttachments": true,
 					"supportsSearchResultAttachments": true,
 					"supportsSourceControlAttachments": true
@@ -5172,8 +5167,9 @@
 				"icon": "$(cloud)",
 				"welcomeTitle": "Cloud Agent",
 				"welcomeMessage": "Delegate tasks to the cloud",
-				"inputPlaceholder": "Describe your task, type `#` for adding context",
+				"inputPlaceholder": "Delegate tasks to the cloud, type `#` for adding context",
 				"order": 1,
+				"canDelegate": true,
 				"description": "Delegate tasks to the GitHub Copilot Cloud Agent. The agent works asynchronously in the cloud to implement changes, iterates via chat, and can create or update pull requests as needed.",
 				"capabilities": {
 					"supportsFileAttachments": true
@@ -5370,9 +5366,9 @@
 		"yargs": "^17.7.2"
 	},
 	"dependencies": {
-		"@anthropic-ai/claude-code": "^1.0.120",
+		"@anthropic-ai/claude-agent-sdk": "0.1.55",
 		"@anthropic-ai/sdk": "^0.68.0",
-		"@github/copilot": "^0.0.365",
+		"@github/copilot": "^0.0.366",
 		"@google/genai": "^1.22.0",
 		"@humanwhocodes/gitignore-to-minimatch": "1.0.2",
 		"@microsoft/tiktokenizer": "^1.0.10",

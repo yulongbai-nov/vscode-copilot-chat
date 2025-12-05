@@ -397,7 +397,7 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 					this._logService.info(`CAPI ping returned status ${res.status}, retrying ping...`);
 				}
 			} catch (err) {
-				connectivityTestError = collectSingleLineErrorMessage(err);
+				connectivityTestError = collectSingleLineErrorMessage(err, true);
 				this._logService.info(`CAPI ping failed with error, retrying ping: ${connectivityTestError}`);
 			}
 		}
@@ -1091,7 +1091,8 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 		}
 		this._logService.error(errorsUtil.fromUnknown(err), `Error on conversation request`);
 		this._telemetryService.sendGHTelemetryException(err, 'Error on conversation request');
-		const errorDetail = fetcher.getUserMessageForFetcherError(err);
+		const userMessage = fetcher.getUserMessageForFetcherError(err);
+		const errorDetail = collectSingleLineErrorMessage(err, true);
 		const scrubbedErrorDetail = this.scrubErrorDetail(errorDetail, usernameToScrub);
 		if (fetcher.isInternetDisconnectedError(err)) {
 			return {
@@ -1104,7 +1105,7 @@ export class ChatMLFetcherImpl extends AbstractChatMLFetcher {
 		} else if (fetcher.isFetcherError(err)) {
 			return {
 				type: ChatFetchResponseType.NetworkError,
-				reason: errorDetail,
+				reason: userMessage,
 				reasonDetail: scrubbedErrorDetail,
 				requestId: requestId,
 				serverRequestId: undefined,
