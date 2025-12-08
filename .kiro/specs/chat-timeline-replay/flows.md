@@ -61,6 +61,29 @@ sequenceDiagram
     end
 ```
 
+## Use Case 3: Continue from Replay and Send
+
+- User in replay session clicks “Start chatting from this replay” (input enabled).
+- User composes a new message in the replay session and sends.
+- Forked session uses the trimmed edited history as context; no changes to original session.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant RS as Replay Session (chat view, forked)
+    participant Fetcher as ChatML Fetcher
+    participant Model
+
+    User->>RS: Click "Start chatting from this replay"
+    RS-->>User: Enable input, show breadcrumb/toast
+    User->>RS: Type new message
+    User->>RS: Send message
+    RS->>Fetcher: Send request with trimmed edited history + new user message
+    Fetcher->>Model: Invoke model
+    Model-->>RS: Stream response
+    RS-->>User: Display response (replay session only; original session untouched)
+```
+
 ## Interrupt Handling (Graceful)
 
 - **Empty/invalid projection**: Show “Nothing to replay” with link back to LRE; do not create replay session.
