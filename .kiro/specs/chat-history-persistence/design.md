@@ -1,7 +1,7 @@
 # Design Document: Chat History Persistence (SQLite)
 
 ## Overview
-Persist chat conversations (original + edited prompts, tool calls/results, responses) locally using SQLite so users can reload/audit across restarts. Scope is per-user, per-machine; no multi-user hosting. No implementation exists yet.
+Persist chat conversations (original + edited prompts, tool calls/results, responses) locally using SQLite so users can reload/audit across restarts. Scope is per-user, per-machine; no multi-user hosting. No implementation exists yet. A future optional remote driver is described at the end; default remains local SQLite.
 
 ## Current Reality
 - No chat history persistence; Live Request Editor is in-memory only.
@@ -15,7 +15,9 @@ Persist chat conversations (original + edited prompts, tool calls/results, respo
 ```
 conversations(id PK, user_id, workspace_id, location, created_at, last_active_at, status)
 turns(id PK, conversation_id FK, turn_index, request_id, original_messages_json, edited_messages_json,
-      request_options_json, model, max_prompt_tokens, interception_mode, replay_parent_turn_id, created_at)
+      request_options_json, model, max_prompt_tokens, interception_mode,
+      replay_parent_session_id, replay_parent_turn_id, replay_payload_hash, replay_payload_version,
+      last_logged_hash, last_logged_at, created_at)
 sections(id PK, turn_id FK, seq, role, label, content, deleted, token_count, trace_path_json, metadata_json,
          tool_call_id, tool_result_id)
 responses(id PK, turn_id FK, model, content_json, metadata_json, created_at)
@@ -27,7 +29,7 @@ references/edges/embeddings tables optional for graph/FTS use
 ### API Layer (conceptual)
 - Append-only writes per turn; no in-place edits.
 - APIs: `beginConversation`, `appendTurn`, `appendResponse`, `listConversations`, `getConversation`, `vacuum/prune`.
-- Preserve `replay_parent_turn_id` when timeline replay forks a session.
+- Preserve `replay_parent_session_id` and `replay_parent_turn_id` when timeline replay forks a session; store `replay_payload_hash`/`replay_payload_version` and `last_logged_hash`/`last_logged_at` for parity diagnostics on reload.
 
 ### Retention and Safety
 - Size cap and TTL: configurable max DB size and max turns per conversation; prune oldest and vacuum periodically.
@@ -54,3 +56,12 @@ references/edges/embeddings tables optional for graph/FTS use
 - Multi-window races: rely on SQLite locking; retry/backoff on busy errors.
 - Trust/privacy: gate on workspace trust; opt-in; avoid content storage unless necessary.
 - Schema drift: versioning, safe migrations; fail-open with warnings rather than blocking chat.
+
+## Remote backend (future, opt-in, off by default)
+- Motivation: optional central store for teams who want shared retention beyond per-machine SQLite.
+- Approach: pluggable persistence driver with SQLite as default; remote driver behind a separate flag and explicit “off-box” consent.
+- Transport/security: TLS required, host/port/DB/auth settings stored securely; no raw attachments unless explicitly enabled; minimize content where possible.
+- Trust: disabled in untrusted workspaces by default; first use prompts that data may leave the machine.
+- Schema: reuse logical schema (conversations/turns/sections/responses/tool_calls) with replay fields (`replay_parent_session_id`, `replay_parent_turn_id`, `replay_payload_hash`, `replay_payload_version`, `last_logged_hash`, `last_logged_at`).
+- Resilience: connection pooling/retry/backoff; graceful fallback/disable on failures; clear status hint when remote is active vs. local off.
+- Telemetry: connection/open/migration failures (no user content), driver type, consent state.

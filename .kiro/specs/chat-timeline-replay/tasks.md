@@ -24,9 +24,10 @@
   - In replay view with interception off, disable edit/delete controls and auto-scroll to the latest section.
   - Handle stale/cleared states (canceled send/context switch) by marking replay stale; ignore stale updates (version/hash guard).
 
-- [ ] 3. Telemetry and error handling
-  - Emit invocation telemetry with source sessionId/requestId and section counts.
-  - Detect/log parity mismatches vs. logged request when available.
+- [ ] 3. Telemetry, parity, and persistence hooks
+  - Emit invocation telemetry with source sessionId/requestId, section counts, edited/deleted counts, and hashes/versions.
+  - Detect/log parity mismatches vs. logged request when available and surface warnings in replay/metadata views.
+  - Persist replay metadata (parent session/turn IDs, hash, version) when chat-history-persistence (SQLite) is enabled; otherwise keep the one-level restore buffer.
   - Handle empty/mapping failures gracefully (“Nothing to replay”).
 
 - [ ] 4. Tests and validation

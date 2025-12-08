@@ -11,7 +11,7 @@ Opt-in local persistence of chat history (original + edited prompts, tool calls/
 
 ### R2: Data Captured
 - THE System SHALL persist conversations, turns, sections, tool calls/results, and responses; attachments are optional and disabled by default.
-- THE System SHALL record both original and edited messages and request options per turn, plus `replay_parent_turn_id` when applicable.
+- THE System SHALL record both original and edited messages and request options per turn, plus `replay_parent_session_id` and `replay_parent_turn_id` when applicable, and persist replay parity metadata (`replay_payload_hash`, `replay_payload_version`, `last_logged_hash`, `last_logged_at`).
 
 ### R3: Limits and Pruning
 - THE System SHALL enforce configurable limits (max DB size, max turns per conversation).
@@ -29,3 +29,4 @@ Opt-in local persistence of chat history (original + edited prompts, tool calls/
 ### R6: Observability
 - THE System SHOULD expose a status hint (e.g., in metadata/replay UI) showing whether a conversation is persisted and how many turns are stored.
 - THE System SHOULD emit non-blocking telemetry/errors for persistence failures and pruning events (without user content).
+- WHEN a remote persistence driver is enabled, THEN the System SHALL surface a clear indicator that data may leave the machine and require explicit consent.

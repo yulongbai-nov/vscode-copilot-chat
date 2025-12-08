@@ -11,7 +11,7 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 ## Non-Goals
 - Re-running the model on the replayed prompt.
 - Editing inside the replay view (edits stay in Live Request Editor).
-- Disk persistence (covered separately by chat-history-persistence).
+- Full-fledged replay storage beyond what chat-history-persistence provides (we only persist minimal linkage/metadata when the SQLite feature is on; otherwise keep an in-memory restore buffer).
 
 ## Current State
 - No timeline replay implementation exists.
@@ -24,7 +24,7 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 3) **Invocation Surface**: Command (e.g., `github.copilot.liveRequestEditor.replayPrompt`) and/or button in the Live Request Editor banner, gated by feature flag.
 4) **Display Surface**: Render via chat participant/content provider in the chat panel; no model call. Replay is read-only by default; user must click “Start chatting from this replay” to enable input.
 5) **Fork payload**: Seed the forked session with the exact trimmed payload that was (or would be) sent to avoid divergence; use the richer projection for display only.
-6) **Persistence (future)**: If/when chat-history-persistence (SQLite) is enabled, store replay metadata (replay_parent_turn_id/session_id, trimmed payload hash, version) so forks survive reloads; otherwise replay remains in-memory only (keep a one-level “restore previous replay” buffer per turn).
+6) **Persistence (conditional)**: When chat-history-persistence (SQLite) is enabled, store replay metadata (replay_parent_turn_id/session_id, trimmed payload hash, version) so forks survive reloads; otherwise replay remains in-memory only with a one-level “restore previous replay” buffer per turn.
 
 ### Data & Control Flow
 1. User edits and confirms send.
@@ -53,8 +53,8 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 - Command visibility tied to Live Request Editor advanced flag + replay flag; optional per-user opt-in to avoid surprises.
 
 ### Telemetry / Diagnostics
-- Emit replay invocation with source sessionId/requestId, section counts, edited/deleted counts.
-- Log parity mismatches between replay content and logged request if available.
+- Emit replay invocation telemetry with source sessionId/requestId, section counts, edited/deleted counts, and the trimmed payload hash/version.
+- Log parity mismatches between replay content and the last logged request when available; surface warnings in replay + metadata views.
 
 ### Error Handling
 - If no editable request: show friendly message, no-op.
@@ -92,13 +92,13 @@ Replayed Session (chat view)
 
 ## Sync & Parity Notes
 - Single source of truth: Live Request Editor service state (trimmed messages + metadata). Replay builds from that state; no divergent copies.
-- Version/hash: Each replay build should carry `version`/`lastUpdated` and a payload hash; UIs ignore stale updates.
-- Parent linkage: Stamp replay sessions with `replay_parent_session_id` and `replay_parent_turn_id` for unambiguous lookup.
+- Version/hash: Each replay build should carry `version`/`lastUpdated` and a payload hash; UIs ignore stale updates and surface parity state.
+- Parent linkage: Stamp replay sessions with `replay_parent_session_id` and `replay_parent_turn_id` for unambiguous lookup (persist when SQLite persistence is enabled).
 - Payload parity: Replay uses the exact trimmed payload sent/queued; projection is display-only. If edits/undo change the payload, bump version and invalidate/rebuild replay.
 - Event scoping: Emit changes keyed by session; views render only when targeting that session to avoid bleed.
 - Stale handling: If the request is cleared/canceled/context-switched, mark replay as stale/cleared rather than freezing old data.
 - Debounce/merge: Debounce rapid edits before emitting to replay to reduce flicker; coalesce updates.
-- Parity warning: If logged request hash ≠ replay hash, surface a warning chip/banner in replay and metadata views.
+- Parity warning: If logged request hash ≠ replay hash, surface a warning chip/banner in replay and metadata views; include hashes/versions in metadata for persistence.
 
 ## Global Mode Interactions (Interception/Override/Replay)
 - Defaults: Interception OFF, Auto-apply OFF, Replay manual (flag off by default). Replay is additive and does not replace interception/override.
