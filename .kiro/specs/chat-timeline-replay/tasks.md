@@ -12,6 +12,7 @@
   - Omit deleted sections; mark edited sections; collapse long system/history/tool by default.
   - Include tool call/result labels and trimmed-prompt warning when applicable.
   - Enforce section cap (30) and compute “(N more)” affordance for overflow.
+  - Attach version/hash metadata to replay builds; emit with session scoping for consumers.
 
 - [ ] 2. Session creation and rendering
   - Add replay session manager keyed to source session/location with optional `replay_parent_turn_id`.
@@ -21,6 +22,7 @@
   - When continuing from replay, switch focus to the replay session and show breadcrumb/toast. Keep interception/auto-override off by default in the fork unless explicitly enabled.
   - Cap rendered sections (e.g., 30) and provide “View replayed prompt (N more)” affordance.
   - In replay view with interception off, disable edit/delete controls and auto-scroll to the latest section.
+  - Handle stale/cleared states (canceled send/context switch) by marking replay stale; ignore stale updates (version/hash guard).
 
 - [ ] 3. Telemetry and error handling
   - Emit invocation telemetry with source sessionId/requestId and section counts.
@@ -32,3 +34,4 @@
   - Integration tests for command → session creation → rendering.
   - UX validation for collapsed sections, labels, and navigation back to Live Request Editor.
   - If persistence is enabled, add tests for replay metadata save/load and version replacement (Option A).
+  - Tests for version/hash scoping: stale updates ignored; parity warning surfaced on hash mismatch; stale/cleared handling on context change/cancel.

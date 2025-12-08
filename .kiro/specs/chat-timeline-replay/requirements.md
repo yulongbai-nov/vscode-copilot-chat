@@ -38,3 +38,4 @@ Provide an opt-in chat timeline that mirrors the edited prompt (system/history/t
 - THE System SHALL emit telemetry on replay invocation with source sessionId/requestId and counts of total/edited/deleted sections.
 - WHEN replay content cannot be built (e.g., mapping failure), THEN the System SHALL show an error message and avoid creating a replay session.
 - THE System SHOULD log parity mismatches when replay content differs from the last logged request, for diagnostics.
+- THE System SHOULD include version/hash metadata with replay builds and ignore stale updates in UI consumers; when replay/log hashes differ, a warning SHALL be surfaced in replay/metadata views.

@@ -82,10 +82,20 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 Live Request Editor (edits/undo/redo)
         |
         v
- Replay Builder (projection, trimmed payload)
+Replay Builder (projection, trimmed payload)
         |
         v
- Replayed Session (chat view)
+Replayed Session (chat view)
    - Display-only by default
    - “Start chatting from this replay” => enable input (fork)
 ```
+
+## Sync & Parity Notes
+- Single source of truth: Live Request Editor service state (trimmed messages + metadata). Replay builds from that state; no divergent copies.
+- Version/hash: Each replay build should carry `version`/`lastUpdated` and a payload hash; UIs ignore stale updates.
+- Parent linkage: Stamp replay sessions with `replay_parent_session_id` and `replay_parent_turn_id` for unambiguous lookup.
+- Payload parity: Replay uses the exact trimmed payload sent/queued; projection is display-only. If edits/undo change the payload, bump version and invalidate/rebuild replay.
+- Event scoping: Emit changes keyed by session; views render only when targeting that session to avoid bleed.
+- Stale handling: If the request is cleared/canceled/context-switched, mark replay as stale/cleared rather than freezing old data.
+- Debounce/merge: Debounce rapid edits before emitting to replay to reduce flicker; coalesce updates.
+- Parity warning: If logged request hash ≠ replay hash, surface a warning chip/banner in replay and metadata views.
