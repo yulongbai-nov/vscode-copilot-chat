@@ -173,6 +173,11 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 		const items: LiveRequestTreeItem[] = [];
 		const request = this._getActiveRequest();
 
+		const parityWarning = this._createParityWarning(this._metadata);
+		if (parityWarning) {
+			items.push(parityWarning);
+		}
+
 		const metadataChildren = this._fields
 			.map(field => this._createMetadataField(field))
 			.filter((node): node is MetadataFieldTreeItem => Boolean(node));
@@ -220,6 +225,21 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 
 		const display = value || '—';
 		return new MetadataFieldTreeItem(label, display, value);
+	}
+
+	private _createParityWarning(metadata: LiveRequestMetadataSnapshot | undefined): ParityWarningTreeItem | undefined {
+		if (!metadata || metadata.parityStatus !== 'mismatch') {
+			return undefined;
+		}
+		const parts: string[] = [];
+		if (typeof metadata.payloadHash === 'number') {
+			parts.push(`replay ${metadata.payloadHash}`);
+		}
+		if (typeof metadata.lastLoggedHash === 'number') {
+			parts.push(`logged ${metadata.lastLoggedHash}`);
+		}
+		const description = parts.length ? parts.join(' · ') : 'Replay payload differs from last logged request';
+		return new ParityWarningTreeItem(description, metadata.parityReason);
 	}
 
 	private _createTokenBudgetItem(metadata: LiveRequestMetadataSnapshot): TokenBudgetTreeItem {
@@ -487,6 +507,16 @@ class PlaceholderTreeItem extends LiveRequestTreeItem {
 	constructor(message: string) {
 		super(message, vscode.TreeItemCollapsibleState.None);
 		this.contextValue = 'copilotLiveRequestMetadataPlaceholder';
+	}
+}
+
+class ParityWarningTreeItem extends LiveRequestTreeItem {
+	constructor(description: string, reason?: string) {
+		super('Replay/log mismatch', vscode.TreeItemCollapsibleState.None);
+		this.description = description;
+		this.tooltip = reason ? `${description}\nReason: ${reason}` : description;
+		this.iconPath = new vscode.ThemeIcon('warning');
+		this.contextValue = 'copilotLiveRequestMetadataParityWarning';
 	}
 }
 

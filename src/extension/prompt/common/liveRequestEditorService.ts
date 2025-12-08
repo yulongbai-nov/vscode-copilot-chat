@@ -67,6 +67,18 @@ export interface LiveRequestMetadataSnapshot {
 	readonly interceptionState: 'pending' | 'idle';
 	readonly tokenCount?: number;
 	readonly maxPromptTokens?: number;
+	readonly version?: number;
+	readonly payloadHash?: number;
+	readonly sectionCounts?: {
+		readonly total: number;
+		readonly active: number;
+		readonly edited: number;
+		readonly deleted: number;
+	};
+	readonly lastLoggedHash?: number;
+	readonly lastLoggedAt?: number;
+	readonly parityStatus?: 'match' | 'mismatch' | 'unknown';
+	readonly parityReason?: string;
 }
 
 export interface LiveRequestMetadataEvent {

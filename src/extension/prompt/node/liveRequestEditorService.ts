@@ -56,6 +56,13 @@ interface SerializedAutoOverrideEntry {
 	readonly updatedAt: number;
 }
 
+interface SectionCounts {
+	total: number;
+	active: number;
+	edited: number;
+	deleted: number;
+}
+
 export class LiveRequestEditorService extends Disposable implements ILiveRequestEditorService {
 	declare readonly _serviceBrand: undefined;
 
@@ -182,6 +189,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		if (this._mode === 'autoOverride' && this._autoOverrideFeatureEnabled) {
 			this.applyAutoOverridesForRequest(request);
 		}
+		this.initializeRequestMetadata(request);
 		this._requests.set(this.toKey(init.sessionId, init.location), request);
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
@@ -193,6 +201,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 	getRequest(key: LiveRequestSessionKey): EditableChatRequest | undefined {
 		return this._requests.get(this.toKey(key.sessionId, key.location));
+	}
+
+	private initializeRequestMetadata(request: EditableChatRequest): void {
+		if (typeof request.metadata.version !== 'number' || Number.isNaN(request.metadata.version)) {
+			request.metadata.version = 1;
+		}
+		request.metadata.payloadHash = this.computeMessagesHash(request.messages);
 	}
 
 	updateSectionContent(key: LiveRequestSessionKey, sectionId: string, newContent: string): EditableChatRequest | undefined {
@@ -242,7 +257,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			request.sections = createSectionsFromMessages(request.messages);
 			request.isDirty = false;
 			return true;
-		}, false);
+		}, true);
 	}
 
 	updateTokenCounts(key: LiveRequestSessionKey, tokenCounts: { total?: number; perMessage?: number[] }): EditableChatRequest | undefined {
@@ -587,18 +602,27 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return;
 		}
 		this.recomputeMessages(request);
-		const expectedHash = this.computeMessagesHash(request.messages);
+		const expectedHash = this.updatePayloadHash(request);
 		const loggedHash = this.computeMessagesHash(messages);
 		request.metadata.lastLoggedAt = Date.now();
 		request.metadata.lastLoggedHash = loggedHash;
 		request.metadata.lastLoggedMatches = expectedHash === loggedHash;
 		request.metadata.lastLoggedMismatchReason = request.metadata.lastLoggedMatches ? undefined : 'messages';
 		if (!request.metadata.lastLoggedMatches) {
+			const sectionCounts = this.summarizeSections(request.sections);
 			this._telemetryService.sendGHTelemetryEvent('liveRequestEditor.requestParityMismatch', {
 				location: ChatLocation.toString(request.location),
 				intentId: request.metadata.intentId ?? 'unknown',
 				model: request.model,
 				debugName: request.debugName,
+				requestId: request.metadata.requestId,
+				replayVersion: String(request.metadata.version ?? 1),
+				replayHash: String(expectedHash),
+				loggedHash: String(loggedHash),
+				totalSections: String(sectionCounts.total),
+				activeSections: String(sectionCounts.active),
+				editedSections: String(sectionCounts.edited),
+				deletedSections: String(sectionCounts.deleted)
 			});
 		}
 		this._onDidChange.fire(request);
@@ -664,8 +688,12 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		request.metadata.lastUpdated = Date.now();
 		if (recompute) {
 			this.recomputeMessages(request);
+			this.bumpPayloadVersion(request);
 		} else {
 			request.isDirty = !equals(request.messages, request.originalMessages);
+			if (request.metadata.payloadHash === undefined) {
+				this.updatePayloadHash(request);
+			}
 		}
 		const validationError = this.validateRequestForSend(request);
 		this.updateValidationMetadata(request, validationError);
@@ -718,6 +746,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 		request.messages = updatedMessages;
 		request.isDirty = isDirty || !equals(updatedMessages, request.originalMessages);
+		this.updatePayloadHash(request);
 	}
 
 	private validateRequestForSend(request: EditableChatRequest): LiveRequestValidationError | undefined {
@@ -744,6 +773,34 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			// fall back to length-based hash if serialization fails unexpectedly
 			return stringHash(String(messages.length), 0);
 		}
+	}
+
+	private updatePayloadHash(request: EditableChatRequest): number {
+		const hash = this.computeMessagesHash(request.messages);
+		request.metadata.payloadHash = hash;
+		return hash;
+	}
+
+	private bumpPayloadVersion(request: EditableChatRequest): number {
+		const next = (request.metadata.version ?? 0) + 1;
+		request.metadata.version = next;
+		return next;
+	}
+
+	private summarizeSections(sections: LiveRequestSection[]): SectionCounts {
+		const stats: SectionCounts = { total: 0, active: 0, edited: 0, deleted: 0 };
+		for (const section of sections) {
+			stats.total++;
+			if (section.deleted) {
+				stats.deleted++;
+				continue;
+			}
+			stats.active++;
+			if (section.editedContent !== undefined) {
+				stats.edited++;
+			}
+		}
+		return stats;
 	}
 
 	private createMessageShell(kind: LiveRequestSectionKind): Raw.ChatMessage {
@@ -989,6 +1046,11 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	private buildMetadataSnapshot(request: EditableChatRequest, lastUpdated?: number): LiveRequestMetadataSnapshot {
 		const tokenCount = this.getTokenCountForRequest(request);
 		const maxPromptTokens = request.metadata.maxPromptTokens;
+		const payloadHash = request.metadata.payloadHash ?? this.updatePayloadHash(request);
+		const sectionCounts = this.summarizeSections(request.sections);
+		const parityStatus = request.metadata.lastLoggedMatches === undefined
+			? 'unknown'
+			: request.metadata.lastLoggedMatches ? 'match' : 'mismatch';
 		return {
 			sessionId: request.sessionId,
 			location: request.location,
@@ -1000,7 +1062,14 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			lastUpdated: lastUpdated ?? Date.now(),
 			interceptionState: this._pendingIntercepts.has(this.toKey(request.sessionId, request.location)) ? 'pending' : 'idle',
 			tokenCount,
-			maxPromptTokens
+			maxPromptTokens,
+			version: request.metadata.version,
+			payloadHash,
+			sectionCounts,
+			lastLoggedHash: request.metadata.lastLoggedHash,
+			lastLoggedAt: request.metadata.lastLoggedAt,
+			parityStatus,
+			parityReason: request.metadata.lastLoggedMismatchReason,
 		};
 	}
 

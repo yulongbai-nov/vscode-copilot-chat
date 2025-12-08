@@ -196,4 +196,47 @@ describe('LiveRequestMetadataProvider', () => {
 		const labels = outlineChildren.map(child => child.label);
 		expect(labels).toEqual(expect.arrayContaining(['temperature', 'top_p', 'n']));
 	});
+
+	test('renders parity warning when hashes mismatch', () => {
+		const key = { sessionId: 'session', location: ChatLocation.Panel };
+		const request: EditableChatRequest = {
+			id: 'req',
+			sessionId: key.sessionId,
+			location: key.location,
+			debugName: 'debug',
+			model: 'gpt',
+			messages: [],
+			sections: [],
+			originalMessages: [],
+			isDirty: false,
+			metadata: {
+				requestId: 'req',
+				createdAt: Date.now(),
+			}
+		};
+		requestEmitter.fire(request);
+		metadataEmitter.fire({
+			key,
+			metadata: {
+				sessionId: key.sessionId,
+				location: key.location,
+				requestId: 'req',
+				debugName: 'debug',
+				model: 'gpt',
+				isDirty: false,
+				createdAt: Date.now(),
+				lastUpdated: Date.now(),
+				interceptionState: 'idle',
+				parityStatus: 'mismatch',
+				payloadHash: 111,
+				lastLoggedHash: 222
+			}
+		});
+
+		const roots = provider.getChildren();
+		const warning = roots.find(root => root.contextValue === 'copilotLiveRequestMetadataParityWarning');
+		expect(warning).toBeDefined();
+		expect(warning?.description).toContain('111');
+		expect(warning?.description).toContain('222');
+	});
 });

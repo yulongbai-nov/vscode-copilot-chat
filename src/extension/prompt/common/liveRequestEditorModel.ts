@@ -51,6 +51,8 @@ export interface LiveRequestSectionOverrideState {
 
 export interface EditableChatRequestMetadata {
 	requestId: string;
+	version?: number;
+	payloadHash?: number;
 	tokenCount?: number;
 	maxPromptTokens?: number;
 	maxResponseTokens?: number;

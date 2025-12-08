@@ -116,6 +116,24 @@ describe('LiveRequestEditorService interception', () => {
 		expect(updated.isDirty).toBe(true);
 	});
 
+	test('tracks payload hash and version as sections change', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
+		const key = { sessionId: init.sessionId, location: init.location };
+		const request = service.prepareRequest(init)!;
+
+		expect(request.metadata.version).toBe(1);
+		expect(typeof request.metadata.payloadHash).toBe('number');
+		const initialHash = request.metadata.payloadHash;
+
+		const second = request.sections[1];
+		service.updateSectionContent(key, second.id, 'edited user');
+		const updated = service.getRequest(key)!;
+
+		expect(updated.metadata.version).toBe(2);
+		expect(updated.metadata.payloadHash).not.toBe(initialHash);
+	});
+
 	test('delete and restore section toggles projection and dirtiness', async () => {
 		const { service } = await createService();
 		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
@@ -221,8 +239,18 @@ describe('LiveRequestEditorService interception', () => {
 
 		const updated = service.getRequest(key)!;
 		expect(updated.metadata.lastLoggedMatches).toBe(false);
+		const snapshot = service.getMetadataSnapshot(key)!;
+		expect(snapshot.parityStatus).toBe('mismatch');
+		expect(snapshot.payloadHash).toBeDefined();
+		expect(snapshot.lastLoggedHash).toBeDefined();
+		expect(snapshot.sectionCounts?.deleted).toBe(0);
 		const events = telemetry.getEvents().telemetryServiceEvents;
 		expect(events.some(evt => evt.eventName === 'liveRequestEditor.requestParityMismatch')).toBe(true);
+		const mismatchEvent = events.find(evt => evt.eventName === 'liveRequestEditor.requestParityMismatch');
+		const props = mismatchEvent?.properties as Record<string, unknown> | undefined;
+		expect(props?.['replayHash']).toBeDefined();
+		expect(props?.['loggedHash']).toBeDefined();
+		expect(props?.['deletedSections']).toBe('0');
 	});
 
 	test('emits metadata events on prepare and disposal', async () => {

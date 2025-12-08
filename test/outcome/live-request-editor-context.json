@@ -6,5 +6,9 @@
 	{
 		"name": "Live Request Editor [context] - edits apply to send result",
 		"requests": []
+	},
+	{
+		"name": "Live Request Editor [context] - parity mismatch emits telemetry and snapshot flags",
+		"requests": []
 	}
 ]

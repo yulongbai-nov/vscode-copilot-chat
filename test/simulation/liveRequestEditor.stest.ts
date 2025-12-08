@@ -39,20 +39,22 @@ ssuite({ title: 'Live Request Editor', location: 'context' }, () => {
 		return part.type === Raw.ChatCompletionContentPartKind.Text ? part.text : undefined;
 	};
 
-	const createService = async (): Promise<LiveRequestEditorService> => {
+	const createService = async (): Promise<{ service: LiveRequestEditorService; telemetry: SpyingTelemetryService }> => {
 		const defaults = new DefaultsOnlyConfigurationService();
 		const config = new InMemoryConfigurationService(defaults);
 		await config.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, true);
 		await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
-		return new LiveRequestEditorService(config, new SpyingTelemetryService(), new (class {
+		const telemetry = new SpyingTelemetryService();
+		const service = new LiveRequestEditorService(config, telemetry, new (class {
 			public readonly _serviceBrand: undefined;
 			private readonly _onDidDispose = new Emitter<string>();
 			public readonly onDidDisposeChatSession = this._onDidDispose.event;
 		})(), new MockExtensionContext() as any);
+		return { service, telemetry };
 	};
 
 	stest({ description: 'edits apply to send result' }, async (_services: TestingServiceCollection) => {
-		const service = await createService();
+		const { service } = await createService();
 
 		const renderResult = createRenderResult(['system prompt', 'user prompt']);
 		const key = { sessionId, location: ChatLocation.Panel };
@@ -79,7 +81,7 @@ ssuite({ title: 'Live Request Editor', location: 'context' }, () => {
 	});
 
 	stest({ description: 'delete all blocks send with validation' }, async (_services: TestingServiceCollection) => {
-		const service = await createService();
+		const { service } = await createService();
 		const renderResult = createRenderResult(['user prompt'], false);
 		const key = { sessionId, location: ChatLocation.Panel };
 		service.prepareRequest({
@@ -98,5 +100,63 @@ ssuite({ title: 'Live Request Editor', location: 'context' }, () => {
 
 		const send = service.getMessagesForSend(key, renderResult.messages);
 		assert.ok(send.error?.code === 'empty');
+	});
+
+	stest({ description: 'parity mismatch emits telemetry and snapshot flags' }, async (_services: TestingServiceCollection) => {
+		const { service, telemetry } = await createService();
+		const renderResult = createRenderResult(['system prompt', 'user prompt']);
+		const key = { sessionId, location: ChatLocation.Panel };
+		service.prepareRequest({
+			sessionId,
+			location: ChatLocation.Panel,
+			debugName: 'sim-debug',
+			model: 'gpt-sim',
+			renderResult,
+			requestId,
+		});
+
+		const request = service.getRequest(key)!;
+		const mutated: Raw.ChatMessage[] = request.messages.map((message, index) => {
+			if (index === 1) {
+				return {
+					...message,
+					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'mutated' }] as Raw.ChatCompletionContentPart[]
+				} as Raw.ChatMessage;
+			}
+			return { ...message };
+		});
+
+		service.recordLoggedRequest(key, mutated);
+		const snapshot = service.getMetadataSnapshot(key)!;
+		assert.strictEqual(snapshot.parityStatus, 'mismatch');
+		assert.ok(typeof snapshot.payloadHash === 'number');
+		assert.ok(typeof snapshot.lastLoggedHash === 'number');
+
+		const events = telemetry.getEvents().telemetryServiceEvents;
+		const mismatch = events.find(evt => evt.eventName === 'liveRequestEditor.requestParityMismatch');
+		assert.ok(mismatch, 'expected telemetry for parity mismatch');
+	});
+
+	stest({ description: 'payload hash and version bump on edits' }, async (_services: TestingServiceCollection) => {
+		const { service } = await createService();
+		const renderResult = createRenderResult(['system prompt', 'user prompt']);
+		const key = { sessionId, location: ChatLocation.Panel };
+		service.prepareRequest({
+			sessionId,
+			location: ChatLocation.Panel,
+			debugName: 'sim-debug',
+			model: 'gpt-sim',
+			renderResult,
+			requestId,
+		});
+
+		const initial = service.getRequest(key)!;
+		const initialHash = initial.metadata.payloadHash;
+		const initialVersion = initial.metadata.version;
+		const second = initial.sections[1];
+		service.updateSectionContent(key, second.id, 'edited user');
+		const updated = service.getRequest(key)!;
+		assert.ok((updated.metadata.payloadHash ?? 0) !== (initialHash ?? -1));
+		assert.strictEqual(updated.metadata.version, (initialVersion ?? 1) + 1);
 	});
 });
