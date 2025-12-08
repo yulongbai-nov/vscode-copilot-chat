@@ -50,13 +50,13 @@ describe('stripSamplingParameters', () => {
 		expect(body.n).toBe(1);
 	});
 
-	it('keeps sampling parameters for gpt-5.1 variants', () => {
+	it('removes sampling parameters for gpt-5.1-codex family', () => {
 		const body: IEndpointBody = { temperature: 0.3, top_p: 0.95, n: 3, model: 'gpt-5.1-codex' };
 
 		stripSamplingParameters(body, 'gpt-5.1-codex');
 
-		expect(body.temperature).toBe(0.3);
-		expect(body.top_p).toBe(0.95);
-		expect(body.n).toBe(3);
+		expect(body.temperature).toBeUndefined();
+		expect(body.top_p).toBeUndefined();
+		expect(body.n).toBeUndefined();
 	});
 });
