@@ -78,10 +78,11 @@ sequenceDiagram
     RS-->>User: Enable input, show breadcrumb/toast
     User->>RS: Type new message
     User->>RS: Send message
-    RS->>Fetcher: Send request with trimmed edited history + new user message
+    RS->>Fetcher: Send request (trimmed edited history + new user message)
     Fetcher->>Model: Invoke model
     Model-->>RS: Stream response
-    RS-->>User: Display response (replay session only; original session untouched)
+    RS-->>User: Display response
+    Note over RS: Replay session only; original session untouched
 ```
 
 ## Replay State Machine (per source turn/session)
