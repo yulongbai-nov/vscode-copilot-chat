@@ -22,6 +22,9 @@ Provide an opt-in chat timeline that mirrors the edited prompt (system/history/t
 - THE System SHALL label replay sessions as “Replayed prompt” and show source session/request identifiers in tooltip/description.
 - THE System SHALL mark edited sections with an “Edited” indicator and omit deleted sections.
 - THE System SHALL provide “View replayed prompt”/“Collapse” toggles for long sections and a link back to the Live Request Editor.
+- THE System SHALL cap rendered sections at 30 and expose a “View replayed prompt (N more)” affordance for additional sections.
+- THE System SHALL present the replay as read-only until the user chooses “Start chatting from this replay,” at which point input is enabled and focus shifts to the replay session with a breadcrumb/toast.
+- WHEN interception/auto-override are off in the fork, THEN edit/delete controls in the replay view SHALL be disabled and the view SHALL auto-scroll to the latest section.
 
 ### R4: Session Handling
 - THE System SHALL create or reuse a replay session keyed to the source session/location; original session remains intact.

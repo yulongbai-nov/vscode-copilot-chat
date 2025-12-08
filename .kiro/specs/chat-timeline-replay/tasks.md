@@ -11,6 +11,7 @@
   - Map `EditableChatRequest.messages` → replay bubbles (system/history/tool/user).
   - Omit deleted sections; mark edited sections; collapse long system/history/tool by default.
   - Include tool call/result labels and trimmed-prompt warning when applicable.
+  - Enforce section cap (30) and compute “(N more)” affordance for overflow.
 
 - [ ] 2. Session creation and rendering
   - Add replay session manager keyed to source session/location with optional `replay_parent_turn_id`.
@@ -19,6 +20,7 @@
   - Render bubbles via chat participant/content provider without model invocation.
   - When continuing from replay, switch focus to the replay session and show breadcrumb/toast. Keep interception/auto-override off by default in the fork unless explicitly enabled.
   - Cap rendered sections (e.g., 30) and provide “View replayed prompt (N more)” affordance.
+  - In replay view with interception off, disable edit/delete controls and auto-scroll to the latest section.
 
 - [ ] 3. Telemetry and error handling
   - Emit invocation telemetry with source sessionId/requestId and section counts.
