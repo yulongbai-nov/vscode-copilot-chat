@@ -41,6 +41,7 @@ Raw Request Payload
 - Idle state: “Live Request Editor idle — send a chat request to populate metadata.”
 - When `sessionMetadata.fields` is empty, the metadata section hides but the token node/placeholder remains.
 - Outline nodes truncate after a safety budget and surface “... entries truncated ...” markers.
+- Reasoning-only models that reject sampling controls (e.g., `o1`, `o1-mini`) have `temperature` / `top_p` / `n` stripped before send, so the Request Options node omits them.
 
 ## Modes
 - **Send normally**: Sends immediately; editor is view-only.
