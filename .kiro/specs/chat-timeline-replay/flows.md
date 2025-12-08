@@ -84,6 +84,47 @@ sequenceDiagram
     RS-->>User: Display response (replay session only; original session untouched)
 ```
 
+## Replay State Machine (per source turn/session)
+
+States:
+- `idle`: no replay built.
+- `building`: projection in progress.
+- `replay_ready`: replay built, read-only, interception/override off, input disabled.
+- `fork_active`: user chose “Start chatting from this replay”; input enabled in forked session.
+- `stale`: replay invalidated (context change/cancel/re-replay).
+
+Events/transitions:
+- `replay_request` (idle/stale) → `building`
+- `build_success` → `replay_ready`
+- `build_fail` → `idle` (show error)
+- `start_chatting` (from `replay_ready`) → `fork_active` (focus shift + breadcrumb/toast)
+- `send_from_fork` (in `fork_active`) → `fork_active` (normal chat turn)
+- `replay_replace` (new replay for same turn) → `building` (after marking prior stale/replaced)
+- `cancel/ctx_change` → `stale` (show cleared state, disable input)
+- `restore_previous` (if buffer exists) → `replay_ready` with prior version
+
+Guards/side effects:
+- Version/hash on `build_success`; ignore stale updates.
+- In `replay_ready`: edit/delete disabled; input disabled; interception/override off.
+- In `fork_active`: input enabled; interception/override off by default unless user toggles.
+- On `stale`: show “Replay cleared” with link back to Live Request Editor.
+- Cap rendering at 30 sections; compute “(N more)” overflow.
+
+```mermaid
+stateDiagram-v2
+    idle --> building: replay_request
+    stale --> building: replay_request
+    building --> replay_ready: build_success
+    building --> idle: build_fail
+    replay_ready --> fork_active: start_chatting
+    fork_active --> fork_active: send_from_fork
+    replay_ready --> building: replay_replace
+    fork_active --> building: replay_replace
+    replay_ready --> stale: cancel/ctx_change
+    fork_active --> stale: cancel/ctx_change
+    stale --> replay_ready: restore_previous (if buffered)
+```
+
 ## Interrupt Handling (Graceful)
 
 - **Empty/invalid projection**: Show “Nothing to replay” with link back to LRE; do not create replay session.

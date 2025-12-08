@@ -99,3 +99,12 @@ Replayed Session (chat view)
 - Stale handling: If the request is cleared/canceled/context-switched, mark replay as stale/cleared rather than freezing old data.
 - Debounce/merge: Debounce rapid edits before emitting to replay to reduce flicker; coalesce updates.
 - Parity warning: If logged request hash ≠ replay hash, surface a warning chip/banner in replay and metadata views.
+
+## Global Mode Interactions (Interception/Override/Replay)
+- Defaults: Interception OFF, Auto-apply OFF, Replay manual (flag off by default). Replay is additive and does not replace interception/override.
+- Independence: Replay does not pause sends; interception is the only pause mechanism. Auto-apply persists prefix edits; replay does not.
+- UI simplicity: In the replay view, keep interception/override OFF by default. If users toggle them, reflect the state but default remains off.
+- Transition guidance:
+  - Interception ON → user edits → may replay before resuming. Replay state machine still applies.
+  - Auto-apply ON → edits are applied automatically on later turns; replay remains a manual audit/fork tool.
+  - Replay does not alter interception/override settings; these modes are orthogonal and should be surfaced separately to avoid mode sprawl.
