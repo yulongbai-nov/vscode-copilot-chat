@@ -8,13 +8,15 @@ import { describe, expect, test } from 'vitest';
 import { buildTraceSnapshotFromHtmlTrace } from '../liveRequestBuilder';
 
 function createMessage(role: Raw.ChatRole, text: string): Raw.ChatMessage {
-	return {
+	const base: Raw.ChatMessage = {
 		role,
 		content: [{
 			type: Raw.ChatCompletionContentPartKind.Text,
 			text
-		}]
+		}],
+		toolCallId: role === Raw.ChatRole.Tool ? 'call' : ''
 	};
+	return base;
 }
 
 function createTraceMessage(name: string, role: Raw.ChatRole, text: string) {
@@ -30,10 +32,13 @@ const tokenizer: ITokenizer = {
 	async countMessageTokens(message: any) {
 		const content = Array.isArray(message?.content) ? message.content : [];
 		return content.reduce((sum: number, part: any) => sum + (typeof part?.text === 'string' ? part.text.length : 0), 0);
+	},
+	async tokenLength(part: any) {
+		return typeof part?.text === 'string' ? part.text.length : 1;
 	}
 };
 
-const renderTree = (container: unknown) => ({ budget: 100, container, removed: 0 });
+const renderTree = (container: unknown) => ({ budget: 100, container: container as any, removed: 0 });
 
 describe('buildTraceSnapshotFromHtmlTrace', () => {
 	test('merges system messages and returns token counts', async () => {

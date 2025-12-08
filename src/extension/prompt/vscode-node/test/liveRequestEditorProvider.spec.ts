@@ -164,6 +164,7 @@ describe('LiveRequestEditorProvider', () => {
 			restoreSection: () => undefined,
 			resetRequest: () => undefined,
 			updateTokenCounts: () => undefined,
+			applyTraceData: () => undefined,
 			updateRequestOptions: (_key: LiveRequestSessionKey, _requestOptions: OptionalChatRequestParams | undefined) => undefined,
 			getMessagesForSend: (_key: LiveRequestSessionKey, _fallback: Raw.ChatMessage[]) => ({ messages: [] as Raw.ChatMessage[] }),
 			getInterceptionState: () => currentInterceptionState,

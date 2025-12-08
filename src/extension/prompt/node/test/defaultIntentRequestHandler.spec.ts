@@ -44,7 +44,7 @@ import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
 import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
 	let accessor: ITestingServicesAccessor;
