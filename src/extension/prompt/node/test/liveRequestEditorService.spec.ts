@@ -47,6 +47,10 @@ function createRenderResultWithMessages(texts: string[]): RenderPromptResult {
 	};
 }
 
+function getText(part: Raw.ChatCompletionContentPart): string | undefined {
+	return part.type === Raw.ChatCompletionContentPartKind.Text ? part.text : undefined;
+}
+
 class TestChatSessionService implements IChatSessionService {
 	declare _serviceBrand: undefined;
 
@@ -108,7 +112,7 @@ describe('LiveRequestEditorService interception', () => {
 		const updated = service.getRequest(key)!;
 		const updatedSection = updated.sections[0];
 		expect(updatedSection.editedContent).toBe('edited text');
-		expect(updated.messages[0].content[0].text).toBe('edited text');
+		expect(getText(updated.messages[0].content[0])).toBe('edited text');
 		expect(updated.isDirty).toBe(true);
 	});
 
