@@ -315,7 +315,7 @@ suite('defaultIntentRequestHandler', () => {
 		clearSubagentHistory(): void {
 			// no-op
 		}
-	getMetadataSnapshot(): LiveRequestMetadataSnapshot | undefined {
+		getMetadataSnapshot(): LiveRequestMetadataSnapshot | undefined {
 			return undefined;
 		}
 	}
