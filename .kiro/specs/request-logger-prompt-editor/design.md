@@ -552,6 +552,13 @@ See `.kiro/specs/chat-history-persistence` for the detailed design/requirements/
 
 See `.kiro/specs/graphiti-memory-integration` for the detailed design/requirements/tasks of the optional Graphiti ingestion concept (feature-gated network sync).
 
+## UI Simplification Opportunities (Forward-Looking)
+
+- Lean on replay/fork as the primary “advanced” affordance: keep replay display-only by default with an explicit “Start chatting from this replay” to avoid branching confusion.
+- Keep interception/auto-override UI minimal: a single “Pause & review” toggle plus an “Auto-apply edits” entry; avoid mode sprawl.
+- Prefer banner actions over nested menus; reserve hover toolbars for section-level edits only.
+- When replay is available, consider demoting inline diff/restore affordances in the main view to reduce clutter (surface them as hover/secondary actions).
+
 ## Future Enhancements
 
 - Side-by-side diff view: auto-generated vs edited prompt.
