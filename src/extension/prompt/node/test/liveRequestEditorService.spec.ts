@@ -34,6 +34,19 @@ function createRenderResult(text: string): RenderPromptResult {
 	};
 }
 
+function createRenderResultWithMessages(texts: string[]): RenderPromptResult {
+	return {
+		...nullRenderPromptResult(),
+		messages: texts.map((text, index) => ({
+			role: index === 0 ? Raw.ChatRole.System : Raw.ChatRole.User,
+			content: [{
+				type: Raw.ChatCompletionContentPartKind.Text,
+				text
+			}]
+		}))
+	};
+}
+
 class TestChatSessionService implements IChatSessionService {
 	declare _serviceBrand: undefined;
 
@@ -81,6 +94,63 @@ describe('LiveRequestEditorService interception', () => {
 			return evt.eventName === 'liveRequestEditor.promptInterception.outcome' && properties?.['action'] === 'resume';
 		});
 		expect(hasResumeEvent).toBe(true);
+	});
+
+	test('updateSectionContent updates messages and dirty flag', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResult('original text') });
+		const key = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		const section = request.sections[0];
+
+		service.updateSectionContent(key, section.id, 'edited text');
+		const updated = service.getRequest(key)!;
+		const updatedSection = updated.sections[0];
+		expect(updatedSection.editedContent).toBe('edited text');
+		expect(updated.messages[0].content[0].text).toBe('edited text');
+		expect(updated.isDirty).toBe(true);
+	});
+
+	test('delete and restore section toggles projection and dirtiness', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
+		const key = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		const target = request.sections[1];
+
+		service.deleteSection(key, target.id);
+		const afterDelete = service.getRequest(key)!;
+		expect(afterDelete.sections.find(s => s.id === target.id)?.deleted).toBe(true);
+		expect(afterDelete.messages).toHaveLength(1);
+		expect(afterDelete.isDirty).toBe(true);
+
+		service.restoreSection(key, target.id);
+		const afterRestore = service.getRequest(key)!;
+		expect(afterRestore.sections.find(s => s.id === target.id)?.deleted).toBeFalsy();
+		expect(afterRestore.messages).toHaveLength(2);
+		expect(afterRestore.isDirty).toBe(false);
+	});
+
+	test('resetRequest restores original content and clears edits/deletes', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
+		const key = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		const first = request.sections[0];
+		const second = request.sections[1];
+
+		service.updateSectionContent(key, first.id, 'edited');
+		service.deleteSection(key, second.id);
+
+		service.resetRequest(key);
+		const reset = service.getRequest(key)!;
+		expect(reset.sections.map(s => s.content)).toEqual(['system', 'user']);
+		expect(reset.sections.every(s => !s.deleted)).toBe(true);
+		expect(reset.sections.every(s => s.editedContent === undefined)).toBe(true);
+		expect(reset.isDirty).toBe(false);
 	});
 
 	test('resolves cancel when interception is discarded', async () => {
