@@ -82,7 +82,7 @@ sequenceDiagram
     Fetcher->>Model: Invoke model
     Model-->>RS: Stream response
     RS-->>User: Display response
-    Note over RS: Replay session only; original session untouched
+    Note over RS: Replay session only\nOriginal session untouched
 ```
 
 ## Replay State Machine (per source turn/session)
