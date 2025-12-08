@@ -37,7 +37,6 @@ import { CopilotDebugCommandContribution } from '../../onboardDebug/vscode-node/
 import { OnboardTerminalTestsContribution } from '../../onboardDebug/vscode-node/onboardTerminalTestsContribution';
 import { DebugCommandsContribution } from '../../prompt/vscode-node/debugCommands';
 import { LiveRequestEditorContribution } from '../../prompt/vscode-node/liveRequestEditorContribution';
-import { LiveReplayChatProvider } from '../../prompt/vscode-node/liveReplayChatProvider';
 import { SubagentPromptMonitorContribution } from '../../prompt/vscode-node/subagentPromptMonitorProvider';
 import { RenameSuggestionsContrib } from '../../prompt/vscode-node/renameSuggestions';
 import { PromptFileContextContribution } from '../../promptFileContext/vscode-node/promptFileContextService';
@@ -92,7 +91,6 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(PromptFileContextContribution),
 	asContributionFactory(DiagnosticsContextContribution),
 	asContributionFactory(ChatReplayContribution),
-	asContributionFactory(LiveReplayChatProvider),
 	asContributionFactory(CompletionsUnificationContribution),
 	workspaceIndexingContribution,
 	asContributionFactory(ChatSessionsContrib),
