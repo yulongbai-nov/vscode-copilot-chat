@@ -42,3 +42,6 @@ src/extension/completions-core
 .tmp/
 *.vsix
 .github/workflows/pr.yml
+# Ignore git worktrees metadata
+.worktree
+.worktrees
