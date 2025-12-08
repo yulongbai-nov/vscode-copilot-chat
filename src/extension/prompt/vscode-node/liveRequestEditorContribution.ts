@@ -14,6 +14,7 @@ import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestOverrideSc
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
 import { LiveRequestMetadataProvider } from './liveRequestMetadataProvider';
+import { LiveReplayChatProvider } from './liveReplayChatProvider';
 
 type ModePickItem = vscode.QuickPickItem & { mode: LiveRequestEditorMode; disabled?: boolean };
 type ScopePickItem = vscode.QuickPickItem & { scope: LiveRequestOverrideScope };
@@ -25,6 +26,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 	private readonly _disposables = new DisposableStore();
 	private _provider?: LiveRequestEditorProvider;
 	private _metadataProvider?: LiveRequestMetadataProvider;
+	private _replayChatProvider?: LiveReplayChatProvider;
 	private readonly _statusBarItem: vscode.StatusBarItem;
 
 	constructor(
@@ -37,6 +39,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, false);
 		this._registerProvider();
 		this._registerMetadataProvider();
+		this._registerReplayChatProvider();
 		this._registerCommands();
 		this._statusBarItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10002));
 		this._statusBarItem.name = 'Copilot Prompt Interception';
@@ -89,6 +92,14 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			this._logService.trace('Live Request Metadata provider registered');
 		} catch (error) {
 			this._logService.error('Failed to register Live Request Metadata provider', error);
+		}
+	}
+
+	private _registerReplayChatProvider(): void {
+		try {
+			this._replayChatProvider = this._disposables.add(this._instantiationService.createInstance(LiveReplayChatProvider));
+		} catch (error) {
+			this._logService.error('Failed to register Live Request Replay chat provider', error);
 		}
 	}
 
@@ -178,7 +189,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 					deleted: String(projection?.deletedCount ?? 0),
 					overflow: String(projection?.overflowCount ?? 0),
 				});
-				vscode.window.showInformationMessage('Replayed prompt built. Open the chat view to review the timeline replay.');
+				this._replayChatProvider?.showReplay(snapshot);
 			}
 		);
 
