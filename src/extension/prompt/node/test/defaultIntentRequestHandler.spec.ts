@@ -7,9 +7,10 @@
 import { Raw, RenderPromptResult } from '@vscode/prompt-tsx';
 import { afterEach, beforeEach, expect, suite, test } from 'vitest';
 import type { ChatLanguageModelToolReference, ChatPromptReference, ChatRequest, ExtendedChatResponsePart, LanguageModelChat } from 'vscode';
-import { IChatMLFetcher } from '../../../../platform/chat/common/chatMLFetcher';
+import { IChatMLFetcher, IFetchMLOptions } from '../../../../platform/chat/common/chatMLFetcher';
 import { IChatSessionService } from '../../../../platform/chat/common/chatSessionService';
 import { toTextPart } from '../../../../platform/chat/common/globalStringUtils';
+import { ChatFetchResponseType, ChatResponse, ChatResponses } from '../../../../platform/chat/common/commonTypes';
 import { StaticChatMLFetcher } from '../../../../platform/chat/test/common/staticChatMLFetcher';
 import { MockEndpoint } from '../../../../platform/endpoint/test/node/mockEndpoint';
 import { IResponseDelta } from '../../../../platform/networking/common/fetch';
@@ -314,8 +315,41 @@ suite('defaultIntentRequestHandler', () => {
 		clearSubagentHistory(): void {
 			// no-op
 		}
-		getMetadataSnapshot(): LiveRequestMetadataSnapshot | undefined {
+	getMetadataSnapshot(): LiveRequestMetadataSnapshot | undefined {
 			return undefined;
+		}
+	}
+
+	class RecordingChatMLFetcher implements IChatMLFetcher {
+		_serviceBrand: undefined;
+		onDidMakeChatMLRequest = Event.None;
+		public readonly requests: IFetchMLOptions[] = [];
+
+		constructor(private readonly value: string = 'ok') { }
+
+		async fetchOne(options: IFetchMLOptions): Promise<ChatResponse> {
+			this.requests.push(options);
+			options.finishedCb?.('', 0, { text: this.value });
+			return {
+				type: ChatFetchResponseType.Success,
+				requestId: '',
+				serverRequestId: '',
+				usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, prompt_tokens_details: { cached_tokens: 0 } },
+				value: this.value,
+				resolvedModel: ''
+			};
+		}
+
+		async fetchMany(options: IFetchMLOptions): Promise<ChatResponses> {
+			this.requests.push(options);
+			return {
+				type: ChatFetchResponseType.Success,
+				requestId: '',
+				serverRequestId: '',
+				usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, prompt_tokens_details: { cached_tokens: 0 } },
+				value: [this.value],
+				resolvedModel: ''
+			};
 		}
 	}
 
@@ -588,6 +622,33 @@ suite('defaultIntentRequestHandler', () => {
 		expect(result).to.deep.equal({});
 		const last = response.at(-1) as ChatResponseMarkdownPart;
 		expect(last.value.value).to.contain('Prompt cannot be sent because all sections were removed.');
+	});
+
+	test('uses edited messages for send when interception is off', async () => {
+		const recordingFetcher = new RecordingChatMLFetcher('edited-response');
+		const editorService = new TestLiveRequestEditorService();
+		editorService.enabled = true;
+		editorService.interceptionEnabled = false;
+		editorService.setMessages([{ role: Raw.ChatRole.User, content: [toTextPart('edited user')] }]);
+
+		resetState((services) => {
+			services.define(IChatMLFetcher, recordingFetcher);
+			return editorService;
+		});
+
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('original prompt')] }],
+		};
+
+		const handler = makeHandler();
+		await handler.getResult();
+
+		expect(recordingFetcher.requests).to.have.length(1);
+		const sent = recordingFetcher.requests[0].messages;
+		const sentContent = sent[0].content[0] as Raw.ChatCompletionContentPart;
+		expect(sentContent.type).to.equal(Raw.ChatCompletionContentPartKind.Text);
+		expect(sentContent.type === Raw.ChatCompletionContentPartKind.Text ? sentContent.text : undefined).to.equal('edited user');
 	});
 
 	function fillWithToolCalls(insertN = 20) {
