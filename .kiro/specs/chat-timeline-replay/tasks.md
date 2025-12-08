@@ -7,7 +7,7 @@
   - Note dependency: persistence is optional. If chat-history-persistence (SQLite) is off, forks are in-memory only; if on, store replay metadata (parent IDs, hashes, version) so forks survive reloads.
   - Default: replay starts read-only; user clicks “Start chatting from this replay” to enable input. Fork payload uses the trimmed messages that were/would be sent.
 
-- [ ] 1. Build replay projection
+- [x] 1. Build replay projection
   - Map `EditableChatRequest.messages` → replay bubbles (system/history/tool/user).
   - Omit deleted sections; mark edited sections; collapse long system/history/tool by default.
   - Include tool call/result labels and trimmed-prompt warning when applicable.
@@ -15,6 +15,7 @@
   - Attach version/hash metadata to replay builds; emit with session scoping for consumers.
 
 - [ ] 2. Session creation and rendering
+  - Status: Service-level state machine + Option A (replace + restore buffer) implemented; command/UI wiring and chat rendering still pending.
   - Add replay session manager keyed to source session/location with optional `replay_parent_turn_id`.
   - Enforce Option A: one replay fork per source turn; replace prior fork if re-replayed.
   - Expose command `github.copilot.liveRequestEditor.replayPrompt` and surface in Live Request Editor UI.
@@ -30,6 +31,7 @@
   - Handle empty/mapping failures gracefully (“Nothing to replay”).
 
 - [ ] 4. Tests and validation
+  - Initial unit coverage added for replay projection/state machine in `liveRequestEditorService.spec.ts`.
   - Unit tests for projection (ordering, deletions/edits, tool labeling, trimming warnings).
   - Unit tests for version/hash scoping: stale updates ignored; replay_replace replaces prior fork; restore_previous buffer (if enabled) works.
   - Integration tests:
