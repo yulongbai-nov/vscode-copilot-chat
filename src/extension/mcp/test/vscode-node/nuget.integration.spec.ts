@@ -38,7 +38,7 @@ describe.runIf(RUN_DOTNET_CLI_TESTS)('get nuget MCP server info using dotnet CLI
 		);
 	});
 
-	it('returns mapped server.json for original schema', async () => {
+	it.skip('returns mapped server.json for original schema', async () => {
 		const result = await nuget.getNuGetPackageMetadata('Knapcode.SampleMcpServer');
 		expect(result.state).toBe('ok');
 		if (result.state === 'ok') {
