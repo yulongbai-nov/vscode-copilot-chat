@@ -28,6 +28,8 @@
      - Sections that carry overrides render an “Override · Show diff” chip that opens a `vscode.diff` view comparing the original intercepted content with the persisted override. Diff launches, saves, clears, and scope transitions all emit telemetry tagged by scope.
   6. **Session selector + metadata freshness**
      - Conversation picker is always enabled and now labels sessions as `<location> · <debug name> · …<sessionId tail>` to disambiguate concurrent sessions. Request/session/model metadata is refreshed via `onDidChangeMetadata` (includes `lastUpdated`) so the header and metadata tree keep request IDs, models, and session IDs in sync during Auto-apply capture/apply.
+  7. **Debug bubbles for interception/auto-apply**
+     - When interception or Auto-apply is active, the chat response stream emits a single `<debug-note>` bubble per request indicating the mode, session id, request id, and timestamp; it is clearly marked as debug-only and not sent to the model. Tests filter these bubbles out of user-facing assertions.
 
   ### Verification
   - `npm run lint`
