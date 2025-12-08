@@ -78,6 +78,7 @@ export class DefaultIntentRequestHandler {
 
 	private _editSurvivalTracker: IEditSurvivalTrackingSession = new NullEditSurvivalTrackingSession();
 	private _loop!: DefaultToolCallingLoop;
+	private readonly _debugNoticeEmittedForRequestIds = new Set<string>();
 
 	constructor(
 		private readonly intent: IIntent,
@@ -98,6 +99,7 @@ export class DefaultIntentRequestHandler {
 		@IRequestLogger private readonly _requestLogger: IRequestLogger,
 		@IEditSurvivalTrackerService private readonly _editSurvivalTrackerService: IEditSurvivalTrackerService,
 		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
+		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
 	) {
 		// Initialize properties
 		this.turn = conversation.getLatestTurn();
@@ -114,6 +116,8 @@ export class DefaultIntentRequestHandler {
 			if (this.token.isCancellationRequested) {
 				return CanceledResult;
 			}
+
+			this.maybePostPromptEditorDebugBubble();
 
 			this._logService.trace('Processing intent');
 			const intentInvocation = await this.intent.invoke({ location: this.location, documentContext: this.documentContext, request: this.request });
@@ -528,6 +532,35 @@ export class DefaultIntentRequestHandler {
 			}
 			case ChatFetchResponseType.InvalidStatefulMarker:
 				throw new Error('unreachable'); // retried within the endpoint
+		}
+	}
+
+	private maybePostPromptEditorDebugBubble(): void {
+		if (!this._liveRequestEditorService.isEnabled() || this.request.isSubagent) {
+			return;
+		}
+		const state = this._liveRequestEditorService.getInterceptionState();
+		const autoActive = state.mode === 'autoOverride' && (!!state.autoOverride?.hasOverrides || !!state.autoOverride?.capturing);
+		if (!state.enabled && !autoActive) {
+			return;
+		}
+		const key: LiveRequestSessionKey = { sessionId: this.conversation.sessionId, location: this.location };
+		const metadata = this._liveRequestEditorService.getMetadataSnapshot(key);
+		const requestId = metadata?.requestId ?? this.turn.id;
+		if (this._debugNoticeEmittedForRequestIds.has(requestId)) {
+			return;
+		}
+		this._debugNoticeEmittedForRequestIds.add(requestId);
+		const scopeLabel = state.mode === 'autoOverride'
+			? (state.autoOverride?.capturing ? 'Auto-apply (capturing)' : 'Auto-apply (applying overrides)')
+			: 'Prompt interception';
+		const ts = new Date().toLocaleTimeString();
+		const sessionLabel = metadata?.debugName ?? `${ChatLocation.toStringShorter(this.location)}/${this.intent.id ?? 'unknown'}`;
+		const message = `<debug-note>Prompt editing active: ${scopeLabel} at ${ts}. Session ${metadata?.sessionId ?? key.sessionId} (${sessionLabel}), request ${requestId}. This is a debug-only bubble and not sent to the model.</debug-note>`;
+		try {
+			this.stream.markdown(message);
+		} catch {
+			// ignore stream failures
 		}
 	}
 }

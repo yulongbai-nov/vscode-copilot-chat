@@ -127,10 +127,15 @@ interface SessionSummary {
 	sessionId: string;
 	location: number;
 	label: string;
+	locationLabel: string;
+	sessionTail: string;
+	isActive: boolean;
+	isLatest: boolean;
 	model: string;
 	isDirty: boolean;
 	lastUpdated?: number;
 	debugName: string;
+	createdAt?: number;
 }
 
 interface PersistedState {
@@ -175,9 +180,9 @@ function formatNumber(value?: number): string {
 const EXTRA_SECTION_VALUES: InspectorExtraSection[] = ['requestOptions', 'telemetry', 'rawRequest'];
 
 const MODE_OPTIONS: Array<{ label: string; mode: LiveRequestEditorMode; description: string }> = [
-	{ label: 'Off', mode: 'off', description: 'Send requests immediately.' },
-	{ label: 'Interception', mode: 'interceptAlways', description: 'Pause every request before sending.' },
-	{ label: 'Auto', mode: 'autoOverride', description: 'Capture prefixes once, then auto-apply overrides.' }
+	{ label: 'Send normally', mode: 'off', description: 'Send requests immediately.' },
+	{ label: 'Pause & review every turn', mode: 'interceptAlways', description: 'Pause each request before sending.' },
+	{ label: 'Auto-apply saved edits', mode: 'autoOverride', description: 'Capture once, then apply edits automatically.' }
 ];
 
 function isInspectorExtraSection(value: unknown): value is InspectorExtraSection {
@@ -193,6 +198,13 @@ function formatTimestamp(value?: number): string {
 	} catch {
 		return String(value);
 	}
+}
+
+function formatAutoOverrideStatus(lastUpdated?: number): string {
+	if (!lastUpdated) {
+		return 'Applying saved edits';
+	}
+	return `Applying (saved ${formatTimestamp(lastUpdated)})`;
 }
 
 function computeTotalTokens(request?: EditableChatRequest): number {
@@ -763,6 +775,7 @@ const App: React.FC = () => {
 	const mode = interception?.mode ?? 'off';
 	const autoOverride = interception?.autoOverride;
 	const captureActive = mode === 'autoOverride' && autoOverride?.capturing;
+	const displayMode: LiveRequestEditorMode = mode === 'interceptOnce' ? 'interceptAlways' : mode;
 	const previewLimit = autoOverride?.previewLimit ?? 3;
 
 	const updatePersistedState = React.useCallback((updater: (prev: PersistedState) => PersistedState) => {
@@ -932,8 +945,11 @@ const App: React.FC = () => {
 	}, [sendMessage]);
 
 	const handleBeginAutoOverrideCapture = React.useCallback(() => {
+		if (captureActive) {
+			return;
+		}
 		sendMessage('beginAutoOverrideCapture');
-	}, [sendMessage]);
+	}, [sendMessage, captureActive]);
 
 	const handleClearOverrides = React.useCallback(() => {
 		sendMessage('clearAutoOverrides', { scope: autoOverride?.scope });
@@ -1037,6 +1053,12 @@ const App: React.FC = () => {
 		setActiveSessionKey(value);
 		sendMessage('selectSession', { sessionKey: value });
 	}, [activeSessionKey, sendMessage]);
+	const formatSessionTooltip = React.useCallback((session: SessionSummary) => {
+		const created = session.createdAt ? `Created ${formatTimestamp(session.createdAt)}` : undefined;
+		const updated = session.lastUpdated ? `Updated ${formatTimestamp(session.lastUpdated)}` : undefined;
+		const parts = [session.locationLabel, created, updated].filter(Boolean);
+		return parts.join(' • ');
+	}, []);
 
 	if (!request || !request.sections || request.sections.length === 0) {
 		return <EmptyState />;
@@ -1063,11 +1085,16 @@ const App: React.FC = () => {
 									className="session-selector-dropdown"
 									value={activeSessionKey ?? ''}
 									onChange={handleSessionChange}
-									disabled={sessions.length <= 1}
 								>
 									{sessions.map(session => (
-										<vscode-option key={session.key} value={session.key}>
+										<vscode-option
+											key={session.key}
+											value={session.key}
+											title={formatSessionTooltip(session)}
+										>
 											{session.label}
+											{session.isLatest ? ' · NEW' : ''}
+											{session.isActive ? ' · Current' : ''}
 										</vscode-option>
 									))}
 								</vscode-dropdown>
@@ -1078,7 +1105,7 @@ const App: React.FC = () => {
 						<div className="mode-toggle" role="group" aria-label="Prompt Inspector mode">
 							{MODE_OPTIONS.map(option => {
 								const disabled = option.mode === 'autoOverride' && !autoOverride?.enabled;
-								const active = mode === option.mode;
+								const active = displayMode === option.mode;
 								return (
 									<button
 										key={option.mode}
@@ -1122,7 +1149,7 @@ const App: React.FC = () => {
 							<span>{request.sections.length}</span>
 						</div>
 					</div>
-					{(request.debugName || request.metadata?.requestId) ? (
+					{(request.debugName || request.metadata?.requestId || request.sessionId) ? (
 						<div className="metadata-row metadata-row-subtle">
 							{request.debugName ? (
 								<div className="metadata-item">
@@ -1136,6 +1163,10 @@ const App: React.FC = () => {
 									<span className="metadata-mono">{request.metadata.requestId}</span>
 								</div>
 							) : null}
+							<div className="metadata-item">
+								<span className="metadata-label">Session ID:</span>
+								<span className="metadata-mono">{request.sessionId}</span>
+							</div>
 						</div>
 					) : null}
 					{totalTokens > 0 && request.metadata?.maxPromptTokens ? (
@@ -1162,28 +1193,32 @@ const App: React.FC = () => {
 				{mode === 'autoOverride' && autoOverride?.enabled ? (
 					<div className={`auto-override-banner ${captureActive ? 'capturing' : autoOverride.hasOverrides ? 'active' : 'idle'}`}>
 						<div className="auto-override-text">
-							<strong>Auto Override · {describeOverrideScope(autoOverride.scope)}</strong>
+							<strong>Auto-apply edits · {describeOverrideScope(autoOverride.scope)}</strong>
 							<span>
 								{captureActive
-									? `Capturing the first ${previewLimit} sections.`
-									: autoOverride.hasOverrides ? 'Overrides are applied automatically.' : 'No overrides saved yet.'}
+									? `Capturing next turn · showing first ${previewLimit} sections`
+									: autoOverride.hasOverrides
+										? formatAutoOverrideStatus(autoOverride.lastUpdated)
+										: `No saved edits yet · next turn will pause to capture`}
 							</span>
 						</div>
 						<div className="auto-override-actions">
-							<vscode-button appearance="secondary" onClick={() => handleModeSelect('interceptOnce')}>
-								Pause next turn
+							<vscode-button appearance="primary" onClick={handleBeginAutoOverrideCapture}>
+								Capture new edits{captureActive ? ' (armed)' : ''}
 							</vscode-button>
-							<vscode-button appearance="secondary" onClick={handleBeginAutoOverrideCapture}>
-								Edit overrides
-							</vscode-button>
+							{!captureActive ? (
+								<vscode-button appearance="secondary" onClick={() => handleModeSelect('interceptOnce')}>
+									Pause next turn
+								</vscode-button>
+							) : null}
 							<vscode-button appearance="secondary" onClick={handleClearOverrides}>
-								Clear overrides
+								Remove saved edits{autoOverride.hasOverrides ? '' : ' (none)'}
 							</vscode-button>
 							<vscode-button appearance="secondary" onClick={handleChangeScope}>
-								Change scope
+								Where to save edits
 							</vscode-button>
 							<vscode-button appearance="secondary" onClick={handleConfigurePreviewLimit}>
-								Preview limit
+								Sections to capture
 							</vscode-button>
 						</div>
 					</div>
@@ -1226,7 +1261,11 @@ const App: React.FC = () => {
 					</div>
 				) : (interception?.enabled && mode !== 'autoOverride') ? (
 					<div className="interception-banner ready">
-						<div className="interception-text">Prompt Interception Mode is on. Requests pause here before sending.</div>
+						<div className="interception-text">
+							{mode === 'interceptOnce'
+								? 'Next request will pause here for review.'
+								: 'Prompt Interception Mode is on. Requests pause here before sending.'}
+						</div>
 					</div>
 				) : null}
 

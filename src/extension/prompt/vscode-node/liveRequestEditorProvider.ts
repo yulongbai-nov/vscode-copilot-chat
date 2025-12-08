@@ -8,7 +8,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, LiveRequestEditorMode, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 
 type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
@@ -32,10 +32,15 @@ interface SessionSummaryPayload {
 	sessionId: string;
 	location: ChatLocation;
 	label: string;
+	locationLabel: string;
+	sessionTail: string;
+	isActive: boolean;
+	isLatest: boolean;
 	model: string;
 	isDirty: boolean;
 	lastUpdated?: number;
 	debugName: string;
+	createdAt?: number;
 }
 
 /**
@@ -80,6 +85,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._register(this._liveRequestEditorService.onDidChangeInterception(state => {
 			this._handleInterceptionStateChanged(state);
 			this._updateWebview();
+		}));
+		this._register(this._liveRequestEditorService.onDidChangeMetadata(event => {
+			this._handleMetadataChanged(event);
 		}));
 		this._register(vscode.workspace.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('github.copilot.chat.promptInspector.extraSections')) {
@@ -399,6 +407,42 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
 	}
 
+	private _handleMetadataChanged(event: LiveRequestMetadataEvent): void {
+		const metadata = event.metadata;
+		if (!metadata) {
+			return;
+		}
+		const compositeKey = this._toCompositeKey(metadata.sessionId, metadata.location);
+		let request = this._requests.get(compositeKey);
+		if (!request) {
+			const fetched = this._liveRequestEditorService.getRequest({ sessionId: metadata.sessionId, location: metadata.location });
+			if (fetched) {
+				request = fetched;
+				this._requests.set(compositeKey, fetched);
+			}
+		}
+		if (!request) {
+			return;
+		}
+		request.metadata.requestId = metadata.requestId ?? request.metadata.requestId;
+		if (metadata.debugName) {
+			(request as EditableChatRequest & { debugName?: string }).debugName = metadata.debugName;
+		}
+		(request as EditableChatRequest & { model: string }).model = metadata.model;
+		request.isDirty = metadata.isDirty;
+		request.metadata.createdAt = metadata.createdAt;
+		request.metadata.lastUpdated = metadata.lastUpdated;
+		request.metadata.tokenCount = metadata.tokenCount;
+		request.metadata.maxPromptTokens = metadata.maxPromptTokens;
+		if (!this._activeSessionKey) {
+			this._activeSessionKey = compositeKey;
+		}
+		if (this._activeSessionKey === compositeKey) {
+			this._currentRequest = request;
+		}
+		this._postStateToWebview();
+	}
+
 	private _readExtraSectionsSetting(): InspectorExtraSection[] {
 		const config = vscode.workspace.getConfiguration('github.copilot.chat.promptInspector');
 		const value = config.get<string[]>('extraSections', []);
@@ -409,23 +453,37 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 	private _getSessionSummaries(): SessionSummaryPayload[] {
 		const entries = Array.from(this._requests.values());
+		let latestUpdated = 0;
+		for (const entry of entries) {
+			const updated = entry.metadata?.lastUpdated ?? entry.metadata?.createdAt ?? 0;
+			if (updated > latestUpdated) {
+				latestUpdated = updated;
+			}
+		}
 		entries.sort((a, b) => {
-			const aTime = a.metadata?.createdAt ?? 0;
-			const bTime = b.metadata?.createdAt ?? 0;
+			const aTime = a.metadata?.lastUpdated ?? a.metadata?.createdAt ?? 0;
+			const bTime = b.metadata?.lastUpdated ?? b.metadata?.createdAt ?? 0;
 			return bTime - aTime;
 		});
 
 		return entries.map(request => {
 			const key = this._toCompositeKey(request.sessionId, request.location);
+			const locationLabel = this._describeLocation(request.location, request.debugName);
+			const sessionTail = request.sessionId.slice(-6);
 			return {
 				key,
 				sessionId: request.sessionId,
 				location: request.location,
+				locationLabel,
+				sessionTail,
+				isActive: key === this._activeSessionKey,
+				isLatest: !!latestUpdated && (request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0) === latestUpdated,
 				label: this._describeSession(request),
 				model: request.model,
 				isDirty: request.isDirty,
-				lastUpdated: request.metadata?.createdAt,
-				debugName: request.debugName
+				lastUpdated: request.metadata?.lastUpdated ?? request.metadata?.createdAt,
+				debugName: request.debugName,
+				createdAt: request.metadata?.createdAt
 			};
 		});
 	}
@@ -460,22 +518,24 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	}
 
 	private _describeSession(request: EditableChatRequest): string {
-		const location = this._describeLocation(request.location);
+		const location = this._describeLocation(request.location, request.debugName);
 		const name = request.debugName || request.metadata?.intentId || request.sessionId;
-		return `${location} · ${name}`;
+		const shortSession = request.sessionId.slice(-6);
+		return `${location} · ${name} · …${shortSession}`;
 	}
 
-	private _describeLocation(location: ChatLocation): string {
+	private _describeLocation(location: ChatLocation, debugName?: string): string {
+		const suffix = debugName ? ` (${debugName})` : '';
 		switch (location) {
 			case ChatLocation.Editor:
-				return 'Editor';
+				return `Editor${suffix}`;
 			case ChatLocation.Terminal:
-				return 'Terminal';
+				return `Terminal${suffix}`;
 			case ChatLocation.Notebook:
-				return 'Notebook';
+				return `Notebook${suffix}`;
 			case ChatLocation.Panel:
 			default:
-				return 'Panel';
+				return `Panel${suffix}`;
 		}
 	}
 

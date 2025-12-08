@@ -126,6 +126,7 @@ As a user with multiple Copilot chat threads (panel, side panel, editor, other w
 7.3 WHEN multiple conversations exist in the current VS Code window, THEN the Live Chat Request Editor SHOULD provide a drop-down or equivalent control to switch its target conversation among those sessions.  
 7.4 THE Live Chat Request Editor SHALL scope its conversation list to the current VS Code window only and SHALL NOT attempt to span multiple windows or remote hosts.  
 7.5 WHEN the user switches the target conversation via the selector, THEN the Live Chat Request Editor SHALL refresh its view to show the pending request (or a message if none) for the newly selected conversation.  
+7.6 THE conversation selector SHALL remain enabled in all modes and label each session with its location, debug/intent name, and a short session-id suffix (e.g., last 6 characters) to disambiguate concurrent sessions.  
 
 ### Requirement 8 – Prompt Interception Mode
 
@@ -182,63 +183,18 @@ As a power user validating intercepted prompts, I want a dedicated metadata view
 10.10 WHEN the extra sections contain `rawRequest`, the metadata view SHALL add a “Raw Request Payload” outline node that nests model, location, messages, and metadata exactly as they will be logged, again using the outline renderer + copy affordances.  
 10.11 Outline nodes SHALL respect the main feature flag, inherit VS Code theming/high-contrast styles, and avoid freezing the UI by truncating after a bounded number of entries with an explicit “…entries truncated…” indicator.
 
-### Requirement 11 – Auto Intercept & Prefix Override Mode
+### Requirement 11 – Auto-apply Prefix Edits (simplified Auto Override)
 
 **User Story:**  
 As an advanced Copilot user, I want to intercept the first turn of a chat session, tweak the system/prefix messages, and have those changes automatically applied to every later request without pausing the conversation, so that I can enforce custom instructions with minimal friction.
 
 #### Acceptance Criteria
 
-11.1 THE Live Request Editor SHALL expose a tri-state mode selector (Off, Intercept Once, Auto Override) surfaced in the inspector header, the status bar command, and via a Quick Pick command (`github.copilot.liveRequestEditor.setMode`). All entry points MUST stay in sync by listening to a single `onDidChangeInterceptionMode` event.  
-11.2 WHEN Auto Override is selected, the next pending request SHALL automatically intercept before send, display only the first `N` prefix sections (default 3), and allow the user to edit/save overrides. The preview count SHALL be configurable via a numeric setting (`github.copilot.chat.liveRequestEditor.autoOverride.previewLimit`, minimum 1) and a Quick Pick presented in the inspector.  
-11.3 AFTER the user saves overrides, subsequent requests SHALL send immediately with the persisted prefix edits applied unless the user explicitly pauses (via a “Pause & Intercept Next Turn” button in the inspector banner/status item).  
-11.4 THE user SHALL be prompted (via Quick Pick) to choose a persistence scope (Session only, Workspace, Global) the first time overrides are saved; the selection SHALL be stored and can be changed later from the banner menu. Overrides stored at the workspace/global scope MUST be applied across sessions and VS Code restarts until cleared.  
-11.5 EACH overridden section SHALL display a “Show diff” affordance in its hover toolbar that opens a standard VS Code diff editor (`vscode.diff`) comparing the original intercepted content to the persisted override. Tooltips SHALL indicate the last-updated timestamp and scope.  
-11.6 THE inspector banner SHALL summarize the active mode and scope, surface actions for `Pause`, `Edit Overrides`, and `Clear Overrides`, and MUST update immediately if the mode changes from any entry point.  
-11.7 Auto Override persistence SHALL be stored in extension global/workspace storage (depending on scope) using encrypted storage APIs when available; clearing overrides MUST remove the stored payload.  
-11.8 TELEMETRY SHALL record mode transitions (off/interceptOnce/autoOverride), scope selections, override saves/clears, and diff button usage with anonymized scope (session/workspace/global) but without storing user content.  
-
-### Requirement 12 – Chat Timeline Replay for Edited Prompts
-
-**User Story:**  
-As a user who edited the prompt before sending, I want the chat timeline to reflect the edited system/history/tool/user content in a normal chat view so that future turns continue from the edited state.
-
-#### Acceptance Criteria
-
-12.1 WHEN the user confirms an edited request (resume/send), THEN the system SHALL create or reuse a forked chat session whose timeline mirrors the edited `EditableChatRequest.messages`.  
-12.2 THE forked session SHALL render replayed content in the standard chat view: system/prefix (collapsed by default), context/history, tool calls/results, and the current user message, omitting deleted sections and applying edited content.  
-12.3 THE original session SHALL remain unchanged; the replayed session SHALL become the active target for subsequent user input and Live Request Editor events until the user switches away.  
-12.4 REPLAYED tool calls/results SHALL be labelled as “replayed” (or equivalent) to indicate they were not re-executed unless explicitly re-run.  
-12.5 IF the replay projection fails (role mismatch, missing tool data), THEN the system SHALL show a single “Replayed prompt” bubble containing the edited request and keep the original session unchanged.  
-12.6 THE feature SHALL be gated by the advanced flag and an opt-in setting/command so existing users are not surprised by automatic replay.  
-12.7 TELEMETRY SHALL tag replay creations, failures, and user opt-in/opt-out actions (without capturing prompt content) to monitor adoption and issues.  
-
-### Requirement 13 – Local Persistence of Chat History (SQLite)
-
-**User Story:**  
-As a user, I want my conversations (including edited prompts) to persist across VS Code restarts so I can audit or replay them later without re-running the Live Request Editor.
-
-#### Acceptance Criteria
-
-13.1 WHEN the advanced flag and “Persist chat history” setting are enabled (and workspace is trusted), THEN conversations SHALL be stored locally in SQLite with schema support for conversations, turns, sections, tool calls, and responses.  
-13.2 EACH turn SHALL store both the original and edited `Raw.ChatMessage[]` (and request options) plus per-section metadata (role, label, deleted flag, token counts, trace paths).  
-13.3 RESPONSES and tool calls SHALL be persisted with their arguments/results and timestamps to keep timeline fidelity.  
-13.4 THE system SHALL enforce configurable limits (max DB size, max turns per conversation) and prune/compact (VACUUM) to prevent unbounded growth.  
-13.5 IF the DB is unavailable or corrupted, THEN the extension SHALL disable persistence for that session, log a non-blocking warning, and continue chat without failing the request.  
-13.6 THE feature SHALL be opt-in, disabled in untrusted workspaces by default, and expose commands to export a conversation and to purge all persisted data.  
-13.7 TELEMETRY SHALL record opt-in/opt-out and persistence errors (without storing prompt content) to monitor health.  
-
-### Requirement 14 – Graphiti Memory Integration (Optional)
-
-**User Story:**  
-As a power user who needs richer memory and graph/RAG queries, I want the extension to (optionally) mirror conversations (including edited prompts and tool calls) into a Graphiti instance so I can query and explore prompt lineage beyond local storage.
-
-#### Acceptance Criteria
-
-14.1 THE feature SHALL be gated by an explicit setting (and workspace trust); default is off.  
-14.2 WHEN enabled and configured (endpoint/API key/workspace), THEN finalized turns SHALL be ingested into Graphiti with nodes for conversations, turns, sections/messages, references, tool calls/results, and responses, plus edges capturing their relationships and replay lineage.  
-14.3 INGESTION SHALL be append-only and idempotent (stable IDs + content hashes) and SHALL NOT block chat; failures SHALL retry with backoff and log diagnostics without interrupting the user.  
-14.4 LARGE payloads SHALL be truncated with markers; attachments SHALL default to URI/hash-only unless attachment upload is explicitly allowed.  
-14.5 IF Graphiti is unavailable/offline, THEN the system SHALL queue/bound retries and continue normal operation without data loss of the local turn; queued jobs SHALL be attempted on next activation.  
-14.6 TELEMETRY SHALL record opt-in/opt-out and ingest success/failure (content-free) so reliability can be monitored.  
-14.7 THE extension SHALL ship a minimal TypeScript Graphiti adapter (REST) behind the feature flag; no official TS SDK is required. The adapter MUST handle auth, batching, retries/backoff, and timeouts without blocking chat.  
+11.1 THE mode selector SHALL present three user-facing options with consistent labels across header, status bar, and Quick Pick: `Send normally` (`off`), `Pause & review every turn` (`interceptAlways`), and `Auto-apply saved edits` (`autoOverride`). A separate one-shot action `Pause next turn` SHALL be exposed without adding a fourth mode.  
+11.2 WHEN `Auto-apply saved edits` is selected AND no overrides are saved, THEN the next pending request SHALL pause before send, show only the first `N` prefix sections (default 3, configurable via `github.copilot.chat.liveRequestEditor.autoOverride.previewLimit` and a Quick Pick), and allow the user to edit/save overrides.  
+11.3 WHEN overrides are already saved AND Auto-apply is active, THEN requests SHALL send immediately with the saved prefix edits applied unless the user triggers `Pause next turn` or `Capture new edits`.  
+11.4 THE banner SHALL expose a primary action `Capture new edits` that arms a capture for the next turn; a secondary menu SHALL provide `Pause next turn`, `Remove saved edits`, `Where to save edits` (Session/Workspace/Global), and `Sections to capture` (preview limit). Redundant buttons SHALL be hidden while a capture is armed.  
+11.5 THE banner SHALL summarize state using simplified copy: `Auto-apply edits · <scope> · Applying (saved <timestamp>)` OR `Capturing next turn · showing first N sections`, updating immediately on state changes from any entry point.  
+11.6 EACH overridden section SHALL display a “Show diff” affordance in its hover toolbar that opens `vscode.diff` between the original intercepted content and the persisted override, with tooltips indicating last-updated timestamp and scope.  
+11.7 Auto-apply persistence SHALL be stored in extension global/workspace storage (depending on scope) using encrypted storage APIs when available; clearing overrides MUST remove the stored payload and re-arm capturing for the next turn while in Auto-apply.  
+11.8 TELEMETRY SHALL record mode transitions, captures, saved/cleared overrides, scope changes, preview-limit changes, and diff button usage with anonymized scope (session/workspace/global) but without storing user content.  

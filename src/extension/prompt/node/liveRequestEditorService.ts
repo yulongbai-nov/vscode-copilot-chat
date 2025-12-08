@@ -134,11 +134,9 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			}
 			if (e.affectsConfiguration(ConfigKey.LiveRequestEditorAutoOverrideEnabled.fullyQualifiedId)) {
 				this._autoOverrideFeatureEnabled = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideEnabled);
-				if (!this._autoOverrideFeatureEnabled) {
-					this._autoOverrideCapturing = false;
-				} else if (this._mode === 'autoOverride') {
-					this._autoOverrideCapturing = true;
-				}
+				this._autoOverrideCapturing = this._autoOverrideFeatureEnabled
+					&& this._mode === 'autoOverride'
+					&& !this._autoOverrideHasOverrides;
 				this.emitInterceptionState();
 			}
 			if (e.affectsConfiguration(ConfigKey.LiveRequestEditorAutoOverridePreviewLimit.fullyQualifiedId)) {
@@ -181,7 +179,9 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return undefined;
 		}
 		const request = buildEditableChatRequest(init);
-		this.applyAutoOverridesForRequest(request);
+		if (this._mode === 'autoOverride' && this._autoOverrideFeatureEnabled) {
+			this.applyAutoOverridesForRequest(request);
+		}
 		this._requests.set(this.toKey(init.sessionId, init.location), request);
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
@@ -344,6 +344,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		if (this._mode === mode) {
 			return;
 		}
+		const hadPendingIntercept = this._pendingIntercepts.size > 0;
 		const previousMode = this._mode;
 		this._mode = mode;
 		if (mode === 'interceptOnce') {
@@ -351,7 +352,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		this._autoOverrideCapturing = mode === 'autoOverride'
 			&& this._autoOverrideFeatureEnabled
-			&& !this._autoOverrideHasOverrides;
+			&& (!this._autoOverrideHasOverrides || hadPendingIntercept);
 		const shouldPersist = mode === 'interceptAlways';
 		const previouslyPersisted = previousMode === 'interceptAlways';
 		if (shouldPersist) {
@@ -359,7 +360,10 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		} else if (previouslyPersisted) {
 			await this.updateInterceptionSetting(false);
 		}
-		if (!this.isInterceptionEnabled()) {
+		// If interception is being turned off entirely, cancel any pending pauses.
+		// Switching to Auto-apply with a pending intercept should preserve the pending turn
+		// so edits can be saved instead of being discarded mid-transition.
+		if (!this.isInterceptionEnabled() && (mode === 'off' || !hadPendingIntercept)) {
 			this.cancelAllIntercepts('modeDisabled');
 		}
 		this.emitInterceptionState();
@@ -619,7 +623,12 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return undefined;
 		}
 		const request = this.getRequest(key);
-		return request ? this.buildMetadataSnapshot(request) : undefined;
+		if (!request) {
+			return undefined;
+		}
+		const snapshot = this.buildMetadataSnapshot(request);
+		request.metadata.lastUpdated = snapshot.lastUpdated;
+		return snapshot;
 	}
 
 	private clampPreviewLimit(value: number | undefined): number {
@@ -652,6 +661,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		if (!didMutate) {
 			return request;
 		}
+		request.metadata.lastUpdated = Date.now();
 		if (recompute) {
 			this.recomputeMessages(request);
 		} else {
@@ -955,9 +965,11 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	}
 
 	private emitMetadataForRequest(request: EditableChatRequest): void {
+		const lastUpdated = Date.now();
+		request.metadata.lastUpdated = lastUpdated;
 		this._onDidChangeMetadata.fire({
 			key: { sessionId: request.sessionId, location: request.location },
-			metadata: this.buildMetadataSnapshot(request)
+			metadata: this.buildMetadataSnapshot(request, lastUpdated)
 		});
 	}
 
@@ -974,7 +986,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 	}
 
-	private buildMetadataSnapshot(request: EditableChatRequest): LiveRequestMetadataSnapshot {
+	private buildMetadataSnapshot(request: EditableChatRequest, lastUpdated?: number): LiveRequestMetadataSnapshot {
 		const tokenCount = this.getTokenCountForRequest(request);
 		const maxPromptTokens = request.metadata.maxPromptTokens;
 		return {
@@ -985,7 +997,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			model: request.model,
 			isDirty: request.isDirty,
 			createdAt: request.metadata.createdAt,
-			lastUpdated: Date.now(),
+			lastUpdated: lastUpdated ?? Date.now(),
 			interceptionState: this._pendingIntercepts.has(this.toKey(request.sessionId, request.location)) ? 'pending' : 'idle',
 			tokenCount,
 			maxPromptTokens
