@@ -24,8 +24,10 @@ Provide an opt-in chat timeline that mirrors the edited prompt (system/history/t
 
 ### R4: Session Handling
 - THE System SHALL create or reuse a replay session keyed to the source session/location; original session remains intact.
+- THE System SHALL allow only one replay fork per source turn; a new replay for the same turn SHALL replace the previous fork (Option A).
 - WHEN a replay session is created, THEN the System SHOULD record a `replay_parent_turn_id` (or equivalent) for telemetry/persistence linkage.
 - THE System SHALL avoid invoking the model; replay is display-only unless explicitly extended in future scope.
+- WHEN chat history persistence (SQLite) is enabled, THEN the System SHOULD persist replay linkage/metadata so the fork survives reloads; otherwise the replay MAY remain in-memory only.
 
 ### R5: Telemetry and Errors
 - THE System SHALL emit telemetry on replay invocation with source sessionId/requestId and counts of total/edited/deleted sections.
