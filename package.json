@@ -2078,6 +2078,13 @@
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
 			},
+			{
+				"command": "github.copilot.liveRequestEditor.replayPrompt",
+				"title": "Replay edited prompt",
+				"icon": "$(history)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
 		{
 			"command": "github.copilot.liveRequestEditor.reset",
 			"title": "Live Request Editor: Reset",
@@ -2680,6 +2687,11 @@
 						"%github.copilot.config.liveRequestEditor.autoOverride.scope.global%"
 					],
 					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.scopePreference%"
+				},
+				"github.copilot.chat.liveRequestEditor.timelineReplay.enabled": {
+					"type": "boolean",
+					"default": false,
+					"markdownDescription": "Enable replaying edited prompts in the chat view."
 				}
 			}
 		},

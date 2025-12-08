@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../platform/log/common/logService';
+import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
@@ -14,6 +15,7 @@ import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestOverrideSc
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
 import { LiveRequestMetadataProvider } from './liveRequestMetadataProvider';
+import { LiveRequestReplaySessionProvider } from './liveRequestReplaySessionProvider';
 
 type ModePickItem = vscode.QuickPickItem & { mode: LiveRequestEditorMode; disabled?: boolean };
 type ScopePickItem = vscode.QuickPickItem & { scope: LiveRequestOverrideScope };
@@ -25,11 +27,13 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 	private readonly _disposables = new DisposableStore();
 	private _provider?: LiveRequestEditorProvider;
 	private _metadataProvider?: LiveRequestMetadataProvider;
+	private _replayProvider?: LiveRequestReplaySessionProvider;
 	private readonly _statusBarItem: vscode.StatusBarItem;
 
 	constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ILogService private readonly _logService: ILogService,
+		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
@@ -37,6 +41,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, false);
 		this._registerProvider();
 		this._registerMetadataProvider();
+		this._registerReplayProvider();
 		this._registerCommands();
 		this._statusBarItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10002));
 		this._statusBarItem.name = 'Copilot Prompt Interception';
@@ -92,6 +97,27 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		}
 	}
 
+	private _registerReplayProvider(): void {
+		try {
+			this._replayProvider = this._instantiationService.createInstance(LiveRequestReplaySessionProvider);
+			const participant = vscode.chat.createChatParticipant(
+				LiveRequestReplaySessionProvider.participantId,
+				async (_request, _context, stream) => {
+					stream.markdown('Replay is read-only. Use "Start chatting from this replay" to continue in a new chat session.');
+				}
+			);
+			const registration = vscode.chat.registerChatSessionContentProvider(
+				LiveRequestReplaySessionProvider.scheme,
+				this._replayProvider,
+				participant
+			);
+			this._disposables.add(registration);
+			this._logService.trace('Live Request Replay provider registered');
+		} catch (error) {
+			this._logService.error('Failed to register Live Request Replay provider', error);
+		}
+	}
+
 	private _registerCommands(): void {
 		const showCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestEditor.show',
@@ -105,6 +131,13 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 						`Failed to show Live Request Editor: ${error instanceof Error ? error.message : String(error)}`
 					);
 				}
+			}
+		);
+
+		const replayPromptCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.replayPrompt',
+			async (sessionKey?: string) => {
+				await this._showReplay(sessionKey);
 			}
 		);
 
@@ -168,6 +201,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		);
 
 		this._disposables.add(showCommand);
+		this._disposables.add(replayPromptCommand);
 		this._disposables.add(toggleCommand);
 		this._disposables.add(toggleInterceptionCommand);
 		this._disposables.add(setModeCommand);
@@ -176,6 +210,78 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(clearOverridesCommand);
 		this._disposables.add(configureMetadataCommand);
 		this._disposables.add(copyMetadataValue);
+	}
+
+	private async _showReplay(sessionKey?: string | { sessionId?: string; location?: number }): Promise<void> {
+		if (!this._ensureLiveRequestEditorEnabled()) {
+			return;
+		}
+		if (!this._configurationService.getConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled)) {
+			vscode.window.showInformationMessage('Enable timeline replay to view edited prompts in the chat view.');
+			return;
+		}
+
+		let key = this._parseSessionKey(sessionKey);
+		let request = key ? this._liveRequestEditorService.getRequest(key) : undefined;
+
+		if (!request) {
+			const current = this._provider?.getCurrentRequest();
+			if (current) {
+				request = current;
+				key = { sessionId: current.sessionId, location: current.location };
+			}
+		}
+
+		if (!request || !key) {
+			vscode.window.showInformationMessage('No edited prompt available to replay.');
+			return;
+		}
+
+		const query = new URLSearchParams({
+			sessionId: request.sessionId,
+			location: String(request.location),
+			requestId: request.metadata?.requestId ?? '',
+			debugName: request.debugName ?? '',
+			sessionKey: `${request.sessionId}::${request.location}`
+		}).toString();
+
+		const uri = vscode.Uri.from({
+			scheme: LiveRequestReplaySessionProvider.scheme,
+			path: `/replay/${encodeURIComponent(request.sessionId)}`,
+			query
+		});
+
+		try {
+			await vscode.commands.executeCommand('vscode.open', uri);
+			this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.replayPrompt', {
+				location: String(request.location),
+				model: request.model,
+			});
+		} catch (error) {
+			this._logService.error('Failed to open replay view', error);
+			vscode.window.showErrorMessage('Unable to open replay view. See output for details.');
+		}
+	}
+
+	private _parseSessionKey(raw?: string | { sessionId?: string; location?: number }): { sessionId: string; location: number } | undefined {
+		if (!raw) {
+			return undefined;
+		}
+		if (typeof raw === 'string') {
+			const [sessionId, locationPart] = raw.split('::');
+			if (!sessionId || typeof locationPart !== 'string') {
+				return undefined;
+			}
+			const location = Number(locationPart);
+			if (Number.isNaN(location)) {
+				return undefined;
+			}
+			return { sessionId, location };
+		}
+		if (raw.sessionId && typeof raw.location === 'number') {
+			return { sessionId: raw.sessionId, location: raw.location };
+		}
+		return undefined;
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {

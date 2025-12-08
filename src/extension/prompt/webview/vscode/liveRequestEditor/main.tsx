@@ -1036,6 +1036,16 @@ const App: React.FC = () => {
 		sendMessage('resetRequest', {});
 	}, [sendMessage]);
 
+	const handleReplayPrompt = React.useCallback(() => {
+		if (!activeSessionKey) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.replayPrompt',
+			args: [activeSessionKey]
+		});
+	}, [sendMessage, activeSessionKey]);
+
 	const handleResumeSend = React.useCallback(() => {
 		sendMessage('resumeSend');
 	}, [sendMessage]);
@@ -1128,6 +1138,9 @@ const App: React.FC = () => {
 								</vscode-button>
 							</>
 						)}
+						<vscode-button appearance="secondary" onClick={handleReplayPrompt}>
+							Replay edited prompt
+						</vscode-button>
 					</div>
 				</div>
 				<div className="metadata">

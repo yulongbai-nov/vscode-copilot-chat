@@ -859,6 +859,8 @@ export namespace ConfigKey {
 	export const LiveRequestEditorAutoOverrideEnabled = defineSetting<boolean>('chat.liveRequestEditor.autoOverride.enabled', ConfigType.Simple, true);
 	export const LiveRequestEditorAutoOverridePreviewLimit = defineSetting<number>('chat.liveRequestEditor.autoOverride.previewLimit', ConfigType.Simple, 3);
 	export const LiveRequestEditorAutoOverrideScopePreference = defineSetting<'session' | 'workspace' | 'global' | undefined>('chat.liveRequestEditor.autoOverride.scopePreference', ConfigType.Simple, undefined);
+	/** Enable timeline replay entry point and chat integration for edited prompts */
+	export const LiveRequestEditorTimelineReplayEnabled = defineSetting<boolean>('chat.liveRequestEditor.timelineReplay.enabled', ConfigType.Simple, false);
 
 	export const NewWorkspaceCreationAgentEnabled = defineSetting<boolean>('chat.newWorkspaceCreation.enabled', ConfigType.Simple, true);
 	export const NewWorkspaceUseContext7 = defineSetting<boolean>('chat.newWorkspace.useContext7', ConfigType.Simple, false);
