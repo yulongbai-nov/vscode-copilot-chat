@@ -22,8 +22,9 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 1) **Replay Builder**: Build a “replay projection” from `EditableChatRequest.messages` (plus tool metadata/request options/intent/debug name), mapping sections to chat bubbles and dropping deleted sections. System/prefix collapsed by default; edited sections labeled “Edited.” Reuse trimming/summarization from prompt render to avoid divergence.
 2) **Replay Session Manager**: Create/reuse a forked “replayed prompt” conversation keyed to the source session/location; optionally link via `replay_parent_turn_id`.
 3) **Invocation Surface**: Command (e.g., `github.copilot.liveRequestEditor.replayPrompt`) and/or button in the Live Request Editor banner, gated by feature flag.
-4) **Display Surface**: Render via chat participant/content provider in the chat panel; no model call.
-5) **Persistence (future)**: If/when chat-history-persistence (SQLite) is enabled, store replay metadata (replay_parent_turn_id/session_id, trimmed payload hash, version) so forks survive reloads; otherwise replay remains in-memory only.
+4) **Display Surface**: Render via chat participant/content provider in the chat panel; no model call. Replay is read-only by default; user must click “Start chatting from this replay” to enable input.
+5) **Fork payload**: Seed the forked session with the exact trimmed payload that was (or would be) sent to avoid divergence; use the richer projection for display only.
+6) **Persistence (future)**: If/when chat-history-persistence (SQLite) is enabled, store replay metadata (replay_parent_turn_id/session_id, trimmed payload hash, version) so forks survive reloads; otherwise replay remains in-memory only (optional one-level “restore previous replay” buffer per turn).
 
 ### Data & Control Flow
 1. User edits and confirms send.
@@ -33,16 +34,18 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
    - Context/history → user/assistant bubbles tagged “replayed.”
    - Tool calls/results → assistant/tool bubbles with arguments/results (no re-execution).
    - Current user message → user bubble.
-4. Subsequent input in the replayed session (if allowed) uses the edited history; otherwise display-only.
+4. Replay starts display-only; user may click “Start chatting from this replay” to enable input. Subsequent input in the replayed session uses the trimmed edited history; original session remains intact.
 
 ### UX
 - Badge: “Replayed prompt · <session tail>” with tooltip including source requestId.
 - Collapse long system/history/tool content by default; “View replayed prompt”/“Collapse” toggles.
 - Omit deleted sections; mark edited sections with an “Edited” chip.
 - Warn if prompt was token-trimmed: “Prompt was trimmed; replay may omit truncated content.”
-- Provide “Back to conversation” + “Open Live Request Editor” links. When read-only replay is shown, keep input disabled until the user explicitly chooses “Start chatting from this replay.”
+- Provide “Back to conversation” + “Open Live Request Editor” links. Replay is read-only until the user explicitly chooses “Start chatting from this replay.”
 - Entry point: explicit “Replay edited prompt” action in the Live Request Editor banner. No surprise auto-launch; optional toast if auto-opened.
 - Option A (one fork per turn): a new replay replaces the previous fork for that turn. Optional soft safety net: keep the last replaced fork in memory for “Restore previous replay.”
+- When enabling input (continuing from fork), switch focus to the replay session and show a breadcrumb/toast indicating the fork.
+- Cap rendered sections (e.g., 30) and show “View replayed prompt (N more)” to avoid overloading the view.
 
 ### Configuration / Flags
 - `github.copilot.chat.liveRequestEditor.timelineReplay.enabled` (default: false).
@@ -69,3 +72,4 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 - Should focus auto-switch to the replay session or prompt first?
 - How should interception/auto-override behave on the fork (inherit vs. start clean)?
 - If persistence is off, do we need a soft in-memory “Restore previous replay” buffer per turn, and how many versions to keep?
+- Do we keep interception/auto-override disabled by default on the fork, or allow opt-in inheritance?

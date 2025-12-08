@@ -5,6 +5,7 @@
   - Confirm collapse defaults and “Edited” labeling.
   - Set flag name (`github.copilot.chat.liveRequestEditor.timelineReplay.enabled`).
   - Note dependency: persistence is optional. If chat-history-persistence (SQLite) is off, forks are in-memory only; if on, store replay metadata (parent IDs, hashes, version) so forks survive reloads.
+  - Default: replay starts read-only; user clicks “Start chatting from this replay” to enable input. Fork payload uses the trimmed messages that were/would be sent.
 
 - [ ] 1. Build replay projection
   - Map `EditableChatRequest.messages` → replay bubbles (system/history/tool/user).
@@ -16,6 +17,8 @@
   - Enforce Option A: one replay fork per source turn; replace prior fork if re-replayed.
   - Expose command `github.copilot.liveRequestEditor.replayPrompt` and surface in Live Request Editor UI.
   - Render bubbles via chat participant/content provider without model invocation.
+  - When continuing from replay, switch focus to the replay session and show breadcrumb/toast. Keep interception/auto-override off by default in the fork unless explicitly enabled.
+  - Cap rendered sections (e.g., 30) and provide “View replayed prompt (N more)” affordance.
 
 - [ ] 3. Telemetry and error handling
   - Emit invocation telemetry with source sessionId/requestId and section counts.
