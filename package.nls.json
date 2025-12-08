@@ -427,6 +427,7 @@
 	"github.copilot.command.liveRequestEditor.configureAutoOverrideScope": "Live Request Editor: Configure Auto Override Scope",
 	"github.copilot.command.liveRequestEditor.configureAutoOverridePreviewLimit": "Live Request Editor: Configure Auto Override Preview Limit",
 	"github.copilot.command.liveRequestEditor.clearAutoOverrides": "Live Request Editor: Clear Auto Override Overrides",
+	"github.copilot.command.liveRequestEditor.replayPrompt": "Live Request Editor: Replay Edited Prompt",
 	"github.copilot.config.githubMcpServer.enabled": "Enable built-in support for the GitHub MCP Server.",
 	"github.copilot.config.githubMcpServer.toolsets": "Specify toolsets to use from the GitHub MCP Server.",
 	"github.copilot.config.githubMcpServer.readonly": "Enable read-only mode for the GitHub MCP Server. When enabled, only read tools are available.",

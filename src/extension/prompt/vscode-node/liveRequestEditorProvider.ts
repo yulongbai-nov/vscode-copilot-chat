@@ -94,6 +94,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				this._extraSections = this._readExtraSectionsSetting();
 				this._postStateToWebview();
 			}
+			if (event.affectsConfiguration('github.copilot.chat.liveRequestEditor.timelineReplay.enabled')) {
+				this._postStateToWebview();
+			}
 		}));
 	}
 
@@ -403,7 +406,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
 			activeSessionKey: this._activeSessionKey,
-			extraSections: this._extraSections
+			extraSections: this._extraSections,
+			replayEnabled: this._liveRequestEditorService.isReplayEnabled()
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
 	}
 

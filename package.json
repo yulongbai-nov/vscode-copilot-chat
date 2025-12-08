@@ -2072,12 +2072,19 @@
 				"category": "Chat"
 			},
 			{
-				"command": "github.copilot.liveRequestEditor.show",
-				"title": "Copilot: Show Prompt Inspector",
-				"icon": "$(open-preview)",
-				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-				"category": "Chat"
-			},
+			"command": "github.copilot.liveRequestEditor.show",
+			"title": "Copilot: Show Prompt Inspector",
+			"icon": "$(open-preview)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.replayPrompt",
+			"title": "%github.copilot.command.liveRequestEditor.replayPrompt%",
+			"icon": "$(history)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+			"category": "Chat"
+		},
 		{
 			"command": "github.copilot.liveRequestEditor.reset",
 			"title": "Live Request Editor: Reset",

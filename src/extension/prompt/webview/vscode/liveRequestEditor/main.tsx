@@ -120,6 +120,7 @@ interface StateUpdateMessage {
 	sessions?: SessionSummary[];
 	activeSessionKey?: string;
 	extraSections?: InspectorExtraSection[];
+	replayEnabled?: boolean;
 }
 
 interface SessionSummary {
@@ -761,6 +762,7 @@ const App: React.FC = () => {
 	const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
+	const [replayEnabled, setReplayEnabled] = React.useState(false);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -849,6 +851,7 @@ const App: React.FC = () => {
 				setActiveSessionKey(event.data.activeSessionKey);
 				const extras = (event.data.extraSections ?? []).filter(isInspectorExtraSection);
 				setExtraSections(extras);
+				setReplayEnabled(!!event.data.replayEnabled);
 			}
 		};
 		window.addEventListener('message', handler);
@@ -1036,6 +1039,10 @@ const App: React.FC = () => {
 		sendMessage('resetRequest', {});
 	}, [sendMessage]);
 
+	const handleReplay = React.useCallback(() => {
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.replayPrompt' });
+	}, [sendMessage]);
+
 	const handleResumeSend = React.useCallback(() => {
 		sendMessage('resumeSend');
 	}, [sendMessage]);
@@ -1102,6 +1109,11 @@ const App: React.FC = () => {
 						)}
 					</div>
 					<div className="header-actions">
+						{replayEnabled ? (
+							<vscode-button appearance="secondary" onClick={handleReplay}>
+								Replay edited prompt
+							</vscode-button>
+						) : null}
 						<div className="mode-toggle" role="group" aria-label="Prompt Inspector mode">
 							{MODE_OPTIONS.map(option => {
 								const disabled = option.mode === 'autoOverride' && !autoOverride?.enabled;

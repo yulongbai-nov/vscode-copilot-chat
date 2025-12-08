@@ -150,6 +150,38 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const replayPromptCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.replayPrompt',
+			async () => {
+				if (!this._ensureLiveRequestEditorEnabled()) {
+					return;
+				}
+				if (!this._liveRequestEditorService.isReplayEnabled()) {
+					vscode.window.showInformationMessage('Timeline Replay is disabled. Enable github.copilot.chat.liveRequestEditor.timelineReplay.enabled to replay prompts.');
+					return;
+				}
+				const current = this._provider?.getCurrentRequest();
+				if (!current) {
+					vscode.window.showInformationMessage('Nothing to replay yet. Edit a prompt first.');
+					return;
+				}
+				const snapshot = this._liveRequestEditorService.buildReplayForRequest({ sessionId: current.sessionId, location: current.location });
+				if (!snapshot) {
+					vscode.window.showInformationMessage('Nothing to replay for this request.');
+					return;
+				}
+				const projection = snapshot.projection;
+				this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.replay.invoked', {
+					state: snapshot.state,
+					totalSections: String(projection?.totalSections ?? 0),
+					edited: String(projection?.editedCount ?? 0),
+					deleted: String(projection?.deletedCount ?? 0),
+					overflow: String(projection?.overflowCount ?? 0),
+				});
+				vscode.window.showInformationMessage('Replayed prompt built. Open the chat view to review the timeline replay.');
+			}
+		);
+
 		const configureMetadataCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestMetadata.configureFields',
 			async () => {
@@ -176,6 +208,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(clearOverridesCommand);
 		this._disposables.add(configureMetadataCommand);
 		this._disposables.add(copyMetadataValue);
+		this._disposables.add(replayPromptCommand);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {

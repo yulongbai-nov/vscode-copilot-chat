@@ -628,6 +628,17 @@ describe('LiveRequestEditorService interception', () => {
 		expect((forked?.version ?? 0) > ready.version).toBe(true);
 	});
 
+	test('buildReplayForRequest respects replay flag', async () => {
+		const { service, config } = await createService();
+		const init = createServiceInit();
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		await config.setConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled, false);
+		expect(service.isReplayEnabled()).toBe(false);
+		const replay = service.buildReplayForRequest(key);
+		expect(replay).toBeUndefined();
+	});
+
 });
 
 function createServiceInit(overrides: Partial<EditableChatRequestInit> = {}): EditableChatRequestInit {
