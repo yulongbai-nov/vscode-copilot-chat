@@ -9,16 +9,15 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { deepClone, equals } from '../../../util/vs/base/common/objects';
-import { stringHash } from '../../../util/vs/base/common/hash';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
-import { AutoOverrideDiffEntry, AutoOverrideSummary, ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
-import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
+import { AutoOverrideDiffEntry, AutoOverrideSummary, ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, LiveRequestReplayEvent, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
+import { DEFAULT_REPLAY_SECTION_CAP, buildEditableChatRequest, buildReplayProjection, computeChatMessagesHash, computeReplayProjectionHash, createSectionsFromMessages } from './liveRequestBuilder';
 
 const SUBAGENT_HISTORY_LIMIT = 10;
 const WORKSPACE_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.workspace';
@@ -56,6 +55,30 @@ interface SerializedAutoOverrideEntry {
 	readonly updatedAt: number;
 }
 
+interface ReplayEntry {
+	readonly key: LiveRequestReplayKey;
+	readonly state: LiveRequestReplayState;
+	readonly version: number;
+	readonly updatedAt: number;
+	readonly payload: Raw.ChatMessage[];
+	readonly payloadHash: number;
+	readonly projection?: LiveRequestReplayProjection;
+	readonly projectionHash?: number;
+	readonly parentSessionId: string;
+	readonly parentTurnId: string;
+	readonly debugName?: string;
+	readonly model?: string;
+	readonly intentId?: string;
+	readonly requestCreatedAt?: number;
+	readonly requestLastUpdated?: number;
+	readonly lastLoggedHash?: number;
+	readonly lastLoggedMatches?: boolean;
+	readonly forkSessionId?: string;
+	readonly staleReason?: string;
+	readonly restoreOfVersion?: number;
+	readonly sourceUpdatedAt?: number;
+}
+
 export class LiveRequestEditorService extends Disposable implements ILiveRequestEditorService {
 	declare readonly _serviceBrand: undefined;
 
@@ -69,9 +92,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	public readonly onDidChangeInterception: Event<PromptInterceptionState> = this._onDidChangeInterception.event;
 	private readonly _onDidChangeMetadata = this._register(new Emitter<LiveRequestMetadataEvent>());
 	public readonly onDidChangeMetadata: Event<LiveRequestMetadataEvent> = this._onDidChangeMetadata.event;
+	private readonly _onDidChangeReplay = this._register(new Emitter<LiveRequestReplayEvent>());
+	public readonly onDidChangeReplay: Event<LiveRequestReplayEvent> = this._onDidChangeReplay.event;
 
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private readonly _subagentHistory: SubagentRequestEntry[] = [];
+	private readonly _replays = new Map<string, ReplayEntry>();
+	private readonly _replayRestoreBuffer = new Map<string, ReplayEntry>();
 	private _enabled: boolean;
 	private _mode: LiveRequestEditorMode;
 	private _modeUpdateFromConfig = false;
@@ -88,6 +115,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	private readonly _pendingIntercepts = new Map<string, PendingIntercept>();
 	private _interceptNonce = 0;
 	private _interceptionState: PromptInterceptionState;
+	private _timelineReplayEnabled: boolean;
 
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
@@ -101,6 +129,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this._autoOverrideFeatureEnabled = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideEnabled);
 		this._autoOverridePreviewLimit = this.clampPreviewLimit(this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverridePreviewLimit));
 		this._autoOverrideScopePreference = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideScopePreference);
+		this._timelineReplayEnabled = this._configurationService.getConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled);
 		this._workspaceAutoOverride = this.loadPersistedOverride('workspace');
 		this._globalAutoOverride = this.loadPersistedOverride('global');
 		this.refreshAutoOverrideFlags();
@@ -116,6 +145,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				if (!this._enabled) {
 					this.removeAllRequests();
 					this.cancelAllIntercepts('editorDisabled');
+					this.clearReplayState('editorDisabled');
 				}
 				this.emitInterceptionState();
 			}
@@ -147,6 +177,12 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				this._autoOverrideScopePreference = this._configurationService.getConfig(ConfigKey.LiveRequestEditorAutoOverrideScopePreference);
 				this.emitInterceptionState();
 			}
+			if (e.affectsConfiguration(ConfigKey.LiveRequestEditorTimelineReplayEnabled.fullyQualifiedId)) {
+				this._timelineReplayEnabled = this._configurationService.getConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled);
+				if (!this.isReplayEnabled()) {
+					this.clearReplayState('replayDisabled');
+				}
+			}
 		}));
 		this._register(this._chatSessionService.onDidDisposeChatSession(sessionId => {
 			this._handleSessionDisposed(sessionId);
@@ -171,6 +207,10 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			default:
 				return false;
 		}
+	}
+
+	isReplayEnabled(): boolean {
+		return this._enabled && this._timelineReplayEnabled;
 	}
 
 	prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
@@ -568,14 +608,14 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	}
 
 	handleContextChange(event: PromptContextChangeEvent): void {
-		if (!this._pendingIntercepts.size || !this.isInterceptionEnabled()) {
-			return;
-		}
 		const reason = event.reason ?? 'contextChanged';
-		const pendingIntercepts = Array.from(this._pendingIntercepts.values());
-		for (const pending of pendingIntercepts) {
-			this.resolvePendingIntercept(pending.key, 'cancel', { reason });
+		if (this._pendingIntercepts.size && this.isInterceptionEnabled()) {
+			const pendingIntercepts = Array.from(this._pendingIntercepts.values());
+			for (const pending of pendingIntercepts) {
+				this.resolvePendingIntercept(pending.key, 'cancel', { reason });
+			}
 		}
+		this.markReplayStale(event.key, undefined, reason);
 	}
 
 	recordLoggedRequest(key: LiveRequestSessionKey | undefined, messages: Raw.ChatMessage[]): void {
@@ -603,6 +643,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
+		this.updateReplayMetadataFromRequest(request);
 	}
 
 	getSubagentRequests(): readonly SubagentRequestEntry[] {
@@ -629,6 +670,164 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		const snapshot = this.buildMetadataSnapshot(request);
 		request.metadata.lastUpdated = snapshot.lastUpdated;
 		return snapshot;
+	}
+
+	buildReplayForRequest(key: LiveRequestSessionKey): LiveRequestReplaySnapshot | undefined {
+		if (!this.isReplayEnabled()) {
+			return undefined;
+		}
+		const request = this.getRequest(key);
+		if (!request) {
+			return undefined;
+		}
+		const replayKey = this.toReplayKey(request, key);
+		const compositeKey = this.toReplayCompositeKey(replayKey);
+		const sourceUpdatedAt = request.metadata.lastUpdated ?? request.metadata.createdAt ?? Date.now();
+		const existing = this._replays.get(compositeKey);
+		if (existing?.sourceUpdatedAt && existing.sourceUpdatedAt > sourceUpdatedAt) {
+			return this.toReplaySnapshot(existing);
+		}
+
+		const sendResult = this.getMessagesForSend(key, request.messages);
+		if (sendResult.error) {
+			this.markReplayStale(key, replayKey.requestId, sendResult.error.code);
+			return undefined;
+		}
+
+		const payload = deepClone(sendResult.messages);
+		const projection = buildReplayProjection(request.sections, {
+			cap: DEFAULT_REPLAY_SECTION_CAP,
+			requestOptions: request.metadata.requestOptions,
+			trimmed: this.wasPromptTrimmed(request)
+		});
+
+		if (!projection) {
+			this.markReplayStale(key, replayKey.requestId, 'empty');
+			return undefined;
+		}
+
+		const payloadHash = computeChatMessagesHash(payload);
+		const projectionHash = computeReplayProjectionHash(projection);
+		const nextVersion = (existing?.version ?? 0) + 1;
+		if (existing) {
+			this._replayRestoreBuffer.set(compositeKey, existing);
+		}
+
+		const entry: ReplayEntry = {
+			key: replayKey,
+			state: 'ready',
+			version: nextVersion,
+			updatedAt: Date.now(),
+			payload,
+			payloadHash,
+			projection,
+			projectionHash,
+			parentSessionId: request.sessionId,
+			parentTurnId: replayKey.requestId,
+			debugName: request.debugName,
+			model: request.model,
+			intentId: request.metadata.intentId,
+			requestCreatedAt: request.metadata.createdAt,
+			requestLastUpdated: request.metadata.lastUpdated,
+			lastLoggedHash: request.metadata.lastLoggedHash,
+			lastLoggedMatches: request.metadata.lastLoggedMatches,
+			sourceUpdatedAt,
+		};
+
+		this._replays.set(compositeKey, entry);
+		const snapshot = this.toReplaySnapshot(entry);
+		this._onDidChangeReplay.fire({ key: replayKey, replay: snapshot });
+		return snapshot;
+	}
+
+	getReplaySnapshot(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined {
+		const entry = this._replays.get(this.toReplayCompositeKey(key));
+		return entry ? this.toReplaySnapshot(entry) : undefined;
+	}
+
+	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined {
+		if (!this.isReplayEnabled()) {
+			return undefined;
+		}
+		const compositeKey = this.toReplayCompositeKey(key);
+		const previous = this._replayRestoreBuffer.get(compositeKey);
+		if (!previous) {
+			return undefined;
+		}
+		const current = this._replays.get(compositeKey);
+		const nextVersion = (current?.version ?? previous.version ?? 0) + 1;
+		const restored: ReplayEntry = {
+			...previous,
+			state: previous.state === 'stale' ? 'ready' : previous.state,
+			version: nextVersion,
+			updatedAt: Date.now(),
+			restoreOfVersion: current?.version,
+			staleReason: undefined,
+		};
+		if (current) {
+			this._replayRestoreBuffer.set(compositeKey, current);
+		} else {
+			this._replayRestoreBuffer.delete(compositeKey);
+		}
+		this._replays.set(compositeKey, restored);
+		const snapshot = this.toReplaySnapshot(restored);
+		this._onDidChangeReplay.fire({ key, replay: snapshot });
+		return snapshot;
+	}
+
+	markReplayForkActive(key: LiveRequestReplayKey, forkSessionId: string): LiveRequestReplaySnapshot | undefined {
+		if (!this.isReplayEnabled()) {
+			return undefined;
+		}
+		const compositeKey = this.toReplayCompositeKey(key);
+		const entry = this._replays.get(compositeKey);
+		if (!entry) {
+			return undefined;
+		}
+		if (entry.state === 'stale') {
+			return undefined;
+		}
+		const updated: ReplayEntry = {
+			...entry,
+			state: 'forkActive',
+			version: entry.version + 1,
+			updatedAt: Date.now(),
+			forkSessionId,
+			staleReason: undefined,
+		};
+		this._replays.set(compositeKey, updated);
+		const snapshot = this.toReplaySnapshot(updated);
+		this._onDidChangeReplay.fire({ key, replay: snapshot });
+		return snapshot;
+	}
+
+	markReplayStale(key: LiveRequestSessionKey, requestId?: string, reason?: string): void {
+		if (!this._replays.size) {
+			return;
+		}
+		const restoreKeysToClear: string[] = [];
+		for (const [compositeKey, entry] of Array.from(this._replays.entries())) {
+			if (entry.key.sessionId !== key.sessionId || entry.key.location !== key.location) {
+				continue;
+			}
+			if (requestId && entry.key.requestId !== requestId) {
+				continue;
+			}
+			const updated: ReplayEntry = {
+				...entry,
+				state: 'stale',
+				version: entry.version + 1,
+				updatedAt: Date.now(),
+				staleReason: reason ?? 'contextChanged',
+			};
+			this._replays.set(compositeKey, updated);
+			const snapshot = this.toReplaySnapshot(updated);
+			this._onDidChangeReplay.fire({ key: updated.key, replay: snapshot });
+			restoreKeysToClear.push(compositeKey);
+		}
+		for (const compositeKey of restoreKeysToClear) {
+			this._replayRestoreBuffer.delete(compositeKey);
+		}
 	}
 
 	private clampPreviewLimit(value: number | undefined): number {
@@ -734,16 +933,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	}
 
 	private computeMessagesHash(messages: Raw.ChatMessage[]): number {
-		if (!messages.length) {
-			return 0;
-		}
-		try {
-			const serialized = JSON.stringify(messages);
-			return stringHash(serialized, 0);
-		} catch {
-			// fall back to length-based hash if serialization fails unexpectedly
-			return stringHash(String(messages.length), 0);
-		}
+		return computeChatMessagesHash(messages);
 	}
 
 	private createMessageShell(kind: LiveRequestSectionKind): Raw.ChatMessage {
@@ -805,6 +995,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		if (!existing) {
 			return;
 		}
+		this.markReplayStale({ sessionId: existing.sessionId, location: existing.location }, existing.metadata.requestId, 'requestRemoved');
 		this._requests.delete(compositeKey);
 		this._onDidRemoveRequest.fire({ sessionId: existing.sessionId, location: existing.location });
 		this.emitMetadataCleared({ sessionId: existing.sessionId, location: existing.location });
@@ -847,6 +1038,11 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		if (removedOverrides) {
 			this.refreshAutoOverrideFlags();
+		}
+		for (const compositeKey of Array.from(this._replayRestoreBuffer.keys())) {
+			if (compositeKey.startsWith(sessionPrefix)) {
+				this._replayRestoreBuffer.delete(compositeKey);
+			}
 		}
 	}
 
@@ -1020,6 +1216,104 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			}
 		}
 		return total;
+	}
+
+	private wasPromptTrimmed(request: EditableChatRequest): boolean | undefined {
+		const tokenCount = this.getTokenCountForRequest(request);
+		const maxPromptTokens = request.metadata.maxPromptTokens;
+		if (typeof tokenCount === 'number' && typeof maxPromptTokens === 'number' && maxPromptTokens > 0) {
+			return tokenCount > maxPromptTokens;
+		}
+		return undefined;
+	}
+
+	private toReplayKey(request: EditableChatRequest, key: LiveRequestSessionKey): LiveRequestReplayKey {
+		return {
+			sessionId: key.sessionId,
+			location: key.location,
+			requestId: request.metadata.requestId ?? request.id,
+		};
+	}
+
+	private toReplayCompositeKey(key: LiveRequestReplayKey): string {
+		return `${key.sessionId}::${key.location}::${key.requestId}`;
+	}
+
+	private toReplaySnapshot(entry: ReplayEntry): LiveRequestReplaySnapshot {
+		return {
+			key: entry.key,
+			state: entry.state,
+			version: entry.version,
+			updatedAt: entry.updatedAt,
+			payload: deepClone(entry.payload),
+			payloadHash: entry.payloadHash,
+			projection: entry.projection ? this.cloneReplayProjection(entry.projection) : undefined,
+			projectionHash: entry.projectionHash,
+			parentSessionId: entry.parentSessionId,
+			parentTurnId: entry.parentTurnId,
+			debugName: entry.debugName,
+			model: entry.model,
+			intentId: entry.intentId,
+			requestCreatedAt: entry.requestCreatedAt,
+			requestLastUpdated: entry.requestLastUpdated,
+			lastLoggedHash: entry.lastLoggedHash,
+			lastLoggedMatches: entry.lastLoggedMatches,
+			forkSessionId: entry.forkSessionId,
+			staleReason: entry.staleReason,
+			restoreOfVersion: entry.restoreOfVersion,
+		};
+	}
+
+	private cloneReplayProjection(projection: LiveRequestReplayProjection): LiveRequestReplayProjection {
+		return {
+			...projection,
+			requestOptions: projection.requestOptions ? deepClone(projection.requestOptions) : undefined,
+			sections: projection.sections.map(section => ({
+				...section,
+				message: section.message ? deepClone(section.message) : undefined,
+				metadata: section.metadata ? { ...section.metadata } : undefined,
+			}))
+		};
+	}
+
+	private clearReplayState(reason: string): void {
+		if (this._replays.size) {
+			for (const [compositeKey, entry] of Array.from(this._replays.entries())) {
+				const updated: ReplayEntry = {
+					...entry,
+					state: 'stale',
+					version: entry.version + 1,
+					updatedAt: Date.now(),
+					staleReason: reason,
+				};
+				this._onDidChangeReplay.fire({ key: updated.key, replay: this.toReplaySnapshot(updated) });
+				this._replays.set(compositeKey, updated);
+			}
+			this._replays.clear();
+		}
+		this._replayRestoreBuffer.clear();
+	}
+
+	private updateReplayMetadataFromRequest(request: EditableChatRequest): void {
+		if (!this._replays.size) {
+			return;
+		}
+		const requestId = request.metadata.requestId ?? request.id;
+		for (const [compositeKey, entry] of Array.from(this._replays.entries())) {
+			if (entry.parentSessionId !== request.sessionId || entry.parentTurnId !== requestId) {
+				continue;
+			}
+			const updated: ReplayEntry = {
+				...entry,
+				version: entry.version + 1,
+				updatedAt: Date.now(),
+				requestLastUpdated: request.metadata.lastUpdated,
+				lastLoggedHash: request.metadata.lastLoggedHash,
+				lastLoggedMatches: request.metadata.lastLoggedMatches,
+			};
+			this._replays.set(compositeKey, updated);
+			this._onDidChangeReplay.fire({ key: updated.key, replay: this.toReplaySnapshot(updated) });
+		}
 	}
 
 	private loadPersistedOverride(scope: LiveRequestOverrideScope): AutoOverrideSet | undefined {

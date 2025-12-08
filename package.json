@@ -2680,6 +2680,11 @@
 						"%github.copilot.config.liveRequestEditor.autoOverride.scope.global%"
 					],
 					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.scopePreference%"
+				},
+				"github.copilot.chat.liveRequestEditor.timelineReplay.enabled": {
+					"type": "boolean",
+					"default": false,
+					"markdownDescription": "%github.copilot.config.liveRequestEditor.timelineReplay.enabled%"
 				}
 			}
 		},

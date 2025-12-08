@@ -9,7 +9,7 @@ import { Event } from '../../../util/vs/base/common/event';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot } from './liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestReplayKey, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot } from './liveRequestEditorModel';
 
 export type { LiveRequestEditorMode, LiveRequestOverrideScope } from './liveRequestEditorModel';
 
@@ -74,6 +74,11 @@ export interface LiveRequestMetadataEvent {
 	readonly metadata?: LiveRequestMetadataSnapshot;
 }
 
+export interface LiveRequestReplayEvent {
+	readonly key: LiveRequestReplayKey;
+	readonly replay?: LiveRequestReplaySnapshot;
+}
+
 export interface ILiveRequestEditorService {
 	readonly _serviceBrand: undefined;
 
@@ -82,9 +87,11 @@ export interface ILiveRequestEditorService {
 	readonly onDidUpdateSubagentHistory: Event<void>;
 	readonly onDidChangeInterception: Event<PromptInterceptionState>;
 	readonly onDidChangeMetadata: Event<LiveRequestMetadataEvent>;
+	readonly onDidChangeReplay: Event<LiveRequestReplayEvent>;
 
 	isEnabled(): boolean;
 	isInterceptionEnabled(): boolean;
+	isReplayEnabled(): boolean;
 
 	prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined;
 
@@ -135,6 +142,12 @@ export interface ILiveRequestEditorService {
 	clearSubagentHistory(): void;
 
 	getMetadataSnapshot(key: LiveRequestSessionKey): LiveRequestMetadataSnapshot | undefined;
+
+	buildReplayForRequest(key: LiveRequestSessionKey): LiveRequestReplaySnapshot | undefined;
+	getReplaySnapshot(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
+	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
+	markReplayForkActive(key: LiveRequestReplayKey, forkSessionId: string): LiveRequestReplaySnapshot | undefined;
+	markReplayStale(key: LiveRequestSessionKey, requestId?: string, reason?: string): void;
 }
 
 export interface PromptContextChangeEvent {

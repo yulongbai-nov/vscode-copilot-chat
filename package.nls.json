@@ -351,6 +351,7 @@
 	"github.copilot.config.liveRequestEditor.autoOverride.scope.session": "Keep overrides scoped to the currently active chat session only.",
 	"github.copilot.config.liveRequestEditor.autoOverride.scope.workspace": "Apply overrides to every Copilot Chat conversation in this workspace.",
 	"github.copilot.config.liveRequestEditor.autoOverride.scope.global": "Apply overrides to all Copilot Chat sessions across workspaces on this machine.",
+	"github.copilot.config.liveRequestEditor.timelineReplay.enabled": "Enable chat timeline replay for edited prompts in the Live Request Editor (advanced).",
 	"copilot.toolSet.editing.description": "Edit files in your workspace",
 	"copilot.toolSet.read.description": "Read files in your workspace",
 	"copilot.toolSet.search.description": "Search files in your workspace",

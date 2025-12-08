@@ -10,7 +10,7 @@ import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { Emitter } from '../../../../util/vs/base/common/event';
 import { EditableChatRequest, LiveRequestSessionKey } from '../../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestOverrideScope, PromptInterceptionState } from '../../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestOverrideScope, LiveRequestReplayEvent, PromptInterceptionState } from '../../common/liveRequestEditorService';
 import { OptionalChatRequestParams } from '../../../../platform/networking/common/fetch';
 import { LiveRequestEditorProvider } from '../liveRequestEditorProvider';
 
@@ -134,6 +134,7 @@ describe('LiveRequestEditorProvider', () => {
 		const onDidRemove = new Emitter<{ sessionId: string; location: ChatLocation }>();
 		const onDidInterception = new Emitter<PromptInterceptionState>();
 		const onDidMetadata = new Emitter<LiveRequestMetadataEvent>();
+		const onDidReplay = new Emitter<LiveRequestReplayEvent>();
 		let currentMode: LiveRequestEditorMode = 'off';
 		let currentScope: LiveRequestOverrideScope | undefined;
 		let previewLimit = 3;
@@ -155,8 +156,10 @@ describe('LiveRequestEditorProvider', () => {
 			onDidUpdateSubagentHistory: new Emitter<void>().event,
 			onDidChangeInterception: onDidInterception.event,
 			onDidChangeMetadata: onDidMetadata.event,
+			onDidChangeReplay: onDidReplay.event,
 			isEnabled: () => true,
 			isInterceptionEnabled: () => true,
+			isReplayEnabled: () => true,
 			prepareRequest: () => undefined,
 			getRequest: () => undefined,
 			updateSectionContent: () => undefined,
@@ -208,6 +211,11 @@ describe('LiveRequestEditorProvider', () => {
 			getSubagentRequests: () => [],
 			clearSubagentHistory: () => undefined,
 			getMetadataSnapshot: () => undefined,
+			buildReplayForRequest: () => undefined,
+			getReplaySnapshot: () => undefined,
+			restorePreviousReplay: () => undefined,
+			markReplayForkActive: () => undefined,
+			markReplayStale: () => undefined,
 		};
 		const buildState = (overrides: Partial<PromptInterceptionState> = {}): PromptInterceptionState => {
 			const autoOverride = overrides.autoOverride

@@ -6,8 +6,11 @@
 import { ITraceData, ITokenizer, Raw, toMode } from '@vscode/prompt-tsx';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { deepClone } from '../../../util/vs/base/common/objects';
+import { stringHash } from '../../../util/vs/base/common/hash';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
-import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestSection, LiveRequestSectionKind, LiveRequestTraceSnapshot } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestReplayProjection, LiveRequestReplaySection, LiveRequestSection, LiveRequestSectionKind, LiveRequestTraceSnapshot } from '../common/liveRequestEditorModel';
+
+export const DEFAULT_REPLAY_SECTION_CAP = 30;
 
 export function buildEditableChatRequest(ctx: EditableChatRequestInit): EditableChatRequest {
 	const clonedMessages = ctx.renderResult.messages.map(message => deepClone(message));
@@ -109,6 +112,105 @@ function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequest
 			arguments: lookup?.args
 		};
 		section.metadata = metadata;
+	}
+}
+
+export interface BuildReplayProjectionOptions {
+	readonly cap?: number;
+	readonly requestOptions?: OptionalChatRequestParams;
+	readonly trimmed?: boolean;
+}
+
+export function buildReplayProjection(sections: LiveRequestSection[], options?: BuildReplayProjectionOptions): LiveRequestReplayProjection | undefined {
+	const cap = Math.max(1, options?.cap ?? DEFAULT_REPLAY_SECTION_CAP);
+	const requestOptions = options?.requestOptions ? deepClone(options.requestOptions) : undefined;
+	const trimmed = options?.trimmed;
+	const replaySections: LiveRequestReplaySection[] = [];
+	let editedCount = 0;
+	let deletedCount = 0;
+	let totalSections = 0;
+
+	for (const section of sections) {
+		if (section.deleted) {
+			deletedCount++;
+			continue;
+		}
+		totalSections++;
+		const edited = section.editedContent !== undefined
+			|| section.overrideState !== undefined
+			|| section.content !== section.originalContent;
+		if (edited) {
+			editedCount++;
+		}
+		if (replaySections.length >= cap) {
+			continue;
+		}
+		replaySections.push({
+			id: section.id,
+			kind: section.kind,
+			label: section.label,
+			content: section.content,
+			message: section.message ? deepClone(section.message) : undefined,
+			collapsed: section.collapsed,
+			edited,
+			sourceMessageIndex: section.sourceMessageIndex,
+			tokenCount: section.tokenCount,
+			hoverTitle: section.hoverTitle,
+			metadata: section.metadata ? { ...section.metadata } : undefined,
+		});
+	}
+
+	if (!replaySections.length) {
+		return undefined;
+	}
+
+	return {
+		sections: replaySections,
+		totalSections,
+		overflowCount: Math.max(0, totalSections - replaySections.length),
+		editedCount,
+		deletedCount,
+		trimmed,
+		requestOptions,
+	};
+}
+
+export function computeChatMessagesHash(messages: Raw.ChatMessage[]): number {
+	if (!messages.length) {
+		return 0;
+	}
+	try {
+		const serialized = JSON.stringify(messages);
+		return stringHash(serialized, 0);
+	} catch {
+		return stringHash(String(messages.length), 0);
+	}
+}
+
+export function computeReplayProjectionHash(projection: LiveRequestReplayProjection | undefined): number {
+	if (!projection) {
+		return 0;
+	}
+	try {
+		const serialized = JSON.stringify({
+			sections: projection.sections.map(section => ({
+				id: section.id,
+				kind: section.kind,
+				label: section.label,
+				content: section.content,
+				sourceMessageIndex: section.sourceMessageIndex,
+				metadata: section.metadata,
+			})),
+			totalSections: projection.totalSections,
+			overflowCount: projection.overflowCount,
+			editedCount: projection.editedCount,
+			deletedCount: projection.deletedCount,
+			trimmed: projection.trimmed,
+			requestOptions: projection.requestOptions,
+		});
+		return stringHash(serialized, 0);
+	} catch {
+		return stringHash(String(projection.sections.length), 0);
 	}
 }
 

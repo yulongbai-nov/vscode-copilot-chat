@@ -167,6 +167,7 @@ suite('defaultIntentRequestHandler', () => {
 		onDidUpdateSubagentHistory = Event.None;
 		onDidChangeInterception = Event.None;
 		onDidChangeMetadata = Event.None;
+		onDidChangeReplay = Event.None;
 
 		public enabled = true;
 		public interceptionEnabled = true;
@@ -187,6 +188,9 @@ suite('defaultIntentRequestHandler', () => {
 		isInterceptionEnabled(): boolean {
 			this.isInterceptionEnabledCalls++;
 			return this.enabled && this.interceptionEnabled;
+		}
+		isReplayEnabled(): boolean {
+			return this.enabled;
 		}
 		getInterceptionState() {
 			return {
@@ -251,6 +255,13 @@ suite('defaultIntentRequestHandler', () => {
 		resetRequest(): EditableChatRequest | undefined { return undefined; }
 		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
 		applyTraceData(): EditableChatRequest | undefined { return undefined; }
+		buildReplayForRequest(): undefined { return undefined; }
+		getReplaySnapshot(): undefined { return undefined; }
+		restorePreviousReplay(): undefined { return undefined; }
+		markReplayForkActive(): undefined { return undefined; }
+		markReplayStale(): void {
+			// no-op
+		}
 
 		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
 			const messages = this._messages.length ? this._messages : fallback;

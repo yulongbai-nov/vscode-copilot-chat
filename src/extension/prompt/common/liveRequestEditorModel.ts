@@ -72,6 +72,59 @@ export interface LiveRequestSessionKey {
 	location: ChatLocation;
 }
 
+export type LiveRequestReplayState = 'idle' | 'building' | 'ready' | 'forkActive' | 'stale';
+
+export interface LiveRequestReplayKey extends LiveRequestSessionKey {
+	requestId: string;
+}
+
+export interface LiveRequestReplaySection {
+	readonly id: string;
+	readonly kind: LiveRequestSectionKind;
+	readonly label: string;
+	readonly content: string;
+	readonly message?: Raw.ChatMessage;
+	readonly collapsed: boolean;
+	readonly edited: boolean;
+	readonly sourceMessageIndex: number;
+	readonly tokenCount?: number;
+	readonly hoverTitle?: string;
+	readonly metadata?: Record<string, unknown>;
+}
+
+export interface LiveRequestReplayProjection {
+	readonly sections: LiveRequestReplaySection[];
+	readonly totalSections: number;
+	readonly overflowCount: number;
+	readonly editedCount: number;
+	readonly deletedCount: number;
+	readonly trimmed?: boolean;
+	readonly requestOptions?: OptionalChatRequestParams;
+}
+
+export interface LiveRequestReplaySnapshot {
+	readonly key: LiveRequestReplayKey;
+	readonly state: LiveRequestReplayState;
+	readonly version: number;
+	readonly updatedAt: number;
+	readonly payload: Raw.ChatMessage[];
+	readonly payloadHash: number;
+	readonly projection?: LiveRequestReplayProjection;
+	readonly projectionHash?: number;
+	readonly parentSessionId: string;
+	readonly parentTurnId: string;
+	readonly debugName?: string;
+	readonly model?: string;
+	readonly intentId?: string;
+	readonly requestCreatedAt?: number;
+	readonly requestLastUpdated?: number;
+	readonly lastLoggedHash?: number;
+	readonly lastLoggedMatches?: boolean;
+	readonly forkSessionId?: string;
+	readonly staleReason?: string;
+	readonly restoreOfVersion?: number;
+}
+
 export interface EditableChatRequest {
 	readonly id: string;
 	readonly sessionId: string;
