@@ -46,6 +46,7 @@ import './prompts/settingsEditorSearchResultsSelector.stest';
 import './simulation/debugCommandToConfig.stest';
 import './simulation/debugTools.stest';
 import './simulation/inlineEdit/inlineEdit.stest';
+import './simulation/liveRequestEditor.stest';
 import './simulation/notebookEdits.stest';
 import './simulation/notebooks.stest';
 import './simulation/prTitleAndDescription.stest';
@@ -58,4 +59,3 @@ import './simulation/slash-test/testGen.js.stest';
 import './simulation/slash-test/testGen.py.stest';
 import './simulation/slash-test/testGen.ts.stest';
 import './simulation/tools/toolcall.stest';
-

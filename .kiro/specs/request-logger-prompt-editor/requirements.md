@@ -26,6 +26,8 @@ The feature exposes the fully composed ChatML request that Copilot is about to s
 - **Live Chat Request Editor** – The new editor surface in the chat panel that shows and edits the pending Chat Request.
 - **Prompt Section** – A logical segment of the prompt (e.g., system instructions, user message, context snippet, tool hint, prediction) mapped from `RenderPromptResult` and/or `Raw.ChatMessage[]`.
 - **Section Action Menu** – The hover-only toolbar shown on each Prompt Section containing `Edit`, `Delete`, and related actions.
+- **Chat Timeline Replay** – A replayed chat session/timeline created from an edited prompt to visualize the final request history (including deletions/edits) as chat bubbles.
+- **Graphiti** – An optional external graph memory service that ingests conversations/turns/sections as nodes/edges for RAG/auditing.
 
 ## Requirements
 
@@ -198,3 +200,45 @@ As an advanced Copilot user, I want to intercept the first turn of a chat sessio
 11.6 EACH overridden section SHALL display a “Show diff” affordance in its hover toolbar that opens `vscode.diff` between the original intercepted content and the persisted override, with tooltips indicating last-updated timestamp and scope.  
 11.7 Auto-apply persistence SHALL be stored in extension global/workspace storage (depending on scope) using encrypted storage APIs when available; clearing overrides MUST remove the stored payload and re-arm capturing for the next turn while in Auto-apply.  
 11.8 TELEMETRY SHALL record mode transitions, captures, saved/cleared overrides, scope changes, preview-limit changes, and diff button usage with anonymized scope (session/workspace/global) but without storing user content.  
+
+### Requirement 12 – Chat Timeline Replay (Edited History/System Prompt)
+
+**User Story:**  
+As a Copilot user who edited a prompt, I want to replay the edited request into a new chat timeline so I can see the exact history/system/tool calls that will be used for follow-up.
+
+#### Acceptance Criteria
+
+12.1 WHEN the user confirms edits, THEN the system SHALL offer a “Replay edited prompt” action (gated by the advanced flag) that creates a new chat session/timeline without modifying the original session.  
+12.2 THE replayed timeline SHALL render bubbles for system/user/history/tool sections using the edited/deleted state (deleted sections omitted, edited text shown).  
+12.3 TOOL calls/results in the replay SHALL be marked as “replayed” and SHALL NOT re-execute tools; existing arguments/results are displayed verbatim.  
+12.4 IF replay construction fails, THEN the system SHALL fall back to a single replay bubble containing the entire edited prompt, leaving the original session untouched and surfacing a non-blocking error.  
+12.5 THE replay SHALL record lineage between the original turn and replayed turn (e.g., `replay_parent_turn_id`) for downstream telemetry/persistence.  
+12.6 TELEMETRY SHALL record replay start/finish/cancel outcomes and the replay session id (not user content).  
+
+### Requirement 13 – Chat History Persistence (SQLite)
+
+**User Story:**  
+As a Copilot user, I want my chat history (original + edited prompts, tool calls/results) persisted locally so I can reload, audit, and replay across VS Code restarts.
+
+#### Acceptance Criteria
+
+13.1 THE system SHALL store conversations, turns, sections, tool calls/results, responses, and references in a local SQLite DB (global storage), with append-only writes per turn.  
+13.2 A configuration/command SHALL gate persistence (default off) and SHALL be disabled in untrusted workspaces unless the user explicitly opts in.  
+13.3 THE SQLite layer SHALL run migrations with schema_version tracking, WAL mode, integrity_check after migration, and fail open (disable persistence) on corruption.  
+13.4 THE schema SHALL include replay linkage (`replay_parent_turn_id`), token counts/trace paths, and support optional FTS for sections/responses; export/purge commands SHALL be provided.  
+13.5 THE persistence layer SHALL enforce size/TTL caps (pruning oldest turns) and retry with backoff on SQLITE_BUSY; writes SHALL NOT block chat sends.  
+13.6 TESTS SHALL cover migrations, append-only writes, pruning, and corruption fallback; a reset command SHALL drop/recreate the DB only after user consent.  
+
+### Requirement 14 – Graphiti Memory Integration (Optional)
+
+**User Story:**  
+As an advanced user, I want to optionally mirror chat history into Graphiti so I can query prompts/responses via a graph/RAG layer without affecting local behaviour.
+
+#### Acceptance Criteria
+
+14.1 THE Graphiti sync SHALL be gated by a setting (default off) requiring trusted workspace and endpoint/apiKey/workspace configuration; no network traffic SHALL occur unless enabled.  
+14.2 THE extension SHALL provide a TypeScript REST adapter for Graphiti and ingest turn/section/response/tool data as nodes/edges with stable IDs (conversation/turn/section ids).  
+14.3 WHEN enabled, ingestion SHALL run on turn finalization, batching requests with timeout/backoff, and SHALL never block chat sends on failure.  
+14.4 THE sync SHALL be idempotent (stable IDs + content hashes) and maintain a local cursor to resume after failures; retries SHALL be bounded.  
+14.5 ATTACHMENTS SHALL be redacted (URIs + hashes only) unless an explicit opt-in is set; embeddings SHALL only be requested when the Graphiti instance advertises an embedder.  
+14.6 TELEMETRY/diagnostics SHALL record sync successes/failures and queue depth (no user content).  
