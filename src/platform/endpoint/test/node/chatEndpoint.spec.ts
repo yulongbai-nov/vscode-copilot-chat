@@ -39,4 +39,24 @@ describe('stripSamplingParameters', () => {
 		expect(body.top_p).toBeUndefined();
 		expect(body.n).toBeUndefined();
 	});
+
+	it('keeps sampling parameters for gpt-5 family', () => {
+		const body: IEndpointBody = { temperature: 0.6, top_p: 0.7, n: 1, model: 'gpt-5' };
+
+		stripSamplingParameters(body, 'gpt-5');
+
+		expect(body.temperature).toBe(0.6);
+		expect(body.top_p).toBe(0.7);
+		expect(body.n).toBe(1);
+	});
+
+	it('keeps sampling parameters for gpt-5.1 variants', () => {
+		const body: IEndpointBody = { temperature: 0.3, top_p: 0.95, n: 3, model: 'gpt-5.1-codex' };
+
+		stripSamplingParameters(body, 'gpt-5.1-codex');
+
+		expect(body.temperature).toBe(0.3);
+		expect(body.top_p).toBe(0.95);
+		expect(body.n).toBe(3);
+	});
 });
