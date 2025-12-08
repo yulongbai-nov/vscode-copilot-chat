@@ -1,7 +1,7 @@
 # Specs Index
 
-- **request-logger-prompt-editor** — Active. Live Chat Request Editor (prompt inspector/interception/auto-override); see design/requirements/tasks.
-- **chat-api-migration** — Parked. No Prompt Section Visualizer code exists; migration to native chat APIs is deferred.
-- **chat-timeline-replay** — Stub. Possible replay of edited prompts into chat timeline; not planned/implemented.
-- **chat-history-persistence** — Stub. Possible SQLite-based chat history persistence; not planned/implemented.
-- **graphiti-memory-integration** — Stub. Possible Graphiti ingestion of chat data; not planned/implemented.
+- **request-logger-prompt-editor** — Active implementation. Live Request Editor (prompt inspector, interception, auto-override); specs under `.kiro/specs/request-logger-prompt-editor/`.
+- **chat-timeline-replay** — Active implementation. Replay/fork edited prompts into the chat timeline (read-only by default, fork to continue); specs under `.kiro/specs/chat-timeline-replay/`.
+- **chat-history-persistence** — Design fleshed out (SQLite-backed persistence, opt-in); implementation not started. Specs under `.kiro/specs/chat-history-persistence/`.
+- **graphiti-memory-integration** — Stubbed concept for optional Graphiti mirroring; no implementation.
+- **chat-api-migration** — Parked. Prompt Section Visualizer code is absent; migration to native chat APIs deferred until re-scoped.
