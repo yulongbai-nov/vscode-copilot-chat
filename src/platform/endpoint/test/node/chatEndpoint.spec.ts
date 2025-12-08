@@ -39,4 +39,42 @@ describe('stripSamplingParameters', () => {
 		expect(body.top_p).toBeUndefined();
 		expect(body.n).toBeUndefined();
 	});
+
+	it('keeps sampling parameters for gpt-5 family', () => {
+		const body: IEndpointBody = { temperature: 0.6, top_p: 0.7, n: 1, model: 'gpt-5' };
+
+		stripSamplingParameters(body, 'gpt-5');
+
+		expect(body.temperature).toBe(0.6);
+		expect(body.top_p).toBe(0.7);
+		expect(body.n).toBe(1);
+	});
+
+	it('removes sampling parameters for all gpt-5.1 family variants', () => {
+		const families = [
+			'gpt-5.1',
+			'gpt-5.1-mini',
+			'gpt-5.1-codex',
+			'gpt-5.1-codex-mini',
+			'gpt-5.1-codex-max'
+		];
+
+		for (const family of families) {
+			const body: IEndpointBody = { temperature: 0.3, top_p: 0.95, n: 3, model: family };
+			stripSamplingParameters(body, family);
+			expect(body.temperature, `${family} temperature`).toBeUndefined();
+			expect(body.top_p, `${family} top_p`).toBeUndefined();
+			expect(body.n, `${family} n`).toBeUndefined();
+		}
+	});
+
+	it('keeps sampling parameters for gpt-5-codex (non-5.1)', () => {
+		const body: IEndpointBody = { temperature: 0.25, top_p: 0.85, n: 2, model: 'gpt-5-codex' };
+
+		stripSamplingParameters(body, 'gpt-5-codex');
+
+		expect(body.temperature).toBe(0.25);
+		expect(body.top_p).toBe(0.85);
+		expect(body.n).toBe(2);
+	});
 });

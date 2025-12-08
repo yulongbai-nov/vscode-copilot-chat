@@ -43,7 +43,10 @@ export function stripSamplingParameters(body: IEndpointBody | undefined, family:
 	}
 
 	const normalizedFamily = family.toLowerCase();
-	const disallowSamplingControls = normalizedFamily.startsWith('o1') || modelId === CHAT_MODEL.O1 || modelId === CHAT_MODEL.O1MINI;
+	const disallowSamplingControls = normalizedFamily.startsWith('o1')
+		|| normalizedFamily.startsWith('gpt-5.1')
+		|| modelId === CHAT_MODEL.O1
+		|| modelId === CHAT_MODEL.O1MINI;
 	if (!disallowSamplingControls) {
 		return;
 	}
