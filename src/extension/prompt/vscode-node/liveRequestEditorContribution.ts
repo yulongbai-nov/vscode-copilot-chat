@@ -218,27 +218,27 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		const state = this._liveRequestEditorService.getInterceptionState();
 		const autoOverride = state.autoOverride;
 		const picks: ModePickItem[] = [
-			{ label: 'Off', description: 'Send requests immediately without pausing.', mode: 'off' },
-			{ label: 'Prompt Interception', description: 'Pause every request for manual approval.', mode: 'interceptAlways' }
+			{ label: 'Send normally', description: 'Send requests immediately without pausing.', mode: 'off' },
+			{ label: 'Pause & review every turn', description: 'Pause each request before sending.', mode: 'interceptAlways' }
 		];
 		if (autoOverride?.enabled) {
 			const previewLabel = autoOverride.previewLimit === 1 ? 'first section' : `first ${autoOverride.previewLimit} sections`;
 			picks.push({
-				label: 'Auto Override',
-				description: `Intercept once, edit ${previewLabel}, then auto-apply overrides.`,
+				label: 'Auto-apply saved edits',
+				description: `Capture once (first ${previewLabel}), then auto-apply edits.`,
 				mode: 'autoOverride'
 			});
 		} else {
 			picks.push({
-				label: 'Auto Override (disabled)',
-				description: 'Enable github.copilot.chat.liveRequestEditor.autoOverride.enabled to unlock override persistence.',
+				label: 'Auto-apply saved edits (disabled)',
+				description: 'Enable github.copilot.chat.liveRequestEditor.autoOverride.enabled to unlock saved edits.',
 				mode: 'autoOverride',
 				disabled: true
 			});
 		}
 
 		const selection = await vscode.window.showQuickPick<ModePickItem>(picks, {
-			placeHolder: 'Select the Live Request Editor mode',
+			placeHolder: 'Select how Copilot prompts should send',
 			canPickMany: false
 		});
 		if (!selection || selection.disabled) {
@@ -257,7 +257,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		}
 		const autoOverride = this._liveRequestEditorService.getInterceptionState().autoOverride;
 		if (!autoOverride?.enabled) {
-			vscode.window.showInformationMessage('Auto Override is disabled in settings. Enable it to configure scope.');
+			vscode.window.showInformationMessage('Auto-apply edits is disabled in settings. Enable it to configure scope.');
 			return;
 		}
 		const current = this._liveRequestEditorService.getAutoOverrideScope() ?? 'session';
@@ -270,14 +270,14 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			...pick,
 			detail: pick.scope === current ? 'Current selection' : undefined
 		})), {
-			placeHolder: 'Choose how Auto Override persists your edits',
+			placeHolder: 'Choose where Auto-apply saves your edits',
 			canPickMany: false
 		});
 		if (!selection) {
 			return;
 		}
 		await this._liveRequestEditorService.setAutoOverrideScope(selection.scope);
-		vscode.window.showInformationMessage(`Auto Override scope set to ${selection.label}.`);
+		vscode.window.showInformationMessage(`Auto-apply scope set to ${selection.label}.`);
 	}
 
 	private async _configureAutoOverridePreviewLimit(): Promise<void> {
@@ -286,7 +286,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		}
 		const autoOverride = this._liveRequestEditorService.getInterceptionState().autoOverride;
 		if (!autoOverride?.enabled) {
-			vscode.window.showInformationMessage('Auto Override is disabled in settings. Enable it to configure the preview limit.');
+			vscode.window.showInformationMessage('Auto-apply edits is disabled in settings. Enable it to configure the capture count.');
 			return;
 		}
 		const current = autoOverride.previewLimit;
@@ -298,7 +298,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		}));
 		picks.push({ label: 'Custom…', description: 'Enter a custom number of sections', custom: true });
 		const selection = await vscode.window.showQuickPick<PreviewLimitPickItem>(picks, {
-			placeHolder: 'How many prefix sections should Auto Override capture?',
+			placeHolder: 'How many prefix sections should Auto-apply capture?',
 			canPickMany: false
 		});
 		if (!selection) {
@@ -319,7 +319,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			nextValue = Math.max(1, Math.floor(Number(input)));
 		}
 		await this._liveRequestEditorService.configureAutoOverridePreviewLimit(nextValue);
-		vscode.window.showInformationMessage(`Auto Override preview limit set to ${nextValue}.`);
+		vscode.window.showInformationMessage(`Auto-apply capture limit set to ${nextValue}.`);
 	}
 
 	private async _clearAutoOverrideOverrides(): Promise<void> {
@@ -327,7 +327,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			return;
 		}
 		await this._liveRequestEditorService.clearAutoOverrides();
-		vscode.window.showInformationMessage('Cleared saved Auto Override overrides.');
+		vscode.window.showInformationMessage('Cleared saved Auto-apply edits.');
 	}
 
 	private async _toggleInspectorVisibility(): Promise<void> {
@@ -355,26 +355,29 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 
 		const pending = state.pending;
 		const mode = state.mode ?? 'off';
+		const displayMode = mode === 'interceptOnce' ? 'interceptAlways' : mode;
 		let icon = '$(circle-slash)';
-		let label = 'Prompt Interception: Off';
+		let label = 'Prompt mode: Send normally';
 		const tooltip = new vscode.MarkdownString(undefined, true);
 		const lines: string[] = ['**Prompt Inspector Mode**'];
 
 		if (mode === 'autoOverride') {
 			const auto = state.autoOverride;
 			icon = auto?.hasOverrides ? '$(symbol-namespace)' : '$(plug)';
-			label = auto?.capturing ? 'Auto Override: capturing…' : 'Auto Override: Active';
+			label = auto?.capturing ? 'Auto-apply edits: capturing…' : 'Auto-apply edits: applying';
 			lines.push(auto?.capturing
-				? 'Auto Override is capturing prefix sections before sending.'
-				: auto?.hasOverrides ? 'Auto Override is applying saved prefix edits.' : 'Enable Auto Override to capture custom prefixes.');
+				? 'Auto-apply is capturing the next turn (prefix sections only).'
+				: auto?.hasOverrides ? 'Auto-apply is applying saved prefix edits.' : 'Enable Auto-apply to capture custom prefixes.');
 			if (auto?.scope) {
 				lines.push('', `Scope: **${auto.scope}**`);
 			}
 			lines.push('', 'Use the mode picker to change modes.');
-		} else if (mode === 'interceptAlways' || state.enabled) {
+		} else if (displayMode === 'interceptAlways' || state.enabled) {
 			icon = pending ? '$(warning)' : '$(debug-pause)';
-			label = pending ? 'Prompt Interception: paused' : 'Prompt Interception: On';
-			lines.push('Requests pause before sending so you can edit them in the Live Request Editor.');
+			label = pending ? 'Prompt mode: Paused' : (mode === 'interceptOnce' ? 'Prompt mode: Pausing next turn' : 'Prompt mode: Pause every turn');
+			lines.push(mode === 'interceptOnce'
+				? 'Next request will pause before sending so you can review it.'
+				: 'Requests pause before sending so you can edit them in the Live Request Editor.');
 			if (pending) {
 				const pausedLabel = pending.debugName.replace(/`/g, '\\`');
 				lines.push('', `Paused turn: \`${pausedLabel}\``);

@@ -4,7 +4,7 @@
 
 - ✅ Backend plumbing landed: the feature flag is in `package.json`, the `ILiveRequestEditorService` + builder produce editable sections, and `defaultIntentRequestHandler` now feeds edited messages to the fetcher.
 - ✅ Send/reset helpers exist server-side (`getMessagesForSend`, `resetRequest`, `isDirty`), ensuring the prompt pipeline can already consume edited sections once a UI drives the mutations.
-- 🚧 Remaining focus flows directly from the open items: chat timeline replay of edited prompts (Tasks 12.x), local persistence (Tasks 13.x), performance/accessibility/reliability (Tasks 6.x), and automated + manual coverage (Tasks 7.x).
+- 🚧 Remaining focus flows directly from the open items: (1) finish the optional HTML tracer integration (Task 2.4), (2) harden performance/accessibility/reliability (Tasks 6.x), and (3) expand automated + manual coverage (Tasks 7.x).
 
 ---
 
@@ -12,11 +12,11 @@
   - [x] 1.1 Add configuration key `github.copilot.chat.advanced.livePromptEditorEnabled` with appropriate default and description. _Requirements: 1.1, 1.5_  
   - [x] 1.2 Gate all Live Chat Request Editor UI and logic behind this flag. _Requirements: 1.5, 5.5_  
 
-- [x] 2. Editable request model and section builder  
+- [ ] 2. Editable request model and section builder  
   - [x] 2.1 Define `EditableChatRequest` and `LiveRequestSection` types in a shared chat/prompt module. _Requirements: 2.1, 4.1, 5.1_  
   - [x] 2.2 Implement a builder that maps `RenderPromptResult` (`messages`, `tokenCount`, `metadata`, `references`) into an initial `EditableChatRequest`. _Requirements: 2.1, 2.3, 5.2_  
   - [x] 2.3 Use message roles, references, and metadata to classify sections as `system`, `user`, `context`, `tool`, `history`, etc. _Requirements: 2.2, 3.7_  
-  - [x] 2.4 Integrate optional `HTMLTracer` data (when available) to refine section boundaries and token counts, falling back gracefully when tracing is disabled. _Requirements: 2.5, 5.3_  
+  - [ ] 2.4 Integrate optional `HTMLTracer` data (when available) to refine section boundaries and token counts, falling back gracefully when tracing is disabled. _Requirements: 2.5, 5.3_  
   - [x] 2.5 Track original messages and content to support reset and diffing. _Requirements: 3.4, 4.4_  
 
 - [ ] 3. Wiring into the chat request pipeline  
@@ -83,33 +83,12 @@
   - [x] 10.2 Add new settings + commands (`autoOverride.previewLimit`, `…scopePreference`, `liveRequestEditor.setMode`, etc.) and plumb them through the configuration service. _Requirements: 11.2, 11.4_  
   - [x] 10.3 Update the Live Request Editor UI (header toggle, banner, status bar) to reflect the new mode, expose Pause/Edit/Clear actions, and prompt for scope via Quick Pick. _Requirements: 11.1, 11.6_  
   - [x] 10.4 Implement auto-override preview limiting (first `N` sections) during the initial interception and resume automatic sends once overrides are saved. _Requirements: 11.2, 11.3_  
-  - [x] 10.5 Add per-section “Show diff” buttons that invoke `vscode.diff` with temp documents plus tooltips showing scope + timestamps. _Requirements: 11.5_  
-  - [x] 10.6 Persist overrides across reloads (global/workspace storage) and ensure clearing overrides removes the stored payload + returns to normal interception. _Requirements: 11.4, 11.7_  
+- [x] 10.5 Add per-section “Show diff” buttons that invoke `vscode.diff` with temp documents plus tooltips showing scope + timestamps. _Requirements: 11.5_  
+- [x] 10.6 Persist overrides across reloads (global/workspace storage) and ensure clearing overrides removes the stored payload + returns to normal interception. _Requirements: 11.4, 11.7_  
 - [x] 10.7 Emit telemetry for mode/scope transitions, override saves/clears, and diff launches; document the new behavior in docs/handoff. _Requirements: 11.8_  
-
-- [ ] 12. Chat timeline replay for edited prompts
-  - [ ] 12.1 Add an opt-in setting/command to enable “Chat timeline replay” when the advanced flag is on. _Requirements: 12.1, 12.6_  
-  - [ ] 12.2 Build a replay projection from `EditableChatRequest.messages` into chat bubbles (system/history/context/tool/user), omitting deleted sections and applying edits. _Requirements: 12.1, 12.2_  
-  - [ ] 12.3 Create or fork a chat session for the replayed timeline, set it active, and keep the original session untouched. _Requirements: 12.1, 12.3_  
-  - [ ] 12.4 Label replayed tool calls/results and ensure telemetry emits replay creation/failure events. _Requirements: 12.4, 12.7_  
-  - [ ] 12.5 Fallback: render a single “Replayed prompt” bubble when projection fails; do not mutate the original session. _Requirements: 12.5_  
-  - [ ] 12.6 Add integration tests to validate replay creation, role mapping, deletion handling, and fallbacks. _Requirements: 12.2, 12.5_  
-
-- [ ] 13. Local chat history persistence (SQLite)
-  - [ ] 13.1 Add opt-in setting/command to enable persistence when the advanced flag is on and workspace is trusted. _Requirements: 13.1, 13.6_  
-  - [ ] 13.2 Implement SQLite schema/migrations (conversations, turns, sections, tool calls, responses), with append-only writes and JSON1 columns for messages/options. _Requirements: 13.1, 13.2, 13.3_  
-  - [ ] 13.3 Wire turn-finalization to append original/edited messages, section metadata, tool calls, and responses into the store; include replay linkage. _Requirements: 13.2, 13.3_  
-  - [ ] 13.4 Add pruning/compaction (size/turn caps, VACUUM) and corruption handling that falls back to in-memory mode with a warning. _Requirements: 13.4, 13.5_  
-  - [ ] 13.5 Add export/purge commands and telemetry for opt-in/out and persistence errors (content-free). _Requirements: 13.6, 13.7_  
-
-- [ ] 14. Graphiti memory integration (optional)
-  - [ ] 14.1 Add settings/commands for Graphiti endpoint/API key/workspace + enable flag; block in untrusted workspaces by default. _Requirements: 14.1_  
-  - [ ] 14.2 Implement Graphiti ingestion adapter (nodes/edges for conversation, turn, section/message, reference, tool call/result, response, replay lineage) with stable IDs + content hashes. _Requirements: 14.2_  
-  - [ ] 14.3 Wire turn-finalization to enqueue Graphiti ingest jobs; add batching/backoff/retry and bounded queue; do not block chat. _Requirements: 14.3, 14.5_  
-  - [ ] 14.4 Handle large payload truncation and optional attachment upload/omission; add config for size caps. _Requirements: 14.4_  
-  - [ ] 14.5 Add a minimal TypeScript REST adapter (no external SDK) with auth, batching, retries, and timeouts. _Requirements: 14.7_  
-  - [ ] 14.6 Add telemetry/health logging for opt-in/out and ingest success/failure (content-free) and surface non-blocking status in the output channel. _Requirements: 14.6_  
-  - [ ] 14.7 Add integration tests or mocked unit tests for the ingestion mapping + retry logic. _Requirements: 14.2–14.5_  
+- [x] 10.8 Simplify Auto-apply UX labels and controls: rename modes to “Send normally” / “Pause & review every turn” / “Auto-apply saved edits”, treat “Pause next turn” as a one-shot action, and expose a primary “Capture new edits” flow with a secondary menu for scope/preview/clear. _Requirements: 11.1, 11.4, 11.5_  
+- [x] 10.9 Rework Auto-apply state handling to two user-visible states (Capturing vs Applying), auto-arm capture when no overrides exist or after clearing, and hide redundant actions while capturing. _Requirements: 11.2, 11.3, 11.7_  
+- [x] 10.10 Update telemetry and status/banners to use simplified copy (“Auto-apply edits · <scope> · Applying/Capturing”), ensure one-shot “Pause next turn” does not alter persisted mode, and refresh docs accordingly. _Requirements: 11.5, 11.8_  
 
 ## Implementation Notes
 
@@ -133,4 +112,4 @@
 ## Current Status Summary
 
 - Feature flag, editable request model, prompt inspector UI, and interception mode are fully wired behind the advanced flag; edits propagate through `ChatMLFetcher`, and interception skips subagent automation.  
-- Remaining tracked work is focused on HTML tracer enrichment (Task 2.4), performance/reliability/accessibility hardening (Tasks 6.x), and the automated + manual validation backlog (Tasks 7.x).  
+- Remaining tracked work is focused on HTML tracer enrichment (Task 2.4), performance/reliability/accessibility hardening (Tasks 6.x), the automated + manual validation backlog (Tasks 7.x), and the simplified Auto-apply flow/labels (Tasks 10.8–10.10).  

@@ -171,29 +171,32 @@ Users still need a fast way to confirm that the intercepted prompt belongs to th
 - Feature gate: the metadata view is only registered/visible when `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, keeping the extra UI confined to advanced workflows.
 - Configuration scope: both `github.copilot.chat.promptInspector.sessionMetadata.fields` and `.extraSections` are marked as **application-scoped** so users can trust/toggle the metadata UI once and have the preference follow every workspace, even when a folder is marked untrusted.
 
-### Auto Intercept & Prefix Override Mode
+### Auto-apply prefix edits (streamlined Auto Override)
 
-We add a new “Auto Override” mode on top of the existing prompt-interception flow so power users can edit prefix sections once and have the edits applied automatically:
+We simplify the Auto Override UX to reduce mode juggling:
 
-- **State machine**
-  - A single `LiveRequestEditorMode` enum (`off`, `interceptOnce`, `interceptAlways`, `autoOverride`) plus a `paused` flag lives inside `ILiveRequestEditorService`. All UI (status bar, header toggle, banner, commands) calls `liveRequestEditorService.setMode(mode, options)` so there is only one source of truth.
-  - The service emits `onDidChangeMode` events containing `{ mode, paused, scope }`, enabling the inspector banner, status bar, and webview to update simultaneously.
-- **Initial interception**
-  - When Auto Override is enabled, the next pending request immediately intercepts. The inspector renders only the first `previewLimit` prefix sections (default 3, configurable via both a numeric setting and a Quick Pick surfaced in the inspector).
-  - A scoped Quick Pick prompts: “Apply overrides to… Session / Workspace / Global (remember choice).” We persist the selection in `github.copilot.chat.liveRequestEditor.autoOverride.scopePreference`; users can reopen the picker from the banner.
+- **Modes (user-facing labels)**
+  - “Send normally” (`off`), “Pause & review every turn” (`interceptAlways`), “Auto-apply saved edits” (`autoOverride`). A separate one-shot action “Pause next turn” replaces the `interceptOnce` label in the UI.
+  - A single `LiveRequestEditorMode` enum remains (`off`, `interceptOnce`, `interceptAlways`, `autoOverride`), but all UI strings use the simplified labels above.
+- **Auto-apply states**
+  - `autoOverride` has two user-visible states: **Capturing** (no saved edits yet; next turn will pause and show the first `previewLimit` sections) and **Applying** (saved edits exist; turns send automatically with prefixes overlaid).
+  - Capturing auto-pauses the next turn; Applying never pauses unless the user explicitly triggers “Pause next turn” or “Capture new edits.”
+- **Banner and actions**
+  - Banner title: `Auto-apply edits · <scope>`. Subtitle shows `Applying (saved <timestamp>)` or `Capturing next turn · showing first N sections`.
+  - Primary button: **Capture new edits** (arms capture; after resume saves and returns to Applying).
+  - Secondary menu (kebab or grouped buttons): `Pause next turn` (one-shot intercept without changing mode), `Remove saved edits` (clears overrides and re-arms capture), `Where to save edits` (Session/Workspace/Global), `Sections to capture` (preview limit).
+  - Hide redundant buttons when already capturing (e.g., no “Pause next turn” while a capture is armed).
 - **Persistence & application**
-  - Edited sections are serialized as `{ scope, sectionId, content, updatedAt }` and stored via VS Code storage APIs: session scope in memory, workspace in `ExtensionContext.workspaceState`, global in `ExtensionContext.globalState`. The service loads them on activation and reapplies them to new `EditableChatRequest`s before send.
-  - After the first save, interception stops automatically; subsequent sends recompute the prompt, overlay the stored overrides, and continue without pausing unless the user presses “Pause & intercept next turn.”
-- **Inspector banner + commands**
-  - The Live Request Editor header gains a tri-segment toggle (Off / Intercept / Auto Override). The sticky banner shows `Auto Override · Workspace scope` with buttons: `Pause`, `Edit Overrides` (re-enters interception), `Clear Overrides`, `Change scope`.
-  - The existing status-bar command mirrors the mode and offers a quick toggle list so users can switch modes without focusing the inspector.
+  - Edited sections remain serialized as `{ scope, sectionId, content, updatedAt }` in session/workspace/global storage. Clearing removes the stored payload and re-enables Capturing for the next turn when in Auto-apply.
+  - Scope defaults to Session until the user picks otherwise; selection is persisted in `github.copilot.chat.liveRequestEditor.autoOverride.scopePreference`.
 - **Diff affordances**
-  - Each section with overrides renders a chip (“Edited · Show diff”). Clicking it runs `vscode.diff` with temp URIs pointing to the original intercepted content vs. the persisted override. We annotate the diff title with the scope (e.g., `System (workspace override)`).
+  - Override chips remain (“Edited · Show diff”), invoking `vscode.diff` with scope/timestamp in the title.
 - **Settings / commands**
-  - New settings: `github.copilot.chat.liveRequestEditor.autoOverride.previewLimit` (number), `…scopePreference` (string), `…enabled` (boolean). We also add commands `github.copilot.liveRequestEditor.setMode`, `…clearOverrides`, `…showOverrideHistory`.
-  - Override history is tracked per scope (timestamp + snippet) so the Quick Pick can show recent snapshots and allow rollbacks.
+  - Settings stay the same (`…autoOverride.enabled`, `…previewLimit`, `…scopePreference`), but Quick Picks and commands adopt the new labels:
+    - Mode picker: Send normally / Pause & review every turn / Auto-apply edits.
+    - Banner menu entries mirror the secondary menu above.
 - **Telemetry**
-  - The service logs mode transitions and override saves/clears via the existing telemetry channel, tagging events with `mode`, `scope`, and `previewLimit` but never the contents of edits.
+  - Continue logging mode changes, auto-apply capture/apply transitions, saved/cleared overrides, diff launches, and scope changes, tagged with scope and previewLimit (never user content).
 
 ### Interim Webview Prompt Inspector (Existing Implementation Surface)
 
@@ -222,8 +225,8 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - Each section displays its token count and visualizes its share of the total prompt budget with a mini progress meter (e.g., “42 tokens · 8%” plus a bar).
   - Pinned section heading summarizes the cumulative token share of the pinned subset so users can gauge how much budget is locked.
 - **Conversation targeting**
-  - The interim webview always listens to `ILiveRequestEditorService.onDidChange`. The last-updated session automatically re-renders in the view.
-  - A conversation drop-down is optional in this phase; instead we surface the session id + chat location in metadata and rely on one-active-session behaviour. Future drawer work will introduce the picker.
+  - The interim webview always listens to `ILiveRequestEditorService.onDidChange` and `onDidChangeMetadata`; the last-updated session automatically re-renders in the view and keeps request/session/model metadata fresh in Auto-apply.
+  - A conversation drop-down is always available (never greyed out) and sorted by recency, with labels of the form `<location> · <debug name or intent> · …<sessionId tail>` so users can disambiguate concurrent panel/editor/terminal sessions.
 - **Advanced extras (opt-in)**
   - Some users need insight into the full HTTP payload (tool schemas, requestOptions, telemetry) that would otherwise clutter the default UI. We expose a configuration key `github.copilot.chat.promptInspector.extraSections` that accepts an array of identifiers (`requestOptions`, `telemetry`, `rawRequest`).
   - When non-empty, the inspector appends read-only panels after the metadata strip: formatted JSON for request options and raw request body (with copy buttons), plus a telemetry table showing intent ID, endpoint URL, timestamps, and parity diagnostics.

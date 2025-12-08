@@ -23,6 +23,7 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 		modelFamily: ctx.modelFamily,
 		requestOptions: ctx.requestOptions ? deepClone(ctx.requestOptions) : undefined,
 		createdAt: Date.now(),
+		lastUpdated: Date.now(),
 	};
 
 	return {

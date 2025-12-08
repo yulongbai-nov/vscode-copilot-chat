@@ -432,6 +432,7 @@ describe('LiveRequestEditorService interception', () => {
 		expect(followRequest.sections[0].overrideState?.scope).toBe('workspace');
 
 		const second = await createService(extensionContext);
+		await second.service.setMode('autoOverride');
 		const rehydratedInit = createServiceInit({ sessionId: 'rehydrated-session', requestId: 'req-rehydrated' });
 		second.service.prepareRequest(rehydratedInit);
 		const rehydratedKey: LiveRequestSessionKey = { sessionId: rehydratedInit.sessionId, location: rehydratedInit.location };
