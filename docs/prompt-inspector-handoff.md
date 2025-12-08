@@ -1,9 +1,10 @@
-  ## Prompt Inspector / Live Request Editor – Handoff (4 Dec 2025)
+  ## Prompt Inspector / Live Request Editor – Handoff (8 Dec 2025)
 
   ### Branch / Scope
-  - Branch: `feature/prompt-interception-mode`
-  - Focus: Prompt Inspector extras + chat-surface metadata (Tasks 5.5 & 9.x in `.kiro/specs/request-logger-prompt-
-  editor/tasks.md`)
+  - Branches:
+    - Core interception/metadata work: `feature/prompt-interception-mode` (merged)
+    - Sampling control guardrail: `feature/strip-sampling-5.1` (open PR #31)
+  - Focus: Prompt Inspector extras + chat-surface metadata (Tasks 5.5 & 9.x in `.kiro/specs/request-logger-prompt-editor/tasks.md`) and safe request-shaping for models that reject sampling params.
 
   ### Spec Source of Truth
   - `.kiro/specs/request-logger-prompt-editor/design.md` — captures the architecture for the Live Request Editor, metadata tree, and Auto Override workflows; update this first if we pivot on UX, data flow, or telemetry.
@@ -30,13 +31,15 @@
      - Conversation picker is always enabled and now labels sessions as `<location> · <debug name> · …<sessionId tail>` to disambiguate concurrent sessions. Request/session/model metadata is refreshed via `onDidChangeMetadata` (includes `lastUpdated`) so the header and metadata tree keep request IDs, models, and session IDs in sync during Auto-apply capture/apply.
   7. **Debug bubbles for interception/auto-apply**
      - When interception or Auto-apply is active, the chat response stream emits a single `<debug-note>` bubble per request indicating the mode, session id, request id, and timestamp; it is clearly marked as debug-only and not sent to the model. Tests filter these bubbles out of user-facing assertions.
+  8. **Sampling controls guardrail**
+     - Requests to models that reject sampling controls (o1/o1-mini and all `gpt-5.1*` variants, including codex/codex-max/mini) now have `temperature`, `top_p`, and `n` stripped before send to avoid `invalid_request_body` errors. Metadata/request-options nodes omit these fields for such models. Tests cover 5/5.1 families.
 
   ### Verification
-  - `npm run lint`
+  - `npm run lint` (targeted for sampling change) — pass
   - `npm run typecheck`
-  - `npm run compile`
-  - `npx vitest run src/extension/prompt/vscode-node/test/liveRequestEditorProvider.spec.ts src/extension/prompt/
-  vscode-node/test/liveRequestMetadataProvider.spec.ts src/extension/prompt/node/test/liveRequestEditorService.spec.ts src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts`
+  - `npm run compile` — pass
+  - `npx vitest run src/extension/prompt/vscode-node/test/liveRequestEditorProvider.spec.ts src/extension/prompt/vscode-node/test/liveRequestMetadataProvider.spec.ts src/extension/prompt/node/test/liveRequestEditorService.spec.ts src/extension/prompt/node/test/defaultIntentRequestHandler.spec.ts`
+  - `npx vitest run src/platform/endpoint/test/node/chatEndpoint.spec.ts` — covers sampling stripping logic for o1 and gpt-5/5.1 families
   - `npm run test:unit` (pass; historical flaky suites noted in handoff doc)
   - `npm run simulate -- --scenario-test debugCommandToConfig.stest.ts --grep "node test"`
   - Manual sanity:
@@ -49,6 +52,7 @@
   - Task 6.x/7.x: performance, accessibility, and testing backlog.
   - Task 9.x follow-ups: once VS Code exposes drawer APIs, embed the metadata/usage UI directly inside the native chat surface and expose richer cues (model budgets, quota warnings).
   - Task 10.x: **done** (mode selector, scope persistence, diff tooling, telemetry).
+  - Sampling guardrail: land PR #31 (`feature/strip-sampling-5.1`) after review.
   - Longer-term: migrate drafted webview UX to the native chat drawer when first-party APIs allow.
 
   ### Gotchas / Notes
