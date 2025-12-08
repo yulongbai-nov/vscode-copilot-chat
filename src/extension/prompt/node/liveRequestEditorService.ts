@@ -1158,7 +1158,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		for (const section of request.sections.slice(0, limit)) {
 			const original = section.originalContent ?? '';
 			const current = section.deleted ? '' : (section.content ?? '');
-			const deleted = !!section.deleted && !!original.length;
+			const deleted = !!section.deleted;
 			if (!deleted && original === current) {
 				continue;
 			}

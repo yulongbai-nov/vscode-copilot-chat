@@ -515,6 +515,29 @@ describe('LiveRequestEditorService interception', () => {
 		expect(rehydratedRequest.sections[0].overrideState?.scope).toBe('workspace');
 	});
 
+	test('auto override persists deletions across turns', async () => {
+		const { service } = await createService();
+		await service.setMode('autoOverride');
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		const decisionPromise = service.waitForInterceptionApproval(key, CancellationToken.None);
+		const request = service.getRequest(key)!;
+		const userSection = request.sections[1];
+
+		service.deleteSection(key, userSection.id);
+		service.resolvePendingIntercept(key, 'resume');
+		await decisionPromise;
+
+		const followUp = createServiceInit({ sessionId: init.sessionId, requestId: 'req-follow', renderResult: createRenderResultWithMessages(['system', 'user-again']) });
+		service.prepareRequest(followUp);
+		const nextRequest = service.getRequest(key)!;
+
+		expect(nextRequest.sections[1].deleted).toBe(true);
+		expect(nextRequest.sections[1].overrideState?.scope).toBe('session');
+		expect(nextRequest.messages).toHaveLength(1);
+	});
+
 	test('applyTraceData updates tokens and trace path metadata', async () => {
 		const { service } = await createService();
 		const renderResult: RenderPromptResult = {
