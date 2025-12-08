@@ -9,7 +9,7 @@ import { Event } from '../../../util/vs/base/common/event';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey } from './liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot } from './liveRequestEditorModel';
 
 export type { LiveRequestEditorMode, LiveRequestOverrideScope } from './liveRequestEditorModel';
 
@@ -99,6 +99,7 @@ export interface ILiveRequestEditorService {
 	resetRequest(key: LiveRequestSessionKey): EditableChatRequest | undefined;
 
 	updateTokenCounts(key: LiveRequestSessionKey, tokenCounts: { total?: number; perMessage?: number[] }): EditableChatRequest | undefined;
+	applyTraceData(key: LiveRequestSessionKey, trace: LiveRequestTraceSnapshot): EditableChatRequest | undefined;
 
 	updateRequestOptions(key: LiveRequestSessionKey, requestOptions: OptionalChatRequestParams | undefined): EditableChatRequest | undefined;
 

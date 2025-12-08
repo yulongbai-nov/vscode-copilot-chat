@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { MetadataMap, Raw, RenderPromptResult } from '@vscode/prompt-tsx';
+import { ITraceData, MetadataMap, Raw, RenderPromptResult } from '@vscode/prompt-tsx';
 import type * as vscode from 'vscode';
 import { IResponsePart } from '../../../platform/chat/common/chatMLFetcher';
 import { ChatLocation, ChatResponse } from '../../../platform/chat/common/commonTypes';
@@ -156,6 +156,7 @@ export abstract class TelemetryData {
 export interface IBuildPromptResult extends RenderPromptResult {
 
 	telemetryData?: readonly TelemetryData[];
+	traceData?: ITraceData;
 }
 
 

@@ -44,7 +44,7 @@ import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
 import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
 	let accessor: ITestingServicesAccessor;
@@ -249,6 +249,7 @@ suite('defaultIntentRequestHandler', () => {
 		restoreSection(): EditableChatRequest | undefined { return undefined; }
 		resetRequest(): EditableChatRequest | undefined { return undefined; }
 		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
+		applyTraceData(): EditableChatRequest | undefined { return undefined; }
 
 		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
 			const messages = this._messages.length ? this._messages : fallback;

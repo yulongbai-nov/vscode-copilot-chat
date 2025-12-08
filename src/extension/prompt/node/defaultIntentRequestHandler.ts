@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import { Raw } from '@vscode/prompt-tsx';
+import { ITraceData, Raw } from '@vscode/prompt-tsx';
 import type { ChatRequest, ChatResponseReferencePart, ChatResponseStream, ChatResult, LanguageModelToolInformation, Progress } from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
@@ -54,6 +54,7 @@ import { ChatTelemetry, ChatTelemetryBuilder } from './chatParticipantTelemetry'
 import { IntentInvocationMetadata } from './conversation';
 import { IDocumentContext } from './documentContext';
 import { IBuildPromptResult, IIntent, IIntentInvocation, IResponseProcessor } from './intents';
+import { buildTraceSnapshotFromHtmlTrace } from './liveRequestBuilder';
 import { ConversationalBaseTelemetryData, createTelemetryWithId, sendModelMessageTelemetry } from './telemetry';
 
 export interface IDefaultIntentRequestHandlerOptions {
@@ -772,6 +773,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			model: this.options.invocation.endpoint.model,
 			isSubagent: !!this.options.request.isSubagent,
 			renderResult: buildPromptResult,
+			traceData: buildPromptResult.traceData,
 			requestId,
 			intentId: this.options.intent?.id,
 			endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
@@ -780,7 +782,12 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			maxPromptTokens: this.options.invocation.endpoint.modelMaxPromptTokens,
 		};
 		this._liveRequestEditorService.prepareRequest(init);
-		void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
+		if (buildPromptResult.traceData) {
+			void this.populateTraceData(sessionKey, buildPromptResult.traceData, buildPromptResult.messages)
+				.then(applied => applied ? undefined : this.populateTokenCounts(sessionKey, buildPromptResult.messages));
+		} else {
+			void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
+		}
 		const result = this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
 		if (result.error) {
 			throw new LiveRequestEditorValidationError(result.error);
@@ -799,6 +806,20 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			this._liveRequestEditorService.updateTokenCounts(key, { total, perMessage });
 		} catch (error) {
 			this._logService.debug(`Live Request Editor: failed to compute token counts: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	private async populateTraceData(key: LiveRequestSessionKey, traceData: ITraceData, messages: Raw.ChatMessage[]): Promise<boolean> {
+		try {
+			const snapshot = await buildTraceSnapshotFromHtmlTrace(messages, traceData);
+			if (!snapshot) {
+				return false;
+			}
+			this._liveRequestEditorService.applyTraceData(key, snapshot);
+			return snapshot.perMessage.every(entry => typeof entry.tokenCount === 'number');
+		} catch (error) {
+			this._logService.debug(`Live Request Editor: failed to apply HTML tracer data: ${error instanceof Error ? error.message : String(error)}`);
+			return false;
 		}
 	}
 

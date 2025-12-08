@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Raw, RenderPromptResult } from '@vscode/prompt-tsx';
+import { ITraceData, Raw, RenderPromptResult } from '@vscode/prompt-tsx';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 
@@ -91,6 +91,7 @@ export interface EditableChatRequestInit {
 	debugName: string;
 	model: string;
 	renderResult: RenderPromptResult;
+	traceData?: ITraceData;
 	requestId: string;
 	intentId?: string;
 	endpointUrl?: string;
@@ -102,6 +103,16 @@ export interface EditableChatRequestInit {
 		total?: number;
 		perMessage?: number[];
 	};
+}
+
+export interface LiveRequestTraceSection {
+	readonly tokenCount?: number;
+	readonly tracePath?: string[];
+}
+
+export interface LiveRequestTraceSnapshot {
+	readonly totalTokens?: number;
+	readonly perMessage: LiveRequestTraceSection[];
 }
 
 export type LiveRequestValidationErrorCode = 'empty';

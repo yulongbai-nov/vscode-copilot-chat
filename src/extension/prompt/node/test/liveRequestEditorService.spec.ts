@@ -16,7 +16,7 @@ import { MockExtensionContext } from '../../../../platform/test/node/extensionCo
 import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyingTelemetryService';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { Emitter } from '../../../../util/vs/base/common/event';
-import { EditableChatRequestInit, LiveRequestSessionKey } from '../../common/liveRequestEditorModel';
+import { EditableChatRequestInit, LiveRequestSessionKey, LiveRequestTraceSnapshot } from '../../common/liveRequestEditorModel';
 import { LiveRequestMetadataEvent } from '../../common/liveRequestEditorService';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { nullRenderPromptResult } from '../intents';
@@ -438,6 +438,41 @@ describe('LiveRequestEditorService interception', () => {
 		const rehydratedRequest = second.service.getRequest(rehydratedKey)!;
 		expect(rehydratedRequest.sections[0].content).toBe('workspace override');
 		expect(rehydratedRequest.sections[0].overrideState?.scope).toBe('workspace');
+	});
+
+	test('applyTraceData updates tokens and trace path metadata', async () => {
+		const { service } = await createService();
+		const renderResult: RenderPromptResult = {
+			...nullRenderPromptResult(),
+			messages: [
+				{
+					role: Raw.ChatRole.System,
+					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'first' }]
+				},
+				{
+					role: Raw.ChatRole.User,
+					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'second' }]
+				}
+			]
+		};
+		const init = createServiceInit({ renderResult });
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+
+		const snapshot: LiveRequestTraceSnapshot = {
+			totalTokens: 42,
+			perMessage: [
+				{ tokenCount: 10, tracePath: ['root', 'system'] },
+				{ tokenCount: 32, tracePath: ['root', 'user'] }
+			]
+		};
+
+		const updated = service.applyTraceData(key, snapshot)!;
+		expect(updated.metadata.tokenCount).toBe(42);
+		expect(updated.sections[0].tokenCount).toBe(10);
+		expect(updated.sections[0].hoverTitle).toBe('root › system');
+		expect(updated.sections[0].metadata?.tracePath).toEqual(['root', 'system']);
+		expect(updated.sections[1].tokenCount).toBe(32);
 	});
 
 });

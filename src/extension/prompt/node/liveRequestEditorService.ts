@@ -16,7 +16,7 @@ import { ConfigKey, IConfigurationService } from '../../../platform/configuratio
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestValidationError } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
 import { AutoOverrideDiffEntry, AutoOverrideSummary, ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
 import { createSectionsFromMessages, buildEditableChatRequest } from './liveRequestBuilder';
 
@@ -261,6 +261,44 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 					}
 				}
 			}
+			return didChange;
+		}, false);
+	}
+
+	applyTraceData(key: LiveRequestSessionKey, trace: LiveRequestTraceSnapshot): EditableChatRequest | undefined {
+		return this.withRequest(key, request => {
+			let didChange = false;
+			if (typeof trace.totalTokens === 'number' && trace.totalTokens >= 0) {
+				request.metadata.tokenCount = trace.totalTokens;
+				didChange = true;
+			}
+
+			for (let index = 0; index < trace.perMessage.length; index++) {
+				const section = request.sections.find(candidate => candidate.sourceMessageIndex === index);
+				if (!section) {
+					continue;
+				}
+				const snapshot = trace.perMessage[index];
+				if (typeof snapshot.tokenCount === 'number' && snapshot.tokenCount >= 0 && section.tokenCount !== snapshot.tokenCount) {
+					section.tokenCount = snapshot.tokenCount;
+					didChange = true;
+				}
+				if (snapshot.tracePath?.length) {
+					const sanitizedPath = snapshot.tracePath.filter(segment => typeof segment === 'string' && segment.length);
+					const hoverTitle = sanitizedPath.join(' › ');
+					if (hoverTitle && hoverTitle !== section.hoverTitle) {
+						section.hoverTitle = hoverTitle;
+						didChange = true;
+					}
+					const metadata = section.metadata ? { ...section.metadata } : {};
+					if (!equals(metadata.tracePath, sanitizedPath)) {
+						metadata.tracePath = sanitizedPath;
+						section.metadata = metadata;
+						didChange = true;
+					}
+				}
+			}
+
 			return didChange;
 		}, false);
 	}
