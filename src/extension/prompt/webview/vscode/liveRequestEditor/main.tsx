@@ -38,6 +38,10 @@ type LiveRequestValidationErrorCode = 'empty' | string;
 
 type SectionActionIconType = 'edit' | 'close' | 'delete' | 'pin' | 'pinFilled' | 'restore';
 
+type LiveRequestEditorMode = 'off' | 'interceptOnce' | 'interceptAlways' | 'autoOverride';
+
+type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
+
 interface EditableChatRequestMetadata {
 	requestId?: string;
 	tokenCount?: number;
@@ -45,6 +49,26 @@ interface EditableChatRequestMetadata {
 	maxResponseTokens?: number;
 	createdAt?: number;
 	lastValidationErrorCode?: LiveRequestValidationErrorCode;
+	intentId?: string;
+	endpointUrl?: string;
+	modelFamily?: string;
+	requestOptions?: Record<string, unknown>;
+	lastLoggedAt?: number;
+	lastLoggedHash?: number;
+	lastLoggedMatches?: boolean;
+	lastLoggedMismatchReason?: string;
+}
+
+interface RawChatMessageContentPart {
+	type: string;
+	text?: string;
+	[key: string]: unknown;
+}
+
+interface RawChatMessage {
+	role?: string;
+	content?: RawChatMessageContentPart[];
+	[key: string]: unknown;
 }
 
 interface EditableChatRequest {
@@ -54,8 +78,21 @@ interface EditableChatRequest {
 	debugName?: string;
 	model: string;
 	isDirty: boolean;
+	messages?: RawChatMessage[];
 	sections: LiveRequestSection[];
 	metadata?: EditableChatRequestMetadata;
+}
+
+interface ToolInvocationMetadata {
+	id?: string;
+	name?: string;
+	arguments?: string;
+}
+
+interface LiveRequestSectionMetadata {
+	name?: string;
+	toolCallId?: string;
+	toolInvocation?: ToolInvocationMetadata;
 }
 
 interface LiveRequestSection {
@@ -68,6 +105,12 @@ interface LiveRequestSection {
 	editable?: boolean;
 	deletable?: boolean;
 	deleted?: boolean;
+	metadata?: LiveRequestSectionMetadata;
+	overrideState?: {
+		scope: string;
+		slotIndex: number;
+		updatedAt: number;
+	};
 }
 
 interface StateUpdateMessage {
@@ -76,6 +119,7 @@ interface StateUpdateMessage {
 	interception?: InterceptionState;
 	sessions?: SessionSummary[];
 	activeSessionKey?: string;
+	extraSections?: InspectorExtraSection[];
 }
 
 interface SessionSummary {
@@ -100,6 +144,16 @@ interface InterceptionState {
 		debugName: string;
 		nonce: number;
 	};
+	mode?: LiveRequestEditorMode;
+	paused?: boolean;
+	autoOverride?: {
+		enabled: boolean;
+		capturing: boolean;
+		hasOverrides: boolean;
+		scope?: string;
+		previewLimit: number;
+		lastUpdated?: number;
+	};
 }
 
 const vscode = acquireVsCodeApi<PersistedState>();
@@ -116,6 +170,29 @@ function formatNumber(value?: number): string {
 		return '—';
 	}
 	return Number(value).toLocaleString();
+}
+
+const EXTRA_SECTION_VALUES: InspectorExtraSection[] = ['requestOptions', 'telemetry', 'rawRequest'];
+
+const MODE_OPTIONS: Array<{ label: string; mode: LiveRequestEditorMode; description: string }> = [
+	{ label: 'Off', mode: 'off', description: 'Send requests immediately.' },
+	{ label: 'Interception', mode: 'interceptAlways', description: 'Pause every request before sending.' },
+	{ label: 'Auto', mode: 'autoOverride', description: 'Capture prefixes once, then auto-apply overrides.' }
+];
+
+function isInspectorExtraSection(value: unknown): value is InspectorExtraSection {
+	return typeof value === 'string' && EXTRA_SECTION_VALUES.includes(value as InspectorExtraSection);
+}
+
+function formatTimestamp(value?: number): string {
+	if (!value) {
+		return '—';
+	}
+	try {
+		return new Date(value).toLocaleString();
+	} catch {
+		return String(value);
+	}
 }
 
 function computeTotalTokens(request?: EditableChatRequest): number {
@@ -176,6 +253,17 @@ function describeValidationError(code: LiveRequestValidationErrorCode | undefine
 			return 'Prompt cannot be sent because all sections were removed. Reset the prompt to restore the original content.';
 		default:
 			return 'Prompt cannot be sent due to an invalid edit. Reset the prompt to continue.';
+	}
+}
+
+function describeOverrideScope(scope?: string): string {
+	switch (scope) {
+		case 'workspace':
+			return 'Workspace scope';
+		case 'global':
+			return 'Global scope';
+		default:
+			return 'Session scope';
 	}
 }
 
@@ -248,6 +336,7 @@ interface SectionCardProps {
 	onSaveEdit: (sectionId: string, content: string) => void;
 	onDelete: (sectionId: string) => void;
 	onRestore: (sectionId: string) => void;
+	onShowDiff?: (section: LiveRequestSection) => void;
 	draggingRef: React.MutableRefObject<string | null>;
 	onReorderPinned: (sourceId: string, targetId: string, placeAfter: boolean) => void;
 }
@@ -265,6 +354,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	onSaveEdit,
 	onDelete,
 	onRestore,
+	onShowDiff,
 	draggingRef,
 	onReorderPinned,
 }) => {
@@ -282,6 +372,22 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		}
 		return DOMPurify.sanitize(markdown.render(section.content ?? ''));
 	}, [section.content]);
+	const toolInvocation = React.useMemo(() => {
+		if (section.kind !== 'tool') {
+			return undefined;
+		}
+		if (section.metadata?.toolInvocation) {
+			return section.metadata.toolInvocation;
+		}
+		if (section.metadata?.name || section.metadata?.toolCallId) {
+			return {
+				id: typeof section.metadata.toolCallId === 'string' ? section.metadata.toolCallId : undefined,
+				name: typeof section.metadata.name === 'string' ? section.metadata.name : undefined
+			};
+		}
+		return undefined;
+	}, [section]);
+	const toolArguments = toolInvocation?.arguments?.trim();
 
 	React.useEffect(() => {
 		if (isEditing) {
@@ -411,6 +517,16 @@ const SectionCard: React.FC<SectionCardProps> = ({
 							<span className="codicon codicon-pin" aria-hidden="true" />
 						</span>
 					)}
+					{section.overrideState ? (
+						<button
+							type="button"
+							className="override-chip"
+							onClick={handleToolbarAction(() => onShowDiff?.(section))}
+							title="Show override diff"
+						>
+							Override · Show diff
+						</button>
+					) : null}
 				</div>
 				<div className="section-toolbar" role="toolbar" aria-label={`Actions for ${section.label}`}>
 					{deleted ? (
@@ -467,6 +583,27 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				id={sectionBodyId}
 				aria-hidden={collapsed && !isEditing}
 			>
+				{toolInvocation ? (
+					<div className="section-tool-details">
+						<div className="tool-name-row">
+							<span className="tool-label">Tool</span>
+							<span className="tool-name">{toolInvocation.name ?? 'Unknown tool'}</span>
+							{toolInvocation.id ? (
+								<span className="tool-id">#{toolInvocation.id}</span>
+							) : null}
+						</div>
+						{toolArguments ? (
+							<div className="tool-args">
+								<div className="tool-label">Arguments</div>
+								<pre className="tool-args-block">
+									<code>{toolArguments}</code>
+								</pre>
+							</div>
+						) : (
+							<div className="tool-args tool-args-empty">No invocation arguments provided.</div>
+						)}
+					</div>
+				) : null}
 				{isEditing ? (
 					<>
 						<textarea
@@ -497,9 +634,118 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	);
 };
 
+interface CollapsiblePanelProps {
+	id: string;
+	title: string;
+	description?: string;
+	actions?: React.ReactNode;
+	isCollapsed: boolean;
+	onToggleCollapse: (id: string) => void;
+	children: React.ReactNode;
+}
+
+const CollapsiblePanel: React.FC<CollapsiblePanelProps> = ({
+	id,
+	title,
+	description,
+	actions,
+	isCollapsed,
+	onToggleCollapse,
+	children
+}) => {
+	const bodyId = React.useMemo(() => `extra-panel-${id}`, [id]);
+	const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			onToggleCollapse(id);
+		}
+	}, [id, onToggleCollapse]);
+
+	return (
+		<div className={['section', 'section-kind-extra', isCollapsed ? 'collapsed' : ''].filter(Boolean).join(' ')} data-section-id={id}>
+			<div
+				className="section-header"
+				role="button"
+				tabIndex={0}
+				aria-expanded={!isCollapsed}
+				aria-controls={bodyId}
+				onClick={() => onToggleCollapse(id)}
+				onKeyDown={handleKeyDown}
+			>
+				<div className="section-title">
+					<span className="icon" aria-hidden="true">{isCollapsed ? '\u25B6' : '\u25BC'}</span>
+					<span className="section-kind extra">extra</span>
+					<span className="section-label">{title}</span>
+				</div>
+				{actions ? (
+					<div className="section-toolbar section-toolbar-static" role="toolbar" aria-label={`${title} actions`}>
+						{actions}
+					</div>
+				) : null}
+			</div>
+			<div className="section-content" id={bodyId} aria-hidden={isCollapsed}>
+				{description ? <p className="inspector-panel-description">{description}</p> : null}
+				{children}
+			</div>
+		</div>
+	);
+};
+
+interface TelemetryPanelProps {
+	panelId: string;
+	metadata?: EditableChatRequestMetadata;
+	isCollapsed: boolean;
+	onToggleCollapse: (panelId: string) => void;
+}
+
+const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ panelId, metadata, isCollapsed, onToggleCollapse }) => {
+	const rows = React.useMemo(() => ([
+		{ label: 'Request ID', value: metadata?.requestId },
+		{ label: 'Intent', value: metadata?.intentId },
+		{ label: 'Endpoint', value: metadata?.endpointUrl },
+		{ label: 'Model Family', value: metadata?.modelFamily },
+		{ label: 'Created', value: formatTimestamp(metadata?.createdAt) },
+		{ label: 'Last Logged', value: formatTimestamp(metadata?.lastLoggedAt) },
+		{
+			label: 'Parity',
+			value: metadata?.lastLoggedMatches === undefined
+				? undefined
+				: metadata.lastLoggedMatches
+					? 'Matches logged request'
+					: `Mismatch (${metadata.lastLoggedMismatchReason ?? 'unspecified'})`
+		}
+	]), [metadata]);
+
+	const hasData = rows.some(row => row.value && row.value !== '—');
+
+	return (
+		<CollapsiblePanel
+			id={panelId}
+			title="Telemetry"
+			description="Metadata recorded for parity checks and endpoint diagnostics."
+			isCollapsed={isCollapsed}
+			onToggleCollapse={onToggleCollapse}
+		>
+			{hasData ? (
+				<dl className="telemetry-grid">
+					{rows.map(row => (
+						<React.Fragment key={row.label}>
+							<dt>{row.label}</dt>
+							<dd>{row.value ?? '—'}</dd>
+						</React.Fragment>
+					))}
+				</dl>
+			) : (
+				<div className="inspector-panel-empty">No telemetry metadata available.</div>
+			)}
+		</CollapsiblePanel>
+	);
+};
+
 const App: React.FC = () => {
 	const [request, setRequest] = React.useState<EditableChatRequest | undefined>(undefined);
 	const [interception, setInterception] = React.useState<InterceptionState | undefined>(undefined);
+	const [extraSections, setExtraSections] = React.useState<InspectorExtraSection[]>([]);
 	const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
@@ -514,6 +760,10 @@ const App: React.FC = () => {
 	});
 	const draggingSectionRef = React.useRef<string | null>(null);
 	const [bannerPulse, setBannerPulse] = React.useState(false);
+	const mode = interception?.mode ?? 'off';
+	const autoOverride = interception?.autoOverride;
+	const captureActive = mode === 'autoOverride' && autoOverride?.capturing;
+	const previewLimit = autoOverride?.previewLimit ?? 3;
 
 	const updatePersistedState = React.useCallback((updater: (prev: PersistedState) => PersistedState) => {
 		setPersistedState(prev => {
@@ -584,6 +834,8 @@ const App: React.FC = () => {
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
 				setActiveSessionKey(event.data.activeSessionKey);
+				const extras = (event.data.extraSections ?? []).filter(isInspectorExtraSection);
+				setExtraSections(extras);
 			}
 		};
 		window.addEventListener('message', handler);
@@ -661,12 +913,50 @@ const App: React.FC = () => {
 		return [...pinnedSections, ...rest];
 	}, [request, pinnedIdSet, pinnedOrder]);
 
-	const pinnedSections = orderedSections.filter(section => pinnedIdSet.has(section.id));
-	const unpinnedSections = orderedSections.filter(section => !pinnedIdSet.has(section.id));
+	const visibleSections = React.useMemo(() => {
+		if (!orderedSections.length) {
+			return [];
+		}
+		return captureActive ? orderedSections.slice(0, previewLimit) : orderedSections;
+	}, [orderedSections, captureActive, previewLimit]);
 
+	const hiddenSectionCount = captureActive ? Math.max(orderedSections.length - visibleSections.length, 0) : 0;
+	const pinnedSections = visibleSections.filter(section => pinnedIdSet.has(section.id));
+	const unpinnedSections = visibleSections.filter(section => !pinnedIdSet.has(section.id));
 	const sendMessage = React.useCallback((type: string, data?: Record<string, unknown>) => {
 		vscode.postMessage({ type, ...(data ?? {}) });
 	}, []);
+
+	const handleModeSelect = React.useCallback((nextMode: LiveRequestEditorMode) => {
+		sendMessage('setMode', { mode: nextMode });
+	}, [sendMessage]);
+
+	const handleBeginAutoOverrideCapture = React.useCallback(() => {
+		sendMessage('beginAutoOverrideCapture');
+	}, [sendMessage]);
+
+	const handleClearOverrides = React.useCallback(() => {
+		sendMessage('clearAutoOverrides', { scope: autoOverride?.scope });
+	}, [sendMessage, autoOverride?.scope]);
+
+	const handleChangeScope = React.useCallback(() => {
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.configureAutoOverrideScope' });
+	}, [sendMessage]);
+
+	const handleConfigurePreviewLimit = React.useCallback(() => {
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.configureAutoOverridePreviewLimit' });
+	}, [sendMessage]);
+
+	const handleShowDiff = React.useCallback((section: LiveRequestSection) => {
+		if (!section.overrideState) {
+			return;
+		}
+		sendMessage('showOverrideDiff', {
+			slotIndex: section.overrideState.slotIndex,
+			scope: section.overrideState.scope,
+			sessionKey: activeSessionKey
+		});
+	}, [sendMessage, activeSessionKey]);
 
 	const handleTogglePinned = React.useCallback((sectionId: string) => {
 		if (!activeSessionKey) {
@@ -785,6 +1075,24 @@ const App: React.FC = () => {
 						)}
 					</div>
 					<div className="header-actions">
+						<div className="mode-toggle" role="group" aria-label="Prompt Inspector mode">
+							{MODE_OPTIONS.map(option => {
+								const disabled = option.mode === 'autoOverride' && !autoOverride?.enabled;
+								const active = mode === option.mode;
+								return (
+									<button
+										key={option.mode}
+										type="button"
+										className={`mode-toggle-button${active ? ' active' : ''}`}
+										onClick={() => handleModeSelect(option.mode)}
+										disabled={disabled}
+										title={option.description}
+									>
+										{option.label}
+									</button>
+								);
+							})}
+						</div>
 						{request.isDirty && (
 							<>
 								<span className="dirty-badge" role="status" aria-live="polite">Modified</span>
@@ -838,6 +1146,55 @@ const App: React.FC = () => {
 					) : null}
 				</div>
 
+				{request && extraSections.length > 0 ? (
+					<div className="inspector-extra-panels">
+						{extraSections.includes('telemetry') ? (
+							<TelemetryPanel
+								panelId="extra:telemetry"
+								metadata={request.metadata}
+								isCollapsed={collapsedIdSet.has('extra:telemetry')}
+								onToggleCollapse={handleToggleCollapse}
+							/>
+						) : null}
+					</div>
+				) : null}
+
+				{mode === 'autoOverride' && autoOverride?.enabled ? (
+					<div className={`auto-override-banner ${captureActive ? 'capturing' : autoOverride.hasOverrides ? 'active' : 'idle'}`}>
+						<div className="auto-override-text">
+							<strong>Auto Override · {describeOverrideScope(autoOverride.scope)}</strong>
+							<span>
+								{captureActive
+									? `Capturing the first ${previewLimit} sections.`
+									: autoOverride.hasOverrides ? 'Overrides are applied automatically.' : 'No overrides saved yet.'}
+							</span>
+						</div>
+						<div className="auto-override-actions">
+							<vscode-button appearance="secondary" onClick={() => handleModeSelect('interceptOnce')}>
+								Pause next turn
+							</vscode-button>
+							<vscode-button appearance="secondary" onClick={handleBeginAutoOverrideCapture}>
+								Edit overrides
+							</vscode-button>
+							<vscode-button appearance="secondary" onClick={handleClearOverrides}>
+								Clear overrides
+							</vscode-button>
+							<vscode-button appearance="secondary" onClick={handleChangeScope}>
+								Change scope
+							</vscode-button>
+							<vscode-button appearance="secondary" onClick={handleConfigurePreviewLimit}>
+								Preview limit
+							</vscode-button>
+						</div>
+					</div>
+				) : null}
+
+				{captureActive && hiddenSectionCount > 0 ? (
+					<div className="auto-override-note">
+						Only the first {previewLimit} sections are shown while editing overrides.
+					</div>
+				) : null}
+
 				{validationMessage ? (
 					<div className="validation-banner" role="alert" aria-live="polite">
 						<div className="validation-text">
@@ -853,31 +1210,23 @@ const App: React.FC = () => {
 					</div>
 				) : null}
 
-				{interception?.enabled ? (
-					<div className={[
-						'interception-banner',
-						interception.pending ? 'pending' : 'ready',
-						bannerPulse ? 'pulse' : ''
-					].join(' ')}>
+				{interception?.pending ? (
+					<div className={`interception-banner pending ${bannerPulse ? 'pulse' : ''}`}>
 						<div className="interception-text">
-							{interception.pending
-								? (
-									<>
-										Request intercepted{interception.pending.debugName ? ` - ${interception.pending.debugName}` : ''}. Review updates and choose an action.
-									</>
-								)
-								: 'Prompt Interception Mode is on. Requests pause here before sending.'}
+							Request intercepted{interception.pending.debugName ? ` - ${interception.pending.debugName}` : ''}. Review updates and choose an action.
 						</div>
-						{interception.pending ? (
-							<div className="interception-actions">
-								<vscode-button appearance="primary" onClick={handleResumeSend}>
-									Resume Send
-								</vscode-button>
-								<vscode-button appearance="secondary" onClick={handleCancelIntercept}>
-									Cancel
-								</vscode-button>
-							</div>
-						) : null}
+						<div className="interception-actions">
+							<vscode-button appearance="primary" onClick={handleResumeSend}>
+								Resume Send
+							</vscode-button>
+							<vscode-button appearance="secondary" onClick={handleCancelIntercept}>
+								Cancel
+							</vscode-button>
+						</div>
+					</div>
+				) : (interception?.enabled && mode !== 'autoOverride') ? (
+					<div className="interception-banner ready">
+						<div className="interception-text">Prompt Interception Mode is on. Requests pause here before sending.</div>
 					</div>
 				) : null}
 
@@ -904,6 +1253,7 @@ const App: React.FC = () => {
 								onSaveEdit={handleSaveEdit}
 								onDelete={handleDelete}
 								onRestore={handleRestore}
+								onShowDiff={handleShowDiff}
 								draggingRef={draggingSectionRef}
 								onReorderPinned={handleReorderPinned}
 							/>
@@ -928,6 +1278,7 @@ const App: React.FC = () => {
 						onSaveEdit={handleSaveEdit}
 						onDelete={handleDelete}
 						onRestore={handleRestore}
+						onShowDiff={handleShowDiff}
 						draggingRef={draggingSectionRef}
 						onReorderPinned={handleReorderPinned}
 					/>

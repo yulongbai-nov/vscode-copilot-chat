@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Raw } from '@vscode/prompt-tsx';
+import { ITraceData, ITokenizer, Raw, toMode } from '@vscode/prompt-tsx';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { deepClone } from '../../../util/vs/base/common/objects';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
-import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestSection, LiveRequestSectionKind } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestSection, LiveRequestSectionKind, LiveRequestTraceSnapshot } from '../common/liveRequestEditorModel';
 
 export function buildEditableChatRequest(ctx: EditableChatRequestInit): EditableChatRequest {
 	const clonedMessages = ctx.renderResult.messages.map(message => deepClone(message));
@@ -31,6 +31,7 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 		location: ctx.location,
 		debugName: ctx.debugName,
 		model: ctx.model,
+		isSubagent: ctx.isSubagent,
 		messages: clonedMessages,
 		sections,
 		originalMessages,
@@ -40,7 +41,9 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 }
 
 export function createSectionsFromMessages(messages: Raw.ChatMessage[], tokenCounts?: number[]): LiveRequestSection[] {
-	return messages.map((message, index) => createSection(message, index, tokenCounts?.[index]));
+	const sections = messages.map((message, index) => createSection(message, index, tokenCounts?.[index]));
+	annotateToolSections(messages, sections);
+	return sections;
 }
 
 function createSection(message: Raw.ChatMessage, index: number, tokenCount?: number): LiveRequestSection {
@@ -67,6 +70,7 @@ function createSection(message: Raw.ChatMessage, index: number, tokenCount?: num
 		label,
 		message,
 		content,
+		originalContent: content,
 		collapsed: kind === 'history',
 		editable,
 		deletable,
@@ -74,6 +78,188 @@ function createSection(message: Raw.ChatMessage, index: number, tokenCount?: num
 		metadata,
 		tokenCount,
 	};
+}
+
+function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequestSection[]): void {
+	const toolCallMap = new Map<string, { id: string; name?: string; args?: string }>();
+	for (const message of messages) {
+		if (message.role === Raw.ChatRole.Assistant && 'toolCalls' in message && message.toolCalls?.length) {
+			for (const call of message.toolCalls) {
+				const name = call.function?.name;
+				const args = extractToolArguments(call.function?.arguments);
+				toolCallMap.set(call.id, { id: call.id, name, args });
+			}
+		}
+	}
+
+	for (const section of sections) {
+		if (section.kind !== 'tool') {
+			continue;
+		}
+		const metadata = section.metadata ?? {};
+		const toolCallId = typeof metadata.toolCallId === 'string' ? metadata.toolCallId : undefined;
+		const lookup = toolCallId ? toolCallMap.get(toolCallId) : undefined;
+		if (!lookup && !metadata.name) {
+			continue;
+		}
+		metadata.toolInvocation = {
+			id: lookup?.id ?? toolCallId,
+			name: lookup?.name ?? (typeof metadata.name === 'string' ? metadata.name : undefined),
+			arguments: lookup?.args
+		};
+		section.metadata = metadata;
+	}
+}
+
+interface TraceMessageDetails {
+	raw: Raw.ChatMessage;
+	tracePath?: string[];
+	tokenCount?: number;
+}
+
+export async function buildTraceSnapshotFromHtmlTrace(messages: Raw.ChatMessage[], traceData?: ITraceData): Promise<LiveRequestTraceSnapshot | undefined> {
+	if (!traceData?.renderedTree?.container || !traceData.tokenizer) {
+		return undefined;
+	}
+	const tracedMessages = await collectTraceMessages(traceData);
+	if (!tracedMessages.length) {
+		return undefined;
+	}
+	const collapsed = await collapseSystemTraceMessages(tracedMessages, traceData.tokenizer);
+	if (collapsed.length !== messages.length) {
+		return undefined;
+	}
+	for (let i = 0; i < messages.length; i++) {
+		if (messages[i].role !== collapsed[i].raw.role) {
+			return undefined;
+		}
+	}
+
+	const perMessage = collapsed.map(msg => ({
+		tokenCount: msg.tokenCount,
+		tracePath: msg.tracePath?.length ? msg.tracePath : undefined
+	}));
+	const totalTokens = collapsed.every(msg => typeof msg.tokenCount === 'number')
+		? collapsed.reduce((sum, msg) => sum + (msg.tokenCount ?? 0), 0)
+		: undefined;
+
+	return { totalTokens, perMessage };
+}
+
+async function collectTraceMessages(traceData: ITraceData): Promise<TraceMessageDetails[]> {
+	const result: TraceMessageDetails[] = [];
+	const walk = async (node: unknown, path: string[]): Promise<void> => {
+		if (!node || typeof node !== 'object') {
+			return;
+		}
+		const name = (node as { name?: unknown }).name;
+		const nextPath = appendName(path, name);
+		const toChatMessage = (node as { toChatMessage?: unknown }).toChatMessage;
+		if (typeof toChatMessage === 'function') {
+			const raw = deepClone((toChatMessage as () => Raw.ChatMessage)());
+			const tokenCount = await countTokensWithFallback(traceData.tokenizer, raw);
+			result.push({ raw, tracePath: nextPath, tokenCount });
+			return;
+		}
+		const children = (node as { children?: unknown }).children;
+		if (Array.isArray(children)) {
+			for (const child of children) {
+				await walk(child, nextPath);
+			}
+		}
+	};
+	await walk(traceData.renderedTree.container, []);
+	return result;
+}
+
+async function collapseSystemTraceMessages(messages: TraceMessageDetails[], tokenizer: ITokenizer): Promise<TraceMessageDetails[]> {
+	const collapsed: TraceMessageDetails[] = [];
+	for (const message of messages) {
+		const previous = collapsed.at(-1);
+		if (previous && previous.raw.role === Raw.ChatRole.System && message.raw.role === Raw.ChatRole.System) {
+			mergeSystemMessages(previous.raw, message.raw);
+			previous.tracePath = mergePaths(previous.tracePath, message.tracePath);
+			previous.tokenCount = await countTokensWithFallback(tokenizer, previous.raw);
+		} else {
+			collapsed.push({
+				raw: deepClone(message.raw),
+				tracePath: message.tracePath ? [...message.tracePath] : undefined,
+				tokenCount: await countTokensWithFallback(tokenizer, message.raw)
+			});
+		}
+	}
+	return collapsed;
+}
+
+function appendName(path: string[], candidate: unknown): string[] {
+	if (typeof candidate === 'string' && candidate.trim().length) {
+		return [...path, candidate];
+	}
+	return path;
+}
+
+function mergePaths(first?: string[], second?: string[]): string[] | undefined {
+	if (!first?.length) {
+		return second?.length ? [...second] : undefined;
+	}
+	if (!second?.length) {
+		return [...first];
+	}
+	const merged = [...first];
+	for (const entry of second) {
+		if (!merged.includes(entry)) {
+			merged.push(entry);
+		}
+	}
+	return merged;
+}
+
+function mergeSystemMessages(target: Raw.ChatMessage, addition: Raw.ChatMessage): void {
+	const lastContent = target.content.at(-1);
+	const nextContent = addition.content.at(0);
+	if (lastContent && nextContent && lastContent.type === Raw.ChatCompletionContentPartKind.Text && nextContent.type === Raw.ChatCompletionContentPartKind.Text) {
+		lastContent.text = lastContent.text.trimEnd() + '\n' + nextContent.text;
+		target.content = target.content.concat(addition.content.slice(1));
+	} else {
+		target.content = target.content.concat([{ type: Raw.ChatCompletionContentPartKind.Text, text: '\n' }], addition.content);
+	}
+}
+
+async function countTokensWithFallback(tokenizer: ITokenizer, message: Raw.ChatMessage): Promise<number | undefined> {
+	try {
+		return await tokenizer.countMessageTokens(toMode(tokenizer.mode, message));
+	} catch {
+		try {
+			return await tokenizer.countMessageTokens(message as unknown as Parameters<ITokenizer['countMessageTokens']>[0]);
+		} catch {
+			return undefined;
+		}
+	}
+}
+
+function extractToolArguments(raw: unknown): string | undefined {
+	if (raw === undefined || raw === null) {
+		return undefined;
+	}
+	if (typeof raw === 'string') {
+		const trimmed = raw.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+		try {
+			return JSON.stringify(JSON.parse(trimmed), null, 2);
+		} catch {
+			return trimmed;
+		}
+	}
+	if (typeof raw === 'object') {
+		try {
+			return JSON.stringify(raw, null, 2);
+		} catch {
+			return JSON.stringify(raw);
+		}
+	}
+	return String(raw);
 }
 
 function inferKind(message: Raw.ChatMessage): LiveRequestSectionKind {
