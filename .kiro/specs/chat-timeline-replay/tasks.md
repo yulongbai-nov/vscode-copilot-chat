@@ -31,7 +31,16 @@
 
 - [ ] 4. Tests and validation
   - Unit tests for projection (ordering, deletions/edits, tool labeling, trimming warnings).
-  - Integration tests for command → session creation → rendering.
-  - UX validation for collapsed sections, labels, and navigation back to Live Request Editor.
-  - If persistence is enabled, add tests for replay metadata save/load and version replacement (Option A).
-  - Tests for version/hash scoping: stale updates ignored; parity warning surfaced on hash mismatch; stale/cleared handling on context change/cancel.
+  - Unit tests for version/hash scoping: stale updates ignored; replay_replace replaces prior fork; restore_previous buffer (if enabled) works.
+  - Integration tests:
+    - Command availability when LRE is enabled/disabled or no editable request exists (shows “Nothing to replay”).
+    - Replay render: collapsed system/history/tool, edited chips, section cap (30) with “(N more)” affordance, warning on trimmed prompt.
+    - “Start chatting from this replay”: enables input, shifts focus with breadcrumb/toast, sends with trimmed edited history + new message; original session untouched.
+    - Interception ON: paused send → edit → replay → resume send uses trimmed edited payload; fork path still works.
+    - Auto-override ON: prefix edits auto-applied; replay remains manual audit/fork; no change to send semantics.
+    - Interception/override OFF in replay by default: edit/delete disabled; auto-scroll to latest section.
+    - Context change/cancel: replay marked stale; input disabled; cleared message shown.
+    - Replay replace on same turn: prior replay replaced; optional restore buffer tested.
+  - UX validation for collapsed sections, labels, navigation back to LRE, and stale state messaging.
+  - Telemetry tests: emits source session/turn, section counts, hashes; parity warning emitted on hash mismatch.
+  - If persistence is enabled: tests for replay metadata save/load (parent IDs, hash, version) and replace behavior (Option A).
