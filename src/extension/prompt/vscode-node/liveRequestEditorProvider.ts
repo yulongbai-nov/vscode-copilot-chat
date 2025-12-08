@@ -7,8 +7,8 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestReplaySnapshot, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestReplayEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 
 type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
@@ -57,9 +57,11 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 	private _view?: vscode.WebviewView;
 	private _currentRequest?: EditableChatRequest;
+	private _currentReplay?: LiveRequestReplaySnapshot;
 	private _interceptionState: PromptInterceptionState;
 	private _lastInterceptNonce?: number;
 	private readonly _requests = new Map<string, EditableChatRequest>();
+	private readonly _replays = new Map<string, LiveRequestReplaySnapshot>();
 	private _activeSessionKey?: string;
 	private _focusCommandAvailable?: boolean;
 	private _extraSections: InspectorExtraSection[];
@@ -88,6 +90,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}));
 		this._register(this._liveRequestEditorService.onDidChangeMetadata(event => {
 			this._handleMetadataChanged(event);
+		}));
+		this._register(this._liveRequestEditorService.onDidChangeReplay(event => {
+			this._handleReplayChanged(event);
 		}));
 		this._register(vscode.workspace.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('github.copilot.chat.promptInspector.extraSections')) {
@@ -337,13 +342,16 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		const compositeKey = this._toCompositeKey(key.sessionId, key.location);
 		const wasActive = this._activeSessionKey === compositeKey;
 		this._requests.delete(compositeKey);
+		this._replays.delete(compositeKey);
 		if (wasActive) {
 			const nextKey = this._requests.keys().next().value as string | undefined;
 			this._activeSessionKey = nextKey;
 			this._currentRequest = nextKey ? this._requests.get(nextKey) : undefined;
+			this._currentReplay = nextKey ? this._replays.get(nextKey) : undefined;
 		} else if (!this._requests.size) {
 			this._activeSessionKey = undefined;
 			this._currentRequest = undefined;
+			this._currentReplay = undefined;
 		}
 		this._postStateToWebview();
 	}
@@ -359,6 +367,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}
 		this._activeSessionKey = compositeKey;
 		this._currentRequest = next;
+		this._currentReplay = this._replays.get(compositeKey);
 		this._postStateToWebview();
 	}
 
@@ -403,6 +412,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._view.webview.postMessage({
 			type: 'stateUpdate',
 			request: this._currentRequest,
+			replay: this._currentReplay,
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
 			activeSessionKey: this._activeSessionKey,
@@ -443,6 +453,24 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}
 		if (this._activeSessionKey === compositeKey) {
 			this._currentRequest = request;
+		}
+		this._postStateToWebview();
+	}
+
+	private _handleReplayChanged(event: LiveRequestReplayEvent): void {
+		const replay = event.replay;
+		const compositeKey = this._toCompositeKey(event.key.sessionId, event.key.location);
+		if (!replay) {
+			this._replays.delete(compositeKey);
+		} else {
+			this._replays.set(compositeKey, replay);
+			if (this._activeSessionKey === compositeKey) {
+				this._currentReplay = replay;
+			}
+		}
+		if (!this._activeSessionKey) {
+			this._activeSessionKey = compositeKey;
+			this._currentReplay = replay;
 		}
 		this._postStateToWebview();
 	}

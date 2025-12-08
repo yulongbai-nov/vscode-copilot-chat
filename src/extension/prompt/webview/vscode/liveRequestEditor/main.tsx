@@ -116,6 +116,7 @@ interface LiveRequestSection {
 interface StateUpdateMessage {
 	type: 'stateUpdate';
 	request?: EditableChatRequest;
+	replay?: LiveRequestReplaySnapshot;
 	interception?: InterceptionState;
 	sessions?: SessionSummary[];
 	activeSessionKey?: string;
@@ -763,6 +764,7 @@ const App: React.FC = () => {
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
 	const [replayEnabled, setReplayEnabled] = React.useState(false);
+	const [replay, setReplay] = React.useState<LiveRequestReplaySnapshot | undefined>(undefined);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -846,6 +848,7 @@ const App: React.FC = () => {
 		const handler = (event: MessageEvent<StateUpdateMessage>) => {
 			if (event.data?.type === 'stateUpdate') {
 				setRequest(event.data.request);
+				setReplay(event.data.replay);
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
 				setActiveSessionKey(event.data.activeSessionKey);
@@ -1075,6 +1078,7 @@ const App: React.FC = () => {
 	const promptText = request.metadata?.maxPromptTokens
 		? `${formatNumber(totalTokens)} / ${formatNumber(request.metadata.maxPromptTokens)} (${formatPercent(totalTokens, request.metadata.maxPromptTokens)})`
 		: `${formatNumber(totalTokens)} tokens`;
+	const replaySummary = replay?.projection;
 
 	return (
 		<>
@@ -1185,6 +1189,41 @@ const App: React.FC = () => {
 						<div className="status-meter">
 							<div className="status-meter-fill" style={{ width: formatPercent(totalTokens, request.metadata.maxPromptTokens) }} />
 							<span className="status-meter-label">{formatPercent(totalTokens, request.metadata.maxPromptTokens)}</span>
+						</div>
+					) : null}
+					{replay ? (
+						<div className="metadata-row replay-row">
+							<div className="metadata-item">
+								<span className="metadata-label">Replay:</span>
+								<span>{replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state}</span>
+							</div>
+							{replaySummary ? (
+								<>
+									<div className="metadata-item">
+										<span className="metadata-label">Sections:</span>
+										<span>{replaySummary.totalSections}{replaySummary.overflowCount > 0 ? ` (+${replaySummary.overflowCount} more)` : ''}</span>
+									</div>
+									<div className="metadata-item">
+										<span className="metadata-label">Edited:</span>
+										<span>{replaySummary.editedCount} · Deleted: {replaySummary.deletedCount}</span>
+									</div>
+									{replaySummary.trimmed ? (
+										<div className="metadata-item">
+											<span className="metadata-label">Trimmed:</span>
+											<span>Yes</span>
+										</div>
+									) : null}
+								</>
+							) : (
+								<div className="metadata-item">
+									<span className="metadata-label">Replay:</span>
+									<span>None</span>
+								</div>
+							)}
+							<div className="metadata-item">
+								<span className="metadata-label">Updated:</span>
+								<span>{replay.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
+							</div>
 						</div>
 					) : null}
 				</div>
@@ -1342,4 +1381,32 @@ const App: React.FC = () => {
 const rootElement = document.getElementById('app');
 if (rootElement) {
 	ReactDOM.render(<App />, rootElement);
+}
+interface LiveRequestReplaySection {
+	id: string;
+	kind: string;
+	label: string;
+	content: string;
+	edited: boolean;
+	sourceMessageIndex: number;
+}
+
+interface LiveRequestReplayProjection {
+	sections: LiveRequestReplaySection[];
+	totalSections: number;
+	overflowCount: number;
+	editedCount: number;
+	deletedCount: number;
+	trimmed?: boolean;
+}
+
+interface LiveRequestReplaySnapshot {
+	state: string;
+	version: number;
+	updatedAt: number;
+	projection?: LiveRequestReplayProjection;
+	parentTurnId?: string;
+	debugName?: string;
+	model?: string;
+	staleReason?: string;
 }
