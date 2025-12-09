@@ -770,6 +770,7 @@ const App: React.FC = () => {
 	const [replay, setReplay] = React.useState<LiveRequestReplaySnapshot | undefined>(undefined);
 	const [replayView, setReplayView] = React.useState<'payload' | 'projection'>('payload');
 	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
+	const [lastReplayUri, setLastReplayUri] = React.useState<string | undefined>(undefined);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -856,7 +857,11 @@ const App: React.FC = () => {
 			if (event.data?.type === 'stateUpdate') {
 				setRequest(event.data.request);
 				setReplay(event.data.replay);
-				setReplayUri(event.data.replayUri);
+				const incomingReplayUri = event.data.replayUri ?? (event.data.replay ? toReplayUri(event.data.replay) : undefined);
+				setReplayUri(incomingReplayUri);
+				if (incomingReplayUri) {
+					setLastReplayUri(incomingReplayUri);
+				}
 				if (event.data.replayView === 'payload' || event.data.replayView === 'projection') {
 					setReplayView(event.data.replayView);
 				}
@@ -1070,14 +1075,15 @@ const App: React.FC = () => {
 	}, [sendMessage]);
 
 	const handleToggleReplayView = React.useCallback(() => {
-		if (!replayUri) {
+		const targetUri = replayUri ?? lastReplayUri;
+		if (!targetUri) {
 			return;
 		}
 		// Ensure the replay chat is visible before toggling view for immediate feedback.
-		sendMessage('command', { command: 'github.copilot.liveRequestEditor.startReplayChat', args: [replayUri] });
-		sendMessage('command', { command: 'github.copilot.liveRequestEditor.toggleReplayView', args: [replayUri] });
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.startReplayChat', args: [targetUri] });
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.toggleReplayView', args: [targetUri] });
 		setReplayView(current => (current === 'payload' ? 'projection' : 'payload'));
-	}, [replayUri, sendMessage]);
+	}, [lastReplayUri, replayUri, sendMessage]);
 
 	const handleResumeSend = React.useCallback(() => {
 		sendMessage('resumeSend');
@@ -1274,7 +1280,7 @@ const App: React.FC = () => {
 									appearance="secondary"
 									onClick={handleToggleReplayView}
 									title="Switch between native payload view and projection debug view"
-									disabled={!replayUri}
+									disabled={!replayUri && !lastReplayUri}
 								>
 									{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}
 								</vscode-button>
@@ -1471,4 +1477,9 @@ interface LiveRequestReplaySnapshot {
 	debugName?: string;
 	model?: string;
 	staleReason?: string;
+}
+
+function toReplayUri(snapshot: LiveRequestReplaySnapshot): string {
+	const composite = `${snapshot.key.sessionId}::${snapshot.key.location}::${snapshot.key.requestId}`;
+	return `copilot-live-replay:/${composite}?${snapshot.version ?? 0}`;
 }
