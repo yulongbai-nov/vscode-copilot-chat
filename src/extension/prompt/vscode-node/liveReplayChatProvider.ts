@@ -49,6 +49,9 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		for (const key of keys) {
 			this._sessionsByResource.set(key, state);
 		}
+		const composite = this._decodeComposite(resource);
+		const compositeKey = `${resource.scheme}:${composite}`;
+		this._sessionsByKey.set(compositeKey, state);
 		this._logService.info(`[LiveReplay] cached state for keys=${keys.join('|')}`);
 	}
 
@@ -193,7 +196,6 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			return;
 		}
 		const forkResource = resource.with({ scheme: REPLAY_FORK_SCHEME });
-		const composite = this._compositeKey(state.snapshot.key.sessionId, state.snapshot.key.location, state.snapshot.key.requestId);
 		let forkState = this._sessionsByResource.get(forkResource.toString());
 		if (!forkState) {
 			forkState = {
@@ -211,8 +213,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		if (updated) {
 			forkState.snapshot = updated;
 		}
-		this._sessionsByResource.set(forkResource.toString(), forkState);
-		this._sessionsByKey.set(composite, forkState);
+		this._rememberState(forkState);
 		try {
 			await vscode.commands.executeCommand('vscode.open', forkResource);
 			await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
@@ -378,7 +379,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		if (!composite) {
 			return undefined;
 		}
-		const fromKey = this._sessionsByKey.get(composite);
+		const fromKey = this._sessionsByKey.get(composite) ?? this._sessionsByKey.get(`${resource.scheme}:${composite}`);
 		if (fromKey) {
 			this._logService.info(`[LiveReplay] _getState recovered from composite ${composite}`);
 			this._sessionsByResource.set(resource.toString(), fromKey);
