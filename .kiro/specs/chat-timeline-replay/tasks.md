@@ -14,12 +14,12 @@
   - Attach version/hash metadata to replay builds; emit with session scoping for consumers.
 
 - [ ] 2. Session creation and rendering
-  - Status: Service-level state machine + Option A (replace + restore buffer) implemented; command wired; chat provider renders replay sections with actions and gates input behind “Start chatting from this replay,” then routes sends through the default participant with replay payload history. Needs polish on bubble styling, collapse/edited chips, stale/replacement affordances, and parity warnings.
+  - Status: Service-level state machine + Option A (replace + restore buffer) implemented; command wired; chat provider renders replay sections with actions and gates input behind “Start chatting from this replay.” Needs polish on bubble styling, collapse/edited chips, stale/replacement affordances, and parity warnings. Continuation currently uses the replay participant; must hand off live chatting to the default Copilot participant.
   - Add replay session manager keyed to source session/location with optional `replay_parent_turn_id`.
   - Enforce Option A: one replay fork per source turn; replace prior fork if re-replayed.
   - Expose command `github.copilot.liveRequestEditor.replayPrompt` and surface in Live Request Editor UI.
   - Render bubbles via chat participant/content provider without model invocation.
-  - When continuing from replay, switch focus to the replay session and show breadcrumb/toast. Keep interception/auto-override off by default in the fork unless explicitly enabled.
+  - When continuing from replay, create/focus a default Copilot chat session seeded with the replay payload/history (attachments/model picker intact), switch focus there with breadcrumb/toast, and keep the replay view projection-only/read-only. Keep interception/auto-override off by default in the fork unless explicitly enabled.
   - Cap rendered sections (e.g., 30) and provide “View replayed prompt (N more)” affordance.
   - In replay view with interception off, disable edit/delete controls and auto-scroll to the latest section.
   - Handle stale/cleared states (canceled send/context switch) by marking replay stale; ignore stale updates (version/hash guard).

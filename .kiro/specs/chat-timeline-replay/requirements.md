@@ -34,6 +34,13 @@ Provide an opt-in chat timeline that mirrors the edited prompt (system/history/t
 - THE System SHALL avoid invoking the model; replay is display-only unless explicitly extended in future scope.
 - WHEN chat history persistence (SQLite) is enabled, THEN the System SHOULD persist replay linkage/metadata so the fork survives reloads; otherwise the replay MAY remain in-memory only.
 
+### R5: Continuation via Default Copilot Participant
+- WHEN the user selects “Start chatting from this replay,” THEN the System SHALL create or focus a normal Copilot chat session (default participant) seeded with the replay payload/history, not the replay participant.
+- THE System SHALL route subsequent turns/responses through the default Copilot participant (with model picker/attachments intact), keeping the replay view projection-only and read-only.
+- WHEN the continuation chat is opened, THEN the System SHALL surface a breadcrumb/toast indicating it is a forked replay and keep the original session untouched.
+- THE replay tab MAY show a “preview” badge, but the live continuation chat SHALL not; live chat uses the default provider.
+- IF the replay payload cannot be seeded into the default session, THEN the System SHALL surface an error and avoid sending with an incomplete history.
+
 ### R5: Telemetry and Errors
 - THE System SHALL emit telemetry on replay invocation with source sessionId/requestId and counts of total/edited/deleted sections.
 - WHEN replay content cannot be built (e.g., mapping failure), THEN the System SHALL show an error message and avoid creating a replay session.
