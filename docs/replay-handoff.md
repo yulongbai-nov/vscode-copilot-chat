@@ -12,6 +12,9 @@ Branch: `feature/replay-ui-integration` (code + docs in tree)
 - Refresh behavior: replay resource URI includes `?version=…` so replays rebuild per edit; caching covers encoded/decoded URIs and hydrates from service; sample replay debug command works.
 - Logging: `[LiveReplay]` logs for caching keys, content requests, state hits/hydration/misses; warns when settings persistence fails (interception flag).
 - Gaps / TODO: telemetry events for replay invoke/parity not wired; SQLite persistence/Graphiti ingestion not yet implemented; parity UI not surfaced; interception/auto-override still off by default in replay.
+- Known issues:
+  - Replay toggle can stay disabled if the webview misses the replay URI in state; we now derive a fallback URI, but the provider should always send it.
+  - “Start chatting from this replay” currently keeps the replay participant for responses. Goal: fork to a normal Copilot chat session seeded with the replay payload so replies come from the default participant (no projection interleave).
 
 ## Next Tasks (parallel-friendly)
 1) **Telemetry + parity surfacing**
@@ -22,6 +25,10 @@ Branch: `feature/replay-ui-integration` (code + docs in tree)
 3) **UX polish**
    - Add trimmed/overflow banners as persistent affordances; focus toast/breadcrumb when enabling input; optional “restore previous replay” command.
    - Ensure interception/auto-override toggles are visually disabled in replay when off.
+4) **Native participant handoff for “Start chatting from this replay”**
+   - On start, fork/create a default Copilot chat session seeded with replay payload history (roles preserved, tool calls/results marked as already executed) and switch focus there; keep the replay tab projection-only.
+   - Preserve attachments/model picker by using the default participant; avoid replay participant interleave in live responses.
+   - Keep replay session read-only; replay view can be closed or left as a reference.
 
 ## Ready State / Defaults
 - Replay off by default; entry is read-only until “Start chatting from this replay.”
