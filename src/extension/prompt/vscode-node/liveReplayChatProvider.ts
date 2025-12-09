@@ -214,6 +214,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const key = this._compositeKey(state.snapshot.key.sessionId, state.snapshot.key.location, state.snapshot.key.requestId);
 		this._sessionsByKey.set(key, state);
 		this._logService.info(`[LiveReplay] toggled view to ${state.view} for ${resource.toString()}`);
+		void vscode.commands.executeCommand('vscode.open', resource);
 		this._onDidChangeChatSessionItems.fire();
 	}
 

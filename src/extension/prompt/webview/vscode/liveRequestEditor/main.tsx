@@ -1058,6 +1058,8 @@ const App: React.FC = () => {
 		if (!replayUri) {
 			return;
 		}
+		// Ensure the replay chat is (re)opened before toggling view for immediate feedback.
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.replayPrompt' });
 		sendMessage('command', { command: 'github.copilot.liveRequestEditor.toggleReplayView', args: [replayUri] });
 		setReplayView(current => (current === 'payload' ? 'projection' : 'payload'));
 	}, [replayUri, sendMessage]);
