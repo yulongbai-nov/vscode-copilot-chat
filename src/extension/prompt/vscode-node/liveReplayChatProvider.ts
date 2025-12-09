@@ -14,6 +14,7 @@ import { IInstantiationService } from '../../../util/vs/platform/instantiation/c
 import { ChatParticipantRequestHandler } from '../node/chatParticipantRequestHandler';
 import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 import { LiveRequestReplaySnapshot, LiveRequestReplaySection } from '../common/liveRequestEditorModel';
+import { buildReplayChatViewModel } from './liveReplayViewModel';
 
 const REPLAY_SCHEME = 'copilot-live-replay';
 const REPLAY_PARTICIPANT_ID = REPLAY_SCHEME;
@@ -205,23 +206,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			];
 		}
 
-		const summaryLines: string[] = [];
-		const editedSummary: string[] = [];
-		const stateLabel = snapshot.state === 'forkActive' ? 'input enabled' : snapshot.state;
-		const sourceLabel = snapshot.debugName ?? snapshot.key.sessionId;
-		summaryLines.push(`**Replay edited prompt** · ${sourceLabel}`);
-		summaryLines.push(`State: ${stateLabel}${snapshot.staleReason ? ` (${snapshot.staleReason})` : ''}`);
-		summaryLines.push(`Sections: ${projection.totalSections}${projection.overflowCount > 0 ? ` (+${projection.overflowCount} more)` : ''}`);
-		editedSummary.push(`Edited: ${projection.editedCount}`);
-		editedSummary.push(`Deleted: ${projection.deletedCount}`);
-		if (projection.trimmed) {
-			editedSummary.push('Trimmed: yes');
-		}
-		summaryLines.push(editedSummary.join(' · '));
-		if (snapshot.updatedAt) {
-			summaryLines.push(`Updated: ${new Date(snapshot.updatedAt).toLocaleTimeString()}`);
-		}
-
+		const viewModel = buildReplayChatViewModel(snapshot, section => this._formatSection(section));
+		const summaryLines = viewModel.summaryLines;
 		const summaryParts: Array<vscode.ChatResponseMarkdownPart | vscode.ChatResponseCommandButtonPart> = [
 			new vscode.ChatResponseMarkdownPart(summaryLines.join('\n'))
 		];
@@ -240,10 +226,10 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
 			new vscode.ChatRequestTurn2('Replay sections', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 		];
-		for (const section of projection.sections) {
+		for (const sectionMarkdown of viewModel.sectionMarkdown) {
 			history.push(
 				new vscode.ChatRequestTurn2(
-					`Section: ${section.label ?? section.kind}`,
+					'Section',
 					undefined,
 					[],
 					REPLAY_PARTICIPANT_ID,
@@ -251,14 +237,14 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 					undefined,
 					undefined
 				),
-				new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(this._formatSection(section))], {}, REPLAY_PARTICIPANT_ID)
+				new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(sectionMarkdown)], {}, REPLAY_PARTICIPANT_ID)
 			);
 		}
-		if (projection.overflowCount > 0) {
-			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(`…and ${projection.overflowCount} more sections not shown.`)], {}, REPLAY_PARTICIPANT_ID));
+		if (viewModel.overflowMessage) {
+			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(viewModel.overflowMessage)], {}, REPLAY_PARTICIPANT_ID));
 		}
-		if (projection.trimmed) {
-			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('⚠️ Prompt was trimmed; replay may omit truncated content.')], {}, REPLAY_PARTICIPANT_ID));
+		if (viewModel.trimmedMessage) {
+			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(viewModel.trimmedMessage)], {}, REPLAY_PARTICIPANT_ID));
 		}
 
 		return history;
