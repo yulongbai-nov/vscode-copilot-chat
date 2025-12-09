@@ -1226,12 +1226,12 @@ const App: React.FC = () => {
 							<span className="status-meter-label">{formatPercent(totalTokens, request.metadata.maxPromptTokens)}</span>
 						</div>
 					) : null}
-					{replay ? (
+					{replayEnabled ? (
 						<div className="metadata-row replay-row">
 							<div className="replay-row-main">
 								<div className="metadata-item">
 									<span className="metadata-label">Replay:</span>
-									<span>{replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state}</span>
+									<span>{replay ? (replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state) : 'Not built yet'}</span>
 								</div>
 								<div className="metadata-item">
 									<span className="metadata-label">View:</span>
@@ -1256,27 +1256,28 @@ const App: React.FC = () => {
 									</>
 								) : (
 									<div className="metadata-item">
-										<span className="metadata-label">Replay:</span>
-										<span>None</span>
+										<span className="metadata-label">Sections:</span>
+										<span>—</span>
 									</div>
 								)}
 								<div className="metadata-item">
 									<span className="metadata-label">Updated:</span>
-									<span>{replay.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
+									<span>{replay?.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
 								</div>
 							</div>
-							{replayUri ? (
-								<div className="replay-row-action">
-									{replayEnabled ? (
-										<vscode-button appearance="secondary" onClick={handleReplay}>
-											Replay edited prompt
-										</vscode-button>
-									) : null}
-									<vscode-button appearance="secondary" onClick={handleToggleReplayView} title="Switch between native payload view and projection debug view">
-										{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}
-									</vscode-button>
-								</div>
-							) : null}
+							<div className="replay-row-action">
+								<vscode-button appearance="secondary" onClick={handleReplay}>
+									Replay edited prompt
+								</vscode-button>
+								<vscode-button
+									appearance="secondary"
+									onClick={handleToggleReplayView}
+									title="Switch between native payload view and projection debug view"
+									disabled={!replayUri}
+								>
+									{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}
+								</vscode-button>
+							</div>
 						</div>
 					) : null}
 				</div>
