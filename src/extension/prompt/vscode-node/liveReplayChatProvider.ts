@@ -225,29 +225,10 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const history: Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2> = [
 			new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
-			new vscode.ChatRequestTurn2('Replay sections', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 		];
-		for (const section of projection.sections) {
-			const sectionMarkdown = this._formatSection(section);
-			history.push(
-				new vscode.ChatRequestTurn2(
-					this._buildSectionTitle(section),
-					undefined,
-					[],
-					REPLAY_PARTICIPANT_ID,
-					[],
-					undefined,
-					undefined
-				),
-				new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(sectionMarkdown)], {}, REPLAY_PARTICIPANT_ID)
-			);
-		}
-		if (viewModel.overflowMessage) {
-			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(viewModel.overflowMessage)], {}, REPLAY_PARTICIPANT_ID));
-		}
-		if (viewModel.trimmedMessage) {
-			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(viewModel.trimmedMessage)], {}, REPLAY_PARTICIPANT_ID));
-		}
+
+		// Render the actual prompt messages using the default Copilot participant to mirror native chat.
+		history.push(...this._buildPayloadHistory(snapshot, getChatParticipantIdFromName(defaultAgentName)));
 
 		return history;
 	}
@@ -291,11 +272,11 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		return `${preview}${preview.length < trimmed.length ? ' …' : ''}`;
 	}
 
-	private _buildPayloadHistory(snapshot: LiveRequestReplaySnapshot): (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[] {
+	private _buildPayloadHistory(snapshot: LiveRequestReplaySnapshot, participantOverride?: string): (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[] {
 		const history: (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[] = [];
 		for (const message of snapshot.payload ?? []) {
 			const text = this._renderMessageText(message).trim();
-			const participant = REPLAY_PARTICIPANT_ID;
+			const participant = participantOverride ?? REPLAY_PARTICIPANT_ID;
 			if (message.role === Raw.ChatRole.User) {
 				const requestTurn = new vscode.ChatRequestTurn2(text || '[user]', undefined, [], participant, [], undefined, undefined);
 				history.push(requestTurn);
