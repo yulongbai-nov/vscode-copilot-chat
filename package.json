@@ -1676,16 +1676,6 @@
 				"locations": [
 					"panel"
 				]
-			},
-			{
-				"id": "copilot-live-replay",
-				"name": "copilotLiveReplay",
-				"fullName": "Copilot Replay",
-				"description": "Displays replayed prompt sections from the Live Request Editor.",
-				"when": "config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
-				"locations": [
-					"panel"
-				]
 			}
 		],
 		"languageModelChatProviders": [
