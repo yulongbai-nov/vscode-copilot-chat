@@ -118,7 +118,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 				state = {
 					resource,
 					snapshot: this._buildSampleSnapshot(),
-					activated: false
+					activated: false,
+					view: 'payload'
 				};
 				this._sessionsByKey.set(composite, state);
 				this._rememberState(state);
@@ -387,7 +388,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const state: ReplaySessionState = {
 			resource,
 			snapshot,
-			activated: snapshot.state === 'forkActive'
+			activated: snapshot.state === 'forkActive',
+			view: 'payload'
 		};
 		this._sessionsByKey.set(this._compositeKey(sessionId, location, requestId), state);
 		this._rememberState(state);

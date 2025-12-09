@@ -22,6 +22,7 @@ declare global {
 		interface IntrinsicElements {
 			'vscode-button': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				appearance?: 'primary' | 'secondary';
+				disabled?: boolean;
 			};
 			'vscode-dropdown': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				value?: string;
@@ -1456,9 +1457,15 @@ interface LiveRequestReplayProjection {
 }
 
 interface LiveRequestReplaySnapshot {
+	key: {
+		sessionId: string;
+		location: number;
+		requestId: string;
+	};
 	state: string;
 	version: number;
 	updatedAt: number;
+	payload?: RawChatMessage[];
 	projection?: LiveRequestReplayProjection;
 	parentTurnId?: string;
 	debugName?: string;
