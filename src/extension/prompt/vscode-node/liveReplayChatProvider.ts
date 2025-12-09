@@ -226,10 +226,11 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
 			new vscode.ChatRequestTurn2('Replay sections', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 		];
-		for (const sectionMarkdown of viewModel.sectionMarkdown) {
+		for (const section of projection.sections) {
+			const sectionMarkdown = this._formatSection(section);
 			history.push(
 				new vscode.ChatRequestTurn2(
-					'Section',
+					this._buildSectionTitle(section),
 					undefined,
 					[],
 					REPLAY_PARTICIPANT_ID,
@@ -266,6 +267,15 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const header = `**${section.kind.toUpperCase()}**${section.label ? ` · ${section.label}` : ''}${chips.length ? ` · ${chips.join(' · ')}` : ''}`;
 		const body = this._summarizeContent(section.content, section.collapsed);
 		return `${header}\n${body || '_empty_'}`;
+	}
+
+	private _buildSectionTitle(section: LiveRequestReplaySection): string {
+		const chips: string[] = [];
+		if (section.edited) {
+			chips.push('edited');
+		}
+		const label = section.label || section.kind;
+		return chips.length ? `${label} (${chips.join(', ')})` : label;
 	}
 
 	private _summarizeContent(content: string | undefined, collapsed: boolean): string {
