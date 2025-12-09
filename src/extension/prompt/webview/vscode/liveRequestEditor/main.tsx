@@ -779,6 +779,8 @@ const App: React.FC = () => {
 		return stored;
 	});
 	const draggingSectionRef = React.useRef<string | null>(null);
+	const sectionsEndRef = React.useRef<HTMLDivElement | null>(null);
+	const prevSectionsLengthRef = React.useRef<number>(0);
 	const [bannerPulse, setBannerPulse] = React.useState(false);
 	const mode = interception?.mode ?? 'off';
 	const autoOverride = interception?.autoOverride;
@@ -883,6 +885,10 @@ const App: React.FC = () => {
 	}, [activeSessionKey]);
 
 	React.useEffect(() => {
+		prevSectionsLengthRef.current = request?.sections?.length ?? 0;
+	}, [request?.id]);
+
+	React.useEffect(() => {
 		if (!request?.sections) {
 			setEditingSectionId(null);
 			return;
@@ -917,6 +923,14 @@ const App: React.FC = () => {
 			}
 		}
 	}, [request, editingSectionId, activeSessionKey, setPinnedForActiveSession, setCollapsedForActiveSession, hasCollapsedState, updatePersistedState]);
+
+	React.useEffect(() => {
+		const length = request?.sections?.length ?? 0;
+		if (length > prevSectionsLengthRef.current && sectionsEndRef.current) {
+			sectionsEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+		}
+		prevSectionsLengthRef.current = length;
+	}, [request?.sections?.length]);
 
 	const validationErrorCode = request?.metadata?.lastValidationErrorCode;
 	const validationMessage = validationErrorCode ? describeValidationError(validationErrorCode) : undefined;
@@ -1139,11 +1153,6 @@ const App: React.FC = () => {
 						)}
 					</div>
 					<div className="header-actions">
-						{replayEnabled ? (
-							<vscode-button appearance="secondary" onClick={handleReplay}>
-								Replay edited prompt
-							</vscode-button>
-						) : null}
 						<div className="mode-toggle" role="group" aria-label="Prompt Inspector mode">
 							{MODE_OPTIONS.map(option => {
 								const disabled = option.mode === 'autoOverride' && !autoOverride?.enabled;
@@ -1258,6 +1267,11 @@ const App: React.FC = () => {
 							</div>
 							{replayUri ? (
 								<div className="replay-row-action">
+									{replayEnabled ? (
+										<vscode-button appearance="secondary" onClick={handleReplay}>
+											Replay edited prompt
+										</vscode-button>
+									) : null}
 									<vscode-button appearance="secondary" onClick={handleToggleReplayView} title="Switch between native payload view and projection debug view">
 										{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}
 									</vscode-button>
@@ -1412,6 +1426,7 @@ const App: React.FC = () => {
 						onReorderPinned={handleReorderPinned}
 					/>
 				))}
+				<div ref={sectionsEndRef} />
 			</div>
 		</>
 	);
