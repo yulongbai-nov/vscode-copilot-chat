@@ -43,13 +43,16 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		this._register(vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this));
 		this._register(vscode.commands.registerCommand(START_REPLAY_COMMAND, async (resource?: vscode.Uri) => {
 			if (!resource) {
+				this._logService.trace('LiveReplayChatProvider: startReplayChat invoked without resource');
 				return;
 			}
 			await this._activateReplay(resource);
 		}));
+		this._logService.trace('LiveReplayChatProvider: registered content and item providers');
 	}
 
 	showReplay(snapshot: LiveRequestReplaySnapshot): void {
+		this._logService.trace('LiveReplayChatProvider: showReplay');
 		const composite = this._compositeKey(snapshot.key.sessionId, snapshot.key.location, snapshot.key.requestId);
 		const existing = this._sessionsByKey.get(composite);
 		const resource = existing?.resource ?? vscode.Uri.from({
@@ -71,6 +74,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	async provideChatSessionContent(resource: vscode.Uri, _token: vscode.CancellationToken): Promise<vscode.ChatSession> {
 		const state = this._getState(resource);
 		if (!state) {
+			this._logService.warn(`LiveReplayChatProvider: provideChatSessionContent missing state for ${resource.toString()}`);
 			return {
 				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found.')], {}, 'copilot')],
 				requestHandler: undefined
@@ -80,6 +84,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const snapshot = state.snapshot;
 		const projection = snapshot.projection;
 		const ready = snapshot.state === 'ready' || snapshot.state === 'forkActive';
+		this._logService.trace('LiveReplayChatProvider: provideChatSessionContent');
 		const history = projection ? this._buildDisplayHistory(state) : [
 			new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, 'copilot')
 		];
@@ -98,6 +103,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			const forkId = state.resource.toString();
 			const updated = this._liveRequestEditorService.markReplayForkActive(state.snapshot.key, forkId);
 			if (updated) {
+				this._logService.trace('LiveReplayChatProvider: markReplayForkActive updated snapshot');
 				state.snapshot = updated;
 				this._sessionsByKey.set(composite, state);
 				this._sessionsByResource.set(state.resource.toString(), state);
