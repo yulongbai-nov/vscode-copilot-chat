@@ -76,11 +76,14 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	async provideChatSessionContent(resource: vscode.Uri, _token: vscode.CancellationToken): Promise<vscode.ChatSession> {
-		const state = this._getState(resource);
+		let state = this._getState(resource);
+		if (!state) {
+			state = this._hydrateFromService(resource);
+		}
 		if (!state) {
 			this._logService.warn(`[LiveReplay] provideChatSessionContent missing state for ${resource.toString()}`);
 			return {
-				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found.')], {}, 'copilot')],
+				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found. Rebuild from the Live Request Editor.')], {}, 'copilot')],
 				requestHandler: undefined
 			};
 		}
@@ -283,6 +286,30 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 
 	private _getState(resource: vscode.Uri): ReplaySessionState | undefined {
 		return this._sessionsByResource.get(resource.toString()) ?? this._sessionsByResource.get(resource.toString(true));
+	}
+
+	private _hydrateFromService(resource: vscode.Uri): ReplaySessionState | undefined {
+		const composite = resource.path?.replace(/^\//, '') ?? '';
+		const [sessionId, locationStr, requestId] = decodeURIComponent(composite).split('::');
+		if (!sessionId || !locationStr || !requestId) {
+			return undefined;
+		}
+		const location = Number(locationStr);
+		if (Number.isNaN(location)) {
+			return undefined;
+		}
+		const snapshot = this._liveRequestEditorService.getReplaySnapshot({ sessionId, location, requestId });
+		if (!snapshot) {
+			return undefined;
+		}
+		const state: ReplaySessionState = {
+			resource,
+			snapshot,
+			activated: snapshot.state === 'forkActive'
+		};
+		this._sessionsByKey.set(this._compositeKey(sessionId, location, requestId), state);
+		this._sessionsByResource.set(resource.toString(), state);
+		return state;
 	}
 
 	// ChatSessionItemProvider
