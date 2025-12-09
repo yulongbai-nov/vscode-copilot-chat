@@ -66,12 +66,13 @@ sequenceDiagram
     participant UI as Chat UI
     participant Prov as ChatSessionContentProvider
     participant Store as Stored Session/History
+    participant Handler as ChatParticipantRequestHandler
     UI->>Prov: open session (URI)
     Prov->>Store: load persisted turns (request/response, metadata)
     Store-->>Prov: turns array
-    Prov->>UI: ChatSession { history (default participant), requestHandler }
+    Prov-->>UI: ChatSession { history (default participant), requestHandler }
     UI->>Prov: user sends message
-    Prov->>Handler: ChatParticipantRequestHandler with history + new request
+    Prov->>Handler: invoke handler with history + request
     Handler-->>UI: streamed response (default participant)
 ```
 
@@ -82,11 +83,12 @@ sequenceDiagram
     participant Service as LiveRequestEditorService
     participant Replay as LiveReplayChatProvider
     participant UI as Chat UI
+    participant Handler as Copilot Handler
     LRE->>Service: buildReplayForRequest (payload, projection, version)
     Service-->>Replay: replay snapshot
-    Replay->>UI: open replay URI (?version=v)
+    Replay-->>UI: open replay URI (?version=v)
     UI->>Replay: provideChatSessionContent(resource)
-    Replay->>UI: summary bubble (replay participant) + payload turns (default Copilot participant); requestHandler gated until start
+    Replay-->>UI: summary (replay participant) + payload turns (default Copilot participant); handler disabled
     UI->>Replay: Start chatting from this replay
     Replay->>Handler: ChatParticipantRequestHandler(history=payload, participant=default Copilot)
     Handler-->>UI: response under default participant
