@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { defaultAgentName, getChatParticipantIdFromName } from '../../../platform/chat/common/chatAgents';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
-import { Event } from '../../../util/vs/base/common/event';
+import { Event, Emitter } from '../../../util/vs/base/common/event';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { ChatParticipantRequestHandler } from '../node/chatParticipantRequestHandler';
 import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
@@ -24,9 +24,13 @@ interface ReplaySessionState {
 	activated: boolean;
 }
 
-export class LiveReplayChatProvider extends Disposable implements vscode.ChatSessionContentProvider {
+export class LiveReplayChatProvider extends Disposable implements vscode.ChatSessionContentProvider, vscode.ChatSessionItemProvider {
 	private readonly _sessionsByKey = new Map<string, ReplaySessionState>();
 	private readonly _sessionsByResource = new Map<string, ReplaySessionState>();
+	private readonly _onDidChangeChatSessionItems = new Emitter<void>();
+	readonly onDidChangeChatSessionItems = this._onDidChangeChatSessionItems.event;
+	private readonly _onDidCommitChatSessionItem = new Emitter<{ original: vscode.ChatSessionItem; modified: vscode.ChatSessionItem }>();
+	readonly onDidCommitChatSessionItem = this._onDidCommitChatSessionItem.event;
 
 	constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
@@ -36,6 +40,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		super();
 		const participant = vscode.chat.createChatParticipant('github.copilot.liveReplay.projection', async () => ({}));
 		this._register(vscode.chat.registerChatSessionContentProvider(REPLAY_SCHEME, this, participant));
+		this._register(vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this));
 		this._register(vscode.commands.registerCommand(START_REPLAY_COMMAND, async (resource?: vscode.Uri) => {
 			if (!resource) {
 				return;
@@ -58,6 +63,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		};
 		this._sessionsByKey.set(composite, state);
 		this._sessionsByResource.set(resource.toString(), state);
+		this._onDidChangeChatSessionItems.fire();
 		void vscode.commands.executeCommand('vscode.open', resource);
 		void vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
 	}
@@ -134,6 +140,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		} catch (error) {
 			this._logService.error('LiveReplayChatProvider: failed to activate replay session', error);
 		}
+		this._onDidChangeChatSessionItems.fire();
 	}
 
 	private _buildDisplayHistory(state: ReplaySessionState): vscode.ChatResponseTurn2[] {
@@ -266,5 +273,41 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 
 	private _getState(resource: vscode.Uri): ReplaySessionState | undefined {
 		return this._sessionsByResource.get(resource.toString()) ?? this._sessionsByResource.get(resource.toString(true));
+	}
+
+	// ChatSessionItemProvider
+	provideChatSessionItems(_token: vscode.CancellationToken): vscode.ProviderResult<vscode.ChatSessionItem[]> {
+		const items: vscode.ChatSessionItem[] = [];
+		for (const state of this._sessionsByKey.values()) {
+			const label = this._buildLabel(state.snapshot);
+			const description = this._buildDescription(state.snapshot);
+			items.push({
+				resource: state.resource,
+				label,
+				description,
+				status: undefined,
+				tooltip: description,
+			});
+		}
+		return items;
+	}
+
+	private _buildLabel(snapshot: LiveRequestReplaySnapshot): string {
+		const sessionTail = snapshot.key.sessionId.slice(-6);
+		const turnTail = snapshot.key.requestId.slice(-4);
+		const name = snapshot.debugName ? snapshot.debugName : `session ${sessionTail}`;
+		return `Replay · ${name} · turn ${turnTail}`;
+	}
+
+	private _buildDescription(snapshot: LiveRequestReplaySnapshot): string {
+		const parts = [
+			`state: ${snapshot.state}`,
+			`sessions: ${snapshot.key.sessionId.slice(-6)}`,
+			`turn: ${snapshot.key.requestId.slice(-6)}`
+		];
+		if (snapshot.projection) {
+			parts.push(`sections: ${snapshot.projection.totalSections}`);
+		}
+		return parts.join(' · ');
 	}
 }
