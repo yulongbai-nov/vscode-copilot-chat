@@ -15,6 +15,7 @@ Branch: `feature/replay-ui-integration` (code + docs in tree)
 - Known issues:
   - Replay toggle can stay disabled if the webview misses the replay URI in state; we now derive a fallback URI, but the provider should always send it.
   - “Start chatting from this replay” currently keeps the replay participant for responses. Goal: fork to a normal Copilot chat session seeded with the replay payload so replies come from the default participant (no projection interleave).
+  - Replay tab shows “preview” because it’s a custom session type; live chatting should move to the normal Copilot view to drop the preview badge from user-visible chats.
 
 ## Next Tasks (parallel-friendly)
 1) **Telemetry + parity surfacing**
@@ -29,6 +30,7 @@ Branch: `feature/replay-ui-integration` (code + docs in tree)
    - On start, fork/create a default Copilot chat session seeded with replay payload history (roles preserved, tool calls/results marked as already executed) and switch focus there; keep the replay tab projection-only.
    - Preserve attachments/model picker by using the default participant; avoid replay participant interleave in live responses.
    - Keep replay session read-only; replay view can be closed or left as a reference.
+   - Remove “preview” experience from the live conversation by relying on the default Copilot chat provider for ongoing turns.
 
 ## Ready State / Defaults
 - Replay off by default; entry is read-only until “Start chatting from this replay.”
