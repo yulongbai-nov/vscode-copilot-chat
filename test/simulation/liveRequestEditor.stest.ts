@@ -44,11 +44,12 @@ ssuite({ title: 'Live Request Editor', location: 'context' }, () => {
 		const config = new InMemoryConfigurationService(defaults);
 		await config.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, true);
 		await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
+		const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
 		return new LiveRequestEditorService(config, new SpyingTelemetryService(), new (class {
 			public readonly _serviceBrand: undefined;
 			private readonly _onDidDispose = new Emitter<string>();
 			public readonly onDidDisposeChatSession = this._onDidDispose.event;
-		})(), new MockExtensionContext() as any);
+		})(), new MockExtensionContext() as any, log);
 	};
 
 	stest({ description: 'edits apply to send result' }, async (_services: TestingServiceCollection) => {

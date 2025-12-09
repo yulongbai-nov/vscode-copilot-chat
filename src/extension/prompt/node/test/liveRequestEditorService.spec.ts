@@ -70,7 +70,8 @@ async function createService(extensionContext: IVSCodeExtensionContext = new Moc
 	await config.setConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled, true);
 	const telemetry = new SpyingTelemetryService();
 	const chatSessions = new TestChatSessionService();
-	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext);
+	const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
+	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log);
 	return { service, telemetry, chatSessions, extensionContext, config };
 }
 

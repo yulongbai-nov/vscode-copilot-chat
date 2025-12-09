@@ -12,6 +12,7 @@ import { deepClone, equals } from '../../../util/vs/base/common/objects';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
+import { ILogService } from '../../../platform/log/common/logService';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
@@ -122,6 +123,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 		@IChatSessionService private readonly _chatSessionService: IChatSessionService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
+		@ILogService private readonly _logService: ILogService,
 	) {
 		super();
 		this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
@@ -1105,6 +1107,8 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this._modeUpdateFromConfig = true;
 		try {
 			await this._configurationService.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, enabled);
+		} catch (error) {
+			this._logService.warn(`Live Request Editor: failed to persist interception setting (${String(error)}). Continuing with in-memory mode only.`);
 		} finally {
 			this._modeUpdateFromConfig = false;
 		}

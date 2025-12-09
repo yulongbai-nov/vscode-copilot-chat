@@ -381,7 +381,8 @@ suite('defaultIntentRequestHandler', () => {
 		const telemetry = new SpyingTelemetryService();
 		const chatSessions = new IntegrationChatSessionService();
 		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
-		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext);
+		const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
+		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log);
 		return { service, chatSessions };
 	}
 
