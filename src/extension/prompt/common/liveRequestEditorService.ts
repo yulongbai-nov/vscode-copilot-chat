@@ -148,6 +148,12 @@ export interface ILiveRequestEditorService {
 	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
 	markReplayForkActive(key: LiveRequestReplayKey, forkSessionId: string): LiveRequestReplaySnapshot | undefined;
 	markReplayStale(key: LiveRequestSessionKey, requestId?: string, reason?: string): void;
+
+	/**
+	 * Returns the original (pre-edit) messages for a request key, if present.
+	 * The returned array is a deep clone and safe to mutate by callers.
+	 */
+	getOriginalRequestMessages(key: LiveRequestSessionKey): Raw.ChatMessage[] | undefined;
 }
 
 export interface PromptContextChangeEvent {

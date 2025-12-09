@@ -237,6 +237,14 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		return this._requests.get(this.toKey(key.sessionId, key.location));
 	}
 
+	getOriginalRequestMessages(key: LiveRequestSessionKey): Raw.ChatMessage[] | undefined {
+		const request = this.getRequest(key);
+		if (!request) {
+			return undefined;
+		}
+		return deepClone(request.originalMessages);
+	}
+
 	updateSectionContent(key: LiveRequestSessionKey, sectionId: string, newContent: string): EditableChatRequest | undefined {
 		return this.withRequest(key, request => {
 			const section = request.sections.find(s => s.id === sectionId);

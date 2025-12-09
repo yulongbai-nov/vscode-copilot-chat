@@ -48,6 +48,7 @@ describe('LiveReplayChatProvider', () => {
 		liveRequestEditorService = {
 			markReplayForkActive: vi.fn().mockImplementation((_key, _forkId) => undefined),
 			getReplaySnapshot: vi.fn().mockReturnValue(undefined),
+			getOriginalRequestMessages: vi.fn().mockReturnValue(undefined),
 		} as unknown as ILiveRequestEditorService;
 		provider = new LiveReplayChatProvider(instantiationService, liveRequestEditorService, {
 			_serviceBrand: undefined,
