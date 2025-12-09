@@ -45,7 +45,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		for (const key of keys) {
 			this._sessionsByResource.set(key, state);
 		}
-		this._logService.trace(`[LiveReplay] cached state for keys=${keys.join('|')}`);
+		this._logService.info(`[LiveReplay] cached state for keys=${keys.join('|')}`);
 	}
 
 	constructor(
@@ -96,6 +96,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	async provideChatSessionContent(resource: vscode.Uri, _token: vscode.CancellationToken): Promise<vscode.ChatSession> {
+		this._logService.info(`[LiveReplay] provideChatSessionContent resource=${resource.toString()} path=${resource.path}`);
 		let state = this._getState(resource);
 		if (!state) {
 			state = this._hydrateFromService(resource);
@@ -125,7 +126,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const projection = snapshot.projection;
 		const ready = snapshot.state === 'ready' || snapshot.state === 'forkActive';
 		const handlerEnabled = ready && state.activated;
-		this._logService.trace(`[LiveReplay] provideChatSessionContent state=${snapshot.state} v${snapshot.version} ready=${ready} activated=${state.activated} handler=${handlerEnabled}`);
+		this._logService.info(`[LiveReplay] provideChatSessionContent state=${snapshot.state} v${snapshot.version} ready=${ready} activated=${state.activated} handler=${handlerEnabled} sections=${snapshot.projection?.sections.length ?? 0}`);
 		const history = projection ? this._buildDisplayHistory(state) : [
 			new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, 'copilot')
 		];
@@ -326,6 +327,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const keyB = resource.toString(true);
 		const byResource = this._sessionsByResource.get(keyA) ?? this._sessionsByResource.get(keyB) ?? this._sessionsByResource.get(resource.path) ?? this._sessionsByResource.get(decodeURIComponent(resource.path ?? ''));
 		if (byResource) {
+			this._logService.info(`[LiveReplay] _getState hit for ${resource.toString()} via direct key`);
 			return byResource;
 		}
 		const composite = this._decodeComposite(resource);
@@ -334,7 +336,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 		const fromKey = this._sessionsByKey.get(composite);
 		if (fromKey) {
-			this._logService.trace(`[LiveReplay] _getState recovered from composite ${composite}`);
+			this._logService.info(`[LiveReplay] _getState recovered from composite ${composite}`);
 			this._sessionsByResource.set(resource.toString(), fromKey);
 			this._sessionsByResource.set(resource.toString(true), fromKey);
 		}
