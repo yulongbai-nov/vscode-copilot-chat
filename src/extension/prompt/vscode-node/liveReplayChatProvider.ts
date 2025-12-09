@@ -230,24 +230,27 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 
 		const viewModel = buildReplayChatViewModel(snapshot, section => this._formatSection(section));
-		const summaryLines = viewModel.summaryLines;
-		const summaryParts: Array<vscode.ChatResponseMarkdownPart | vscode.ChatResponseCommandButtonPart> = [
-			new vscode.ChatResponseMarkdownPart(summaryLines.join('\n'))
-		];
-		if (snapshot.state === 'stale') {
-			summaryParts.push(new vscode.ChatResponseMarkdownPart('⚠️ Replay is stale. Rebuild from the Live Request Editor to continue.'));
-		} else {
-			const startLabel = state.activated ? 'Input enabled for this replay' : 'Start chatting from this replay';
-			summaryParts.push(new vscode.ChatResponseMarkdownPart(' '));
-			summaryParts.push(new vscode.ChatResponseMarkdownPart('Actions:'));
-			summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: startLabel, command: START_REPLAY_COMMAND, arguments: [state.resource] }));
-		}
-		summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: 'Open Live Request Editor', command: OPEN_LRE_COMMAND }));
+		const history: Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2> = [];
 
-		const history: Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2> = [
-			new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
-			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
-		];
+		if (!state.activated) {
+			const summaryLines = viewModel.summaryLines;
+			const summaryParts: Array<vscode.ChatResponseMarkdownPart | vscode.ChatResponseCommandButtonPart> = [
+				new vscode.ChatResponseMarkdownPart(summaryLines.join('\n'))
+			];
+			if (snapshot.state === 'stale') {
+				summaryParts.push(new vscode.ChatResponseMarkdownPart('⚠️ Replay is stale. Rebuild from the Live Request Editor to continue.'));
+			} else {
+				const startLabel = 'Start chatting from this replay';
+				summaryParts.push(new vscode.ChatResponseMarkdownPart(' '));
+				summaryParts.push(new vscode.ChatResponseMarkdownPart('Actions:'));
+				summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: startLabel, command: START_REPLAY_COMMAND, arguments: [state.resource] }));
+			}
+			summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: 'Open Live Request Editor', command: OPEN_LRE_COMMAND }));
+			history.push(
+				new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
+				new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
+			);
+		}
 
 		const view = state.view ?? 'payload';
 		if (view === 'payload') {
