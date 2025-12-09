@@ -251,15 +251,6 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		return `${header}\n${body || '_empty_'}`;
 	}
 
-	private _buildSectionTitle(section: LiveRequestReplaySection): string {
-		const chips: string[] = [];
-		if (section.edited) {
-			chips.push('edited');
-		}
-		const label = section.label || section.kind;
-		return chips.length ? `${label} (${chips.join(', ')})` : label;
-	}
-
 	private _summarizeContent(content: string | undefined, collapsed: boolean): string {
 		if (!content) {
 			return '';
