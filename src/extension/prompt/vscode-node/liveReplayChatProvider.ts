@@ -39,8 +39,10 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	) {
 		super();
 		const participant = vscode.chat.createChatParticipant('github.copilot.liveReplay.projection', async () => ({}));
-		this._register(vscode.chat.registerChatSessionContentProvider(REPLAY_SCHEME, this, participant));
-		this._register(vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this));
+		const contentDisposable = vscode.chat.registerChatSessionContentProvider(REPLAY_SCHEME, this, participant);
+		const itemDisposable = vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this);
+		this._register(contentDisposable);
+		this._register(itemDisposable);
 		this._register(vscode.commands.registerCommand(START_REPLAY_COMMAND, async (resource?: vscode.Uri) => {
 			if (!resource) {
 				this._logService.trace('LiveReplayChatProvider: startReplayChat invoked without resource');
