@@ -62,6 +62,10 @@ describe('LiveReplay registration', () => {
 			'github.copilot.liveRequestEditor.startReplayChat',
 			expect.any(Function)
 		);
+		expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+			'github.copilot.liveRequestEditor.toggleReplayView',
+			expect.any(Function)
+		);
 	});
 
 	test('manifest declares replay participant, session type, and command', () => {

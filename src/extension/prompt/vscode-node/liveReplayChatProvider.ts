@@ -20,11 +20,13 @@ const REPLAY_SCHEME = 'copilot-live-replay';
 const REPLAY_PARTICIPANT_ID = REPLAY_SCHEME;
 const START_REPLAY_COMMAND = 'github.copilot.liveRequestEditor.startReplayChat';
 const OPEN_LRE_COMMAND = 'github.copilot.liveRequestEditor.show';
+const TOGGLE_VIEW_COMMAND = 'github.copilot.liveRequestEditor.toggleReplayView';
 
 interface ReplaySessionState {
 	readonly resource: vscode.Uri;
 	snapshot: LiveRequestReplaySnapshot;
 	activated: boolean;
+	view: 'payload' | 'projection';
 }
 
 export class LiveReplayChatProvider extends Disposable implements vscode.ChatSessionContentProvider, vscode.ChatSessionItemProvider {
@@ -68,6 +70,12 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			}
 			await this._activateReplay(resource);
 		}));
+		this._register(vscode.commands.registerCommand(TOGGLE_VIEW_COMMAND, async (resource?: vscode.Uri) => {
+			if (!resource) {
+				return;
+			}
+			this._toggleView(resource);
+		}));
 		this._logService.trace('LiveReplayChatProvider: registered content and item providers');
 	}
 
@@ -83,7 +91,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const state: ReplaySessionState = {
 			resource,
 			snapshot,
-			activated: existing?.activated ?? false
+			activated: existing?.activated ?? false,
+			view: existing?.view ?? 'payload'
 		};
 		this._sessionsByKey.set(composite, state);
 		this._rememberState(state);
@@ -197,6 +206,19 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		this._onDidChangeChatSessionItems.fire();
 	}
 
+	private _toggleView(resource: vscode.Uri): void {
+		const state = this._getState(resource);
+		if (!state) {
+			return;
+		}
+		state.view = state.view === 'payload' ? 'projection' : 'payload';
+		this._sessionsByResource.set(resource.toString(), state);
+		const key = this._compositeKey(state.snapshot.key.sessionId, state.snapshot.key.location, state.snapshot.key.requestId);
+		this._sessionsByKey.set(key, state);
+		this._logService.info(`[LiveReplay] toggled view to ${state.view} for ${resource.toString()}`);
+		this._onDidChangeChatSessionItems.fire();
+	}
+
 	private _buildDisplayHistory(state: ReplaySessionState): Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2> {
 		const snapshot = state.snapshot;
 		const projection = snapshot.projection;
@@ -227,8 +249,25 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
 		];
 
-		// Render the actual prompt messages using the default Copilot participant to mirror native chat.
-		history.push(...this._buildPayloadHistory(snapshot, getChatParticipantIdFromName(defaultAgentName)));
+		const view = state.view ?? 'payload';
+		if (view === 'payload') {
+			history.push(...this._buildPayloadHistory(snapshot, getChatParticipantIdFromName(defaultAgentName)));
+		} else {
+			// Projection view: render sections under replay participant.
+			for (const section of projection.sections) {
+				const sectionMarkdown = this._formatSection(section);
+				history.push(
+					new vscode.ChatRequestTurn2(section.label || section.kind, undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
+					new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(sectionMarkdown)], {}, REPLAY_PARTICIPANT_ID)
+				);
+			}
+			if (viewModel.overflowMessage) {
+				history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(viewModel.overflowMessage)], {}, REPLAY_PARTICIPANT_ID));
+			}
+			if (viewModel.trimmedMessage) {
+				history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(viewModel.trimmedMessage)], {}, REPLAY_PARTICIPANT_ID));
+			}
+		}
 
 		return history;
 	}

@@ -88,7 +88,9 @@ sequenceDiagram
     Service-->>Replay: replay snapshot
     Replay-->>UI: open replay URI (?version=v)
     UI->>Replay: provideChatSessionContent(resource)
-    Replay-->>UI: summary (replay participant) + payload turns (default Copilot participant); handler disabled
+    Replay-->>UI: summary (replay participant)
+    Replay-->>UI: payload turns (default Copilot participant)
+    note over Handler: handler disabled
     UI->>Replay: Start chatting from this replay
     Replay->>Handler: ChatParticipantRequestHandler(history=payload, participant=default Copilot)
     Handler-->>UI: response under default participant
