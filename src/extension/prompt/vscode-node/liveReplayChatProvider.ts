@@ -117,7 +117,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 		if (!state) {
 			return {
-				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found. Rebuild from the Live Request Editor.')], {}, 'copilot')],
+				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found. Rebuild from the Live Request Editor.')], {}, REPLAY_PARTICIPANT_ID)],
 				requestHandler: undefined
 			};
 		}
@@ -128,7 +128,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const handlerEnabled = ready && state.activated;
 		this._logService.info(`[LiveReplay] provideChatSessionContent state=${snapshot.state} v${snapshot.version} ready=${ready} activated=${state.activated} handler=${handlerEnabled} sections=${snapshot.projection?.sections.length ?? 0}`);
 		const history = projection ? this._buildDisplayHistory(state) : [
-			new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, 'copilot')
+			new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, REPLAY_PARTICIPANT_ID)
 		];
 
 		return {
@@ -198,7 +198,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const snapshot = state.snapshot;
 		const projection = snapshot.projection;
 		if (!projection) {
-			return [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, 'copilot')];
+			return [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, REPLAY_PARTICIPANT_ID)];
 		}
 
 		const summaryLines: string[] = [];
@@ -243,8 +243,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 
 		return [
-			new vscode.ChatResponseTurn2(summaryParts, {}, getChatParticipantIdFromName(defaultAgentName)),
-			new vscode.ChatResponseTurn2(sectionMarkdown, {}, getChatParticipantIdFromName(defaultAgentName))
+			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
+			new vscode.ChatResponseTurn2(sectionMarkdown, {}, REPLAY_PARTICIPANT_ID)
 		];
 	}
 
@@ -282,7 +282,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const history: (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[] = [];
 		for (const message of snapshot.payload ?? []) {
 			const text = this._renderMessageText(message).trim();
-			const participant = getChatParticipantIdFromName(defaultAgentName);
+			const participant = REPLAY_PARTICIPANT_ID;
 			if (message.role === Raw.ChatRole.User) {
 				const requestTurn = new vscode.ChatRequestTurn2(text || '[user]', undefined, [], participant, [], undefined, undefined);
 				history.push(requestTurn);
