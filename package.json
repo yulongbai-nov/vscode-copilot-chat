@@ -5211,6 +5211,22 @@
 				]
 			},
 			{
+				"type": "copilot-live-replay",
+				"name": "Copilot Replay",
+				"displayName": "Copilot Replay",
+				"icon": "$(history)",
+				"order": 99,
+				"description": "Displays replayed prompt sections from the Live Request Editor.",
+				"welcomeTitle": "Replay edited prompt",
+				"welcomeMessage": "Review and continue from a replayed prompt.",
+				"inputPlaceholder": "Start chatting from this replay",
+				"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"canDelegate": false,
+				"capabilities": {
+					"supportsFileAttachments": false
+				}
+			},
+			{
 				"type": "copilotcli",
 				"name": "cli",
 				"displayName": "Background Agent",
