@@ -17,6 +17,7 @@ import { LiveRequestReplaySnapshot, LiveRequestReplaySection } from '../common/l
 import { buildReplayChatViewModel } from './liveReplayViewModel';
 
 export const REPLAY_SCHEME = 'copilot-live-replay';
+export const REPLAY_FORK_SCHEME = 'copilot-live-replay-fork';
 const REPLAY_PARTICIPANT_ID = REPLAY_SCHEME;
 const START_REPLAY_COMMAND = 'github.copilot.liveRequestEditor.startReplayChat';
 const OPEN_LRE_COMMAND = 'github.copilot.liveRequestEditor.show';
@@ -59,10 +60,15 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		super();
 		this._logService.info('[LiveReplay] registering providers');
 		const participant = vscode.chat.createChatParticipant(REPLAY_PARTICIPANT_ID, async () => ({}));
+		const forkParticipant = vscode.chat.createChatParticipant(REPLAY_FORK_SCHEME, async () => ({}));
 		const contentDisposable = vscode.chat.registerChatSessionContentProvider(REPLAY_SCHEME, this, participant);
+		const forkContentDisposable = vscode.chat.registerChatSessionContentProvider(REPLAY_FORK_SCHEME, this, forkParticipant);
 		const itemDisposable = vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this);
+		const forkItemDisposable = vscode.chat.registerChatSessionItemProvider(REPLAY_FORK_SCHEME, this);
 		this._register(contentDisposable);
+		this._register(forkContentDisposable);
 		this._register(itemDisposable);
+		this._register(forkItemDisposable);
 		this._register(vscode.commands.registerCommand(START_REPLAY_COMMAND, async (resource?: vscode.Uri | string) => {
 			const uri = typeof resource === 'string' ? vscode.Uri.parse(resource) : resource;
 			if (!uri) {
@@ -186,18 +192,29 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		if (!state) {
 			return;
 		}
-		if (!state.activated) {
-			state.activated = true;
-			const updated = this._liveRequestEditorService.markReplayForkActive(state.snapshot.key, resource.toString());
-			if (updated) {
-				state.snapshot = updated;
-			}
-			this._sessionsByResource.set(resource.toString(), state);
-			const key = this._compositeKey(state.snapshot.key.sessionId, state.snapshot.key.location, state.snapshot.key.requestId);
-			this._sessionsByKey.set(key, state);
+		const forkResource = resource.with({ scheme: REPLAY_FORK_SCHEME });
+		const composite = this._compositeKey(state.snapshot.key.sessionId, state.snapshot.key.location, state.snapshot.key.requestId);
+		let forkState = this._sessionsByResource.get(forkResource.toString());
+		if (!forkState) {
+			forkState = {
+				resource: forkResource,
+				snapshot: state.snapshot,
+				activated: true,
+				view: 'payload'
+			};
+		} else {
+			forkState.activated = true;
+			forkState.view = 'payload';
+			forkState.snapshot = state.snapshot;
 		}
+		const updated = this._liveRequestEditorService.markReplayForkActive(state.snapshot.key, forkResource.toString());
+		if (updated) {
+			forkState.snapshot = updated;
+		}
+		this._sessionsByResource.set(forkResource.toString(), forkState);
+		this._sessionsByKey.set(composite, forkState);
 		try {
-			await vscode.commands.executeCommand('vscode.open', resource);
+			await vscode.commands.executeCommand('vscode.open', forkResource);
 			await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
 		} catch (error) {
 			this._logService.error('[LiveReplay] failed to activate replay session', error);
@@ -459,7 +476,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const sessionTail = snapshot.key.sessionId.slice(-6);
 		const turnTail = snapshot.key.requestId.slice(-4);
 		const name = snapshot.debugName ? snapshot.debugName : `session ${sessionTail}`;
-		return `Replay · ${name} · turn ${turnTail}`;
+		return `Replay fork · ${name} · turn ${turnTail}`;
 	}
 
 	private _buildDescription(snapshot: LiveRequestReplaySnapshot): string {

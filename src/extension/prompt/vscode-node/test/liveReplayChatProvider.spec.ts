@@ -71,7 +71,8 @@ describe('LiveReplayChatProvider', () => {
 
 		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.startReplayChat', resource);
 
-		const activatedSession = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
+		const forkResource = vscode.Uri.from({ scheme: 'copilot-live-replay-fork', path: resource.path });
+		const activatedSession = await provider.provideChatSessionContent(forkResource, new vscode.CancellationTokenSource().token);
 		expect(activatedSession.requestHandler).toBeDefined();
 	});
 
@@ -94,7 +95,8 @@ describe('LiveReplayChatProvider', () => {
 		provider.showReplay(snapshot);
 		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.startReplayChat', resource);
 
-		const session = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
+		const forkResource = vscode.Uri.from({ scheme: 'copilot-live-replay-fork', path: resource.path });
+		const session = await provider.provideChatSessionContent(forkResource, new vscode.CancellationTokenSource().token);
 		expect(session.requestHandler).toBeDefined();
 		await session.requestHandler?.(
 			{ prompt: 'next', references: [], toolReferences: [], model: { id: 'm' } } as unknown as vscode.ChatRequest,
@@ -121,6 +123,19 @@ describe('LiveReplayChatProvider', () => {
 		const toggledSession = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
 		const projectionParticipant = (toggledSession.history?.[2] as vscode.ChatRequestTurn)?.participant;
 		expect(projectionParticipant).toBe('copilot-live-replay');
+	});
+
+	test('start replay chat opens fork session with payload only', async () => {
+		const snapshot = buildSnapshot();
+		provider.showReplay(snapshot);
+
+		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.startReplayChat', resource);
+
+		const forkResource = vscode.Uri.from({ scheme: 'copilot-live-replay-fork', path: resource.path });
+		const session = await provider.provideChatSessionContent(forkResource, new vscode.CancellationTokenSource().token);
+		// Activated fork should have payload view only; no summary bubble.
+		expect(session.history[0]).toBeInstanceOf(vscode.ChatRequestTurn2);
+		expect((session.history[0] as vscode.ChatRequestTurn).participant).not.toBe('copilot-live-replay');
 	});
 
 	function buildSnapshot(): LiveRequestReplaySnapshot {
