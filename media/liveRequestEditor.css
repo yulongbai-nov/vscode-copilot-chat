@@ -178,6 +178,20 @@ body {
 	color: var(--vscode-descriptionForeground);
 	margin-bottom: 12px;
 }
+.replay-row {
+	align-items: flex-end;
+	justify-content: space-between;
+}
+.replay-row-main {
+	display: flex;
+	gap: 16px;
+	flex-wrap: wrap;
+	align-items: flex-end;
+}
+.replay-row-action {
+	display: flex;
+	align-items: flex-end;
+}
 
 .auto-override-banner {
 	display: flex;

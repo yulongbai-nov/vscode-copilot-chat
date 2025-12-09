@@ -1217,43 +1217,45 @@ const App: React.FC = () => {
 					) : null}
 					{replay ? (
 						<div className="metadata-row replay-row">
-							<div className="metadata-item">
-								<span className="metadata-label">Replay:</span>
-								<span>{replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state}</span>
-							</div>
-							<div className="metadata-item">
-								<span className="metadata-label">View:</span>
-								<span>{replayView === 'payload' ? 'Native' : 'Projection debug'}</span>
-							</div>
-							{replaySummary ? (
-								<>
-									<div className="metadata-item">
-										<span className="metadata-label">Sections:</span>
-										<span>{replaySummary.totalSections}{replaySummary.overflowCount > 0 ? ` (+${replaySummary.overflowCount} more)` : ''}</span>
-									</div>
-									<div className="metadata-item">
-										<span className="metadata-label">Edited:</span>
-										<span>{replaySummary.editedCount} · Deleted: {replaySummary.deletedCount}</span>
-									</div>
-									{replaySummary.trimmed ? (
-										<div className="metadata-item">
-											<span className="metadata-label">Trimmed:</span>
-											<span>Yes</span>
-										</div>
-									) : null}
-								</>
-							) : (
+							<div className="replay-row-main">
 								<div className="metadata-item">
 									<span className="metadata-label">Replay:</span>
-									<span>None</span>
+									<span>{replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state}</span>
 								</div>
-							)}
-							<div className="metadata-item">
-								<span className="metadata-label">Updated:</span>
-								<span>{replay.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
+								<div className="metadata-item">
+									<span className="metadata-label">View:</span>
+									<span>{replayView === 'payload' ? 'Native' : 'Projection debug'}</span>
+								</div>
+								{replaySummary ? (
+									<>
+										<div className="metadata-item">
+											<span className="metadata-label">Sections:</span>
+											<span>{replaySummary.totalSections}{replaySummary.overflowCount > 0 ? ` (+${replaySummary.overflowCount} more)` : ''}</span>
+										</div>
+										<div className="metadata-item">
+											<span className="metadata-label">Edited:</span>
+											<span>{replaySummary.editedCount} · Deleted: {replaySummary.deletedCount}</span>
+										</div>
+										{replaySummary.trimmed ? (
+											<div className="metadata-item">
+												<span className="metadata-label">Trimmed:</span>
+												<span>Yes</span>
+											</div>
+										) : null}
+									</>
+								) : (
+									<div className="metadata-item">
+										<span className="metadata-label">Replay:</span>
+										<span>None</span>
+									</div>
+								)}
+								<div className="metadata-item">
+									<span className="metadata-label">Updated:</span>
+									<span>{replay.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
+								</div>
 							</div>
 							{replayUri ? (
-								<div className="metadata-item">
+								<div className="replay-row-action">
 									<vscode-button appearance="secondary" onClick={handleToggleReplayView} title="Switch between native payload view and projection debug view">
 										{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}
 									</vscode-button>
