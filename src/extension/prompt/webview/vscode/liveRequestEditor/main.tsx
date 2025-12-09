@@ -118,6 +118,7 @@ interface StateUpdateMessage {
 	request?: EditableChatRequest;
 	replay?: LiveRequestReplaySnapshot;
 	replayUri?: string;
+	replayView?: 'payload' | 'projection';
 	interception?: InterceptionState;
 	sessions?: SessionSummary[];
 	activeSessionKey?: string;
@@ -766,6 +767,7 @@ const App: React.FC = () => {
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
 	const [replayEnabled, setReplayEnabled] = React.useState(false);
 	const [replay, setReplay] = React.useState<LiveRequestReplaySnapshot | undefined>(undefined);
+	const [replayView, setReplayView] = React.useState<'payload' | 'projection'>('payload');
 	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
@@ -852,6 +854,9 @@ const App: React.FC = () => {
 				setRequest(event.data.request);
 				setReplay(event.data.replay);
 				setReplayUri(event.data.replayUri);
+				if (event.data.replayView === 'payload' || event.data.replayView === 'projection') {
+					setReplayView(event.data.replayView);
+				}
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
 				setActiveSessionKey(event.data.activeSessionKey);
@@ -1054,6 +1059,7 @@ const App: React.FC = () => {
 			return;
 		}
 		sendMessage('command', { command: 'github.copilot.liveRequestEditor.toggleReplayView', args: [replayUri] });
+		setReplayView(current => (current === 'payload' ? 'projection' : 'payload'));
 	}, [replayUri, sendMessage]);
 
 	const handleResumeSend = React.useCallback(() => {
@@ -1079,6 +1085,14 @@ const App: React.FC = () => {
 		const parts = [session.locationLabel, created, updated].filter(Boolean);
 		return parts.join(' • ');
 	}, []);
+
+	React.useEffect(() => {
+		if (!replay) {
+			return;
+		}
+		// Reset view to payload when a new replay version/key arrives.
+		setReplayView('payload');
+	}, [replay?.key.sessionId, replay?.key.location, replay?.key.requestId, replay?.version]);
 
 	if (!request || !request.sections || request.sections.length === 0) {
 		return <EmptyState />;
@@ -1207,6 +1221,10 @@ const App: React.FC = () => {
 								<span className="metadata-label">Replay:</span>
 								<span>{replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state}</span>
 							</div>
+							<div className="metadata-item">
+								<span className="metadata-label">View:</span>
+								<span>{replayView === 'payload' ? 'Native' : 'Projection debug'}</span>
+							</div>
 							{replaySummary ? (
 								<>
 									<div className="metadata-item">
@@ -1236,8 +1254,8 @@ const App: React.FC = () => {
 							</div>
 							{replayUri ? (
 								<div className="metadata-item">
-									<vscode-button appearance="secondary" onClick={handleToggleReplayView}>
-										Toggle replay view
+									<vscode-button appearance="secondary" onClick={handleToggleReplayView} title="Switch between native payload view and projection debug view">
+										{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}
 									</vscode-button>
 								</div>
 							) : null}
