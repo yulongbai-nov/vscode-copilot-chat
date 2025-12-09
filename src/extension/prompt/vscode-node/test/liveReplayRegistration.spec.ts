@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, test, vi } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { ILiveRequestEditorService } from '../../common/liveRequestEditorService';
 import { LiveReplayChatProvider } from '../liveReplayChatProvider';
-const manifest = require('../../../../package.json') as {
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', '..', 'package.json'), 'utf8')) as {
 	contributes?: {
-		chatParticipants?: Array<{ id: string }>;
 		commands?: Array<{ command: string }>;
 		chatSessions?: Array<{ type: string }>;
 	};

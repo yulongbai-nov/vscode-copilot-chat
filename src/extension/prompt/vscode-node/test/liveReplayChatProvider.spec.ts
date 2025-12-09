@@ -18,6 +18,7 @@ vi.mock('vscode', async () => {
 		...shim,
 		chat: {
 			createChatParticipant: vi.fn().mockReturnValue({}),
+			registerChatSessionItemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 			registerChatSessionContentProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 		},
 		commands: {
