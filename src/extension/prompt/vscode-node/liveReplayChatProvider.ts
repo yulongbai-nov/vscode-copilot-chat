@@ -15,6 +15,7 @@ import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 import { LiveRequestReplaySnapshot, LiveRequestReplaySection } from '../common/liveRequestEditorModel';
 
 const REPLAY_SCHEME = 'copilot-live-replay';
+const REPLAY_PARTICIPANT_ID = REPLAY_SCHEME;
 const START_REPLAY_COMMAND = 'github.copilot.liveRequestEditor.startReplayChat';
 const OPEN_LRE_COMMAND = 'github.copilot.liveRequestEditor.show';
 
@@ -38,7 +39,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		@ILogService private readonly _logService: ILogService,
 	) {
 		super();
-		const participant = vscode.chat.createChatParticipant('github.copilot.liveReplay.projection', async () => ({}));
+		this._logService.trace('[LiveReplay] registering providers');
+		const participant = vscode.chat.createChatParticipant(REPLAY_PARTICIPANT_ID, async () => ({}));
 		const contentDisposable = vscode.chat.registerChatSessionContentProvider(REPLAY_SCHEME, this, participant);
 		const itemDisposable = vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this);
 		this._register(contentDisposable);
@@ -54,7 +56,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	showReplay(snapshot: LiveRequestReplaySnapshot): void {
-		this._logService.trace('LiveReplayChatProvider: showReplay');
+		this._logService.trace('[LiveReplay] showReplay');
 		const composite = this._compositeKey(snapshot.key.sessionId, snapshot.key.location, snapshot.key.requestId);
 		const existing = this._sessionsByKey.get(composite);
 		const resource = existing?.resource ?? vscode.Uri.from({
@@ -76,7 +78,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	async provideChatSessionContent(resource: vscode.Uri, _token: vscode.CancellationToken): Promise<vscode.ChatSession> {
 		const state = this._getState(resource);
 		if (!state) {
-			this._logService.warn(`LiveReplayChatProvider: provideChatSessionContent missing state for ${resource.toString()}`);
+			this._logService.warn(`[LiveReplay] provideChatSessionContent missing state for ${resource.toString()}`);
 			return {
 				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found.')], {}, 'copilot')],
 				requestHandler: undefined
@@ -86,7 +88,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const snapshot = state.snapshot;
 		const projection = snapshot.projection;
 		const ready = snapshot.state === 'ready' || snapshot.state === 'forkActive';
-		this._logService.trace('LiveReplayChatProvider: provideChatSessionContent');
+		this._logService.trace('[LiveReplay] provideChatSessionContent');
 		const history = projection ? this._buildDisplayHistory(state) : [
 			new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, 'copilot')
 		];
@@ -105,7 +107,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			const forkId = state.resource.toString();
 			const updated = this._liveRequestEditorService.markReplayForkActive(state.snapshot.key, forkId);
 			if (updated) {
-				this._logService.trace('LiveReplayChatProvider: markReplayForkActive updated snapshot');
+				this._logService.trace('[LiveReplay] markReplayForkActive');
 				state.snapshot = updated;
 				this._sessionsByKey.set(composite, state);
 				this._sessionsByResource.set(state.resource.toString(), state);
@@ -146,7 +148,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			await vscode.commands.executeCommand('vscode.open', resource);
 			await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
 		} catch (error) {
-			this._logService.error('LiveReplayChatProvider: failed to activate replay session', error);
+			this._logService.error('[LiveReplay] failed to activate replay session', error);
 		}
 		this._onDidChangeChatSessionItems.fire();
 	}

@@ -68,7 +68,7 @@ describe('LiveReplay registration', () => {
 		const commands = (manifest as any).contributes?.commands ?? [];
 		const chatSessions = (manifest as any).contributes?.chatSessions ?? [];
 
-		expect(participants.some((p: any) => p.id === 'github.copilot.liveReplay.projection')).toBe(true);
+		expect(participants.some((p: any) => p.id === 'copilot-live-replay')).toBe(true);
 		expect(commands.some((c: any) => c.command === 'github.copilot.liveRequestEditor.startReplayChat')).toBe(true);
 		expect(chatSessions.some((s: any) => s.type === 'copilot-live-replay')).toBe(true);
 	});
