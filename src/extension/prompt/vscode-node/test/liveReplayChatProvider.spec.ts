@@ -108,6 +108,21 @@ describe('LiveReplayChatProvider', () => {
 		expect((liveRequestEditorService.markReplayForkActive as Mock)).toHaveBeenCalled();
 	});
 
+	test('toggle view command accepts string resources', async () => {
+		const snapshot = buildSnapshot();
+		provider.showReplay(snapshot);
+
+		const session = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
+		const payloadParticipant = (session.history?.[2] as vscode.ChatRequestTurn)?.participant;
+		expect(payloadParticipant).not.toBe('copilot-live-replay');
+
+		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.toggleReplayView', resource.toString());
+
+		const toggledSession = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
+		const projectionParticipant = (toggledSession.history?.[2] as vscode.ChatRequestTurn)?.participant;
+		expect(projectionParticipant).toBe('copilot-live-replay');
+	});
+
 	function buildSnapshot(): LiveRequestReplaySnapshot {
 		const payload: Raw.ChatMessage[] = [
 			{

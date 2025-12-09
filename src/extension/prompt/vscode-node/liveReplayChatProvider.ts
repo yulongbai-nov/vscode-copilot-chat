@@ -16,7 +16,7 @@ import { ILiveRequestEditorService } from '../common/liveRequestEditorService';
 import { LiveRequestReplaySnapshot, LiveRequestReplaySection } from '../common/liveRequestEditorModel';
 import { buildReplayChatViewModel } from './liveReplayViewModel';
 
-const REPLAY_SCHEME = 'copilot-live-replay';
+export const REPLAY_SCHEME = 'copilot-live-replay';
 const REPLAY_PARTICIPANT_ID = REPLAY_SCHEME;
 const START_REPLAY_COMMAND = 'github.copilot.liveRequestEditor.startReplayChat';
 const OPEN_LRE_COMMAND = 'github.copilot.liveRequestEditor.show';
@@ -63,18 +63,20 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const itemDisposable = vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this);
 		this._register(contentDisposable);
 		this._register(itemDisposable);
-		this._register(vscode.commands.registerCommand(START_REPLAY_COMMAND, async (resource?: vscode.Uri) => {
-			if (!resource) {
+		this._register(vscode.commands.registerCommand(START_REPLAY_COMMAND, async (resource?: vscode.Uri | string) => {
+			const uri = typeof resource === 'string' ? vscode.Uri.parse(resource) : resource;
+			if (!uri) {
 				this._logService.trace('LiveReplayChatProvider: startReplayChat invoked without resource');
 				return;
 			}
-			await this._activateReplay(resource);
+			await this._activateReplay(uri);
 		}));
-		this._register(vscode.commands.registerCommand(TOGGLE_VIEW_COMMAND, async (resource?: vscode.Uri) => {
-			if (!resource) {
+		this._register(vscode.commands.registerCommand(TOGGLE_VIEW_COMMAND, async (resource?: vscode.Uri | string) => {
+			const uri = typeof resource === 'string' ? vscode.Uri.parse(resource) : resource;
+			if (!uri) {
 				return;
 			}
-			this._toggleView(resource);
+			this._toggleView(uri);
 		}));
 		this._logService.trace('LiveReplayChatProvider: registered content and item providers');
 	}
@@ -83,11 +85,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const composite = this._compositeKey(snapshot.key.sessionId, snapshot.key.location, snapshot.key.requestId);
 		this._logService.info(`[LiveReplay] showReplay begin ${composite} state=${snapshot.state} v${snapshot.version} sections=${snapshot.projection?.sections.length ?? 0} overflow=${snapshot.projection?.overflowCount ?? 0}`);
 		const existing = this._sessionsByKey.get(composite);
-		const resource = vscode.Uri.from({
-			scheme: REPLAY_SCHEME,
-			path: `/${composite}`,
-			query: String(snapshot.version ?? 0)
-		});
+		const resource = buildReplayResource(snapshot);
 		const state: ReplaySessionState = {
 			resource,
 			snapshot,
@@ -469,4 +467,13 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 		return parts.join(' · ');
 	}
+}
+
+export function buildReplayResource(snapshot: LiveRequestReplaySnapshot): vscode.Uri {
+	const path = `/${snapshot.key.sessionId}::${snapshot.key.location}::${snapshot.key.requestId}`;
+	return vscode.Uri.from({
+		scheme: REPLAY_SCHEME,
+		path,
+		query: String(snapshot.version ?? 0)
+	});
 }

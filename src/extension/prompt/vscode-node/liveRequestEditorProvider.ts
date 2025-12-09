@@ -9,6 +9,7 @@ import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestReplaySnapshot, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestReplayEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { buildReplayResource } from './liveReplayChatProvider';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 
 type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
@@ -409,10 +410,13 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			return;
 		}
 
+		const replayResource = this._currentReplay ? buildReplayResource(this._currentReplay).toString() : undefined;
+
 		this._view.webview.postMessage({
 			type: 'stateUpdate',
 			request: this._currentRequest,
 			replay: this._currentReplay,
+			replayUri: replayResource,
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
 			activeSessionKey: this._activeSessionKey,

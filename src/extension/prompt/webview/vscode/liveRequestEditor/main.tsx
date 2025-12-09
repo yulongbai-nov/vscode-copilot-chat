@@ -117,6 +117,7 @@ interface StateUpdateMessage {
 	type: 'stateUpdate';
 	request?: EditableChatRequest;
 	replay?: LiveRequestReplaySnapshot;
+	replayUri?: string;
 	interception?: InterceptionState;
 	sessions?: SessionSummary[];
 	activeSessionKey?: string;
@@ -765,6 +766,7 @@ const App: React.FC = () => {
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
 	const [replayEnabled, setReplayEnabled] = React.useState(false);
 	const [replay, setReplay] = React.useState<LiveRequestReplaySnapshot | undefined>(undefined);
+	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -849,6 +851,7 @@ const App: React.FC = () => {
 			if (event.data?.type === 'stateUpdate') {
 				setRequest(event.data.request);
 				setReplay(event.data.replay);
+				setReplayUri(event.data.replayUri);
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
 				setActiveSessionKey(event.data.activeSessionKey);
@@ -1046,6 +1049,13 @@ const App: React.FC = () => {
 		sendMessage('command', { command: 'github.copilot.liveRequestEditor.replayPrompt' });
 	}, [sendMessage]);
 
+	const handleToggleReplayView = React.useCallback(() => {
+		if (!replayUri) {
+			return;
+		}
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.toggleReplayView', args: [replayUri] });
+	}, [replayUri, sendMessage]);
+
 	const handleResumeSend = React.useCallback(() => {
 		sendMessage('resumeSend');
 	}, [sendMessage]);
@@ -1224,6 +1234,13 @@ const App: React.FC = () => {
 								<span className="metadata-label">Updated:</span>
 								<span>{replay.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
 							</div>
+							{replayUri ? (
+								<div className="metadata-item">
+									<vscode-button appearance="secondary" onClick={handleToggleReplayView}>
+										Toggle replay view
+									</vscode-button>
+								</div>
+							) : null}
 						</div>
 					) : null}
 				</div>
