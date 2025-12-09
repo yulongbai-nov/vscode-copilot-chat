@@ -47,6 +47,7 @@ describe('LiveReplayChatProvider', () => {
 		} as unknown as IInstantiationService;
 		liveRequestEditorService = {
 			markReplayForkActive: vi.fn().mockImplementation((_key, _forkId) => undefined),
+			getReplaySnapshot: vi.fn().mockReturnValue(undefined),
 		} as unknown as ILiveRequestEditorService;
 		provider = new LiveReplayChatProvider(instantiationService, liveRequestEditorService, {
 			_serviceBrand: undefined,
@@ -78,6 +79,12 @@ describe('LiveReplayChatProvider', () => {
 		provider.showReplay(snapshot);
 
 		const session = await provider.provideChatSessionContent(encodedResource, new vscode.CancellationTokenSource().token);
+		expect(session.history).toHaveLength(2);
+	});
+
+	test('rebuilds sample snapshot when missing state', async () => {
+		const sampleResource = vscode.Uri.from({ scheme: 'copilot-live-replay', path: '/sample-session::1::sample-turn' });
+		const session = await provider.provideChatSessionContent(sampleResource, new vscode.CancellationTokenSource().token);
 		expect(session.history).toHaveLength(2);
 	});
 

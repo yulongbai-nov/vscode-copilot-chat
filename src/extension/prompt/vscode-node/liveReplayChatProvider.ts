@@ -79,33 +79,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	showSampleReplay(): void {
-		const now = Date.now();
-		const payload: Raw.ChatMessage[] = [
-			{ role: Raw.ChatRole.System, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'System prep' }] },
-			{ role: Raw.ChatRole.User, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Edited user message' }] }
-		];
-		const snapshot: LiveRequestReplaySnapshot = {
-			key: { sessionId: 'sample-session', location: ChatLocation.Panel, requestId: 'sample-turn' },
-			state: 'ready',
-			version: 1,
-			updatedAt: now,
-			payload,
-			payloadHash: 1,
-			projection: {
-				sections: [
-					{ id: 'sys', kind: 'system', label: 'System', content: 'System prep', collapsed: true, edited: false, sourceMessageIndex: 0 },
-					{ id: 'usr', kind: 'user', label: 'User', content: 'Edited user message', collapsed: false, edited: true, sourceMessageIndex: 1 }
-				],
-				totalSections: 2,
-				overflowCount: 0,
-				editedCount: 1,
-				deletedCount: 0
-			},
-			projectionHash: 1,
-			parentSessionId: 'sample-session',
-			parentTurnId: 'sample-turn'
-		};
-		this.showReplay(snapshot);
+		this.showReplay(this._buildSampleSnapshot());
 	}
 
 	async provideChatSessionContent(resource: vscode.Uri, _token: vscode.CancellationToken): Promise<vscode.ChatSession> {
@@ -116,6 +90,19 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		if (!state) {
 			const composite = this._decodeComposite(resource);
 			this._logService.warn(`[LiveReplay] provideChatSessionContent missing state for ${resource.toString()} (composite=${composite})`);
+			if (composite.startsWith('sample-session')) {
+				this._logService.trace('[LiveReplay] provideChatSessionContent rebuilding sample snapshot');
+				state = {
+					resource,
+					snapshot: this._buildSampleSnapshot(),
+					activated: false
+				};
+				this._sessionsByKey.set(composite, state);
+				this._sessionsByResource.set(resource.toString(), state);
+				this._sessionsByResource.set(resource.toString(true), state);
+			}
+		}
+		if (!state) {
 			return {
 				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found. Rebuild from the Live Request Editor.')], {}, 'copilot')],
 				requestHandler: undefined
@@ -323,7 +310,9 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	private _getState(resource: vscode.Uri): ReplaySessionState | undefined {
-		const byResource = this._sessionsByResource.get(resource.toString()) ?? this._sessionsByResource.get(resource.toString(true));
+		const keyA = resource.toString();
+		const keyB = resource.toString(true);
+		const byResource = this._sessionsByResource.get(keyA) ?? this._sessionsByResource.get(keyB);
 		if (byResource) {
 			return byResource;
 		}
@@ -335,6 +324,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		if (fromKey) {
 			this._logService.trace(`[LiveReplay] _getState recovered from composite ${composite}`);
 			this._sessionsByResource.set(resource.toString(), fromKey);
+			this._sessionsByResource.set(resource.toString(true), fromKey);
 		}
 		return fromKey;
 	}
@@ -363,6 +353,35 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		this._sessionsByResource.set(resource.toString(), state);
 		this._sessionsByResource.set(resource.toString(true), state);
 		return state;
+	}
+
+	private _buildSampleSnapshot(): LiveRequestReplaySnapshot {
+		const now = Date.now();
+		const payload: Raw.ChatMessage[] = [
+			{ role: Raw.ChatRole.System, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'System prep' }] },
+			{ role: Raw.ChatRole.User, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Edited user message' }] }
+		];
+		return {
+			key: { sessionId: 'sample-session', location: ChatLocation.Panel, requestId: 'sample-turn' },
+			state: 'ready',
+			version: 1,
+			updatedAt: now,
+			payload,
+			payloadHash: 1,
+			projection: {
+				sections: [
+					{ id: 'sys', kind: 'system', label: 'System', content: 'System prep', collapsed: true, edited: false, sourceMessageIndex: 0 },
+					{ id: 'usr', kind: 'user', label: 'User', content: 'Edited user message', collapsed: false, edited: true, sourceMessageIndex: 1 }
+				],
+				totalSections: 2,
+				overflowCount: 0,
+				editedCount: 1,
+				deletedCount: 0
+			},
+			projectionHash: 1,
+			parentSessionId: 'sample-session',
+			parentTurnId: 'sample-turn'
+		};
 	}
 
 	private _decodeComposite(resource: vscode.Uri): string {
