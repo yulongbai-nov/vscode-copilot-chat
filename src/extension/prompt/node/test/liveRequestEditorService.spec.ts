@@ -139,6 +139,29 @@ describe('LiveRequestEditorService interception', () => {
 		expect(afterRestore.isDirty).toBe(false);
 	});
 
+	test('getMessagesForSend builds payload after deletes and edits', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['sys', 'user1', 'user2']) });
+		const key = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+
+		const request = service.getRequest(key)!;
+		service.deleteSection(key, request.sections[1].id); // remove user1
+		service.updateSectionContent(key, request.sections[2].id, 'edited user2');
+
+		const sendResult = service.getMessagesForSend(key, request.originalMessages);
+		expect(sendResult.error).toBeUndefined();
+		expect(sendResult.messages).toHaveLength(2);
+		expect(sendResult.messages[0].role).toBe(Raw.ChatRole.System);
+		expect(getText(sendResult.messages[0].content[0])).toBe('sys');
+		expect(sendResult.messages[1].role).toBe(Raw.ChatRole.User);
+		expect(getText(sendResult.messages[1].content[0])).toBe('edited user2');
+
+		const mutatedRequest = service.getRequest(key)!;
+		expect(mutatedRequest.isDirty).toBe(true);
+		expect(mutatedRequest.messages).toHaveLength(2);
+	});
+
 	test('resetRequest restores original content and clears edits/deletes', async () => {
 		const { service } = await createService();
 		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
