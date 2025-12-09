@@ -56,7 +56,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	showReplay(snapshot: LiveRequestReplaySnapshot): void {
-		this._logService.trace('[LiveReplay] showReplay');
+		this._logService.trace(`[LiveReplay] showReplay begin ${snapshot.key.sessionId}/${snapshot.key.requestId} state=${snapshot.state} v${snapshot.version} sections=${snapshot.projection?.sections.length ?? 0} overflow=${snapshot.projection?.overflowCount ?? 0}`);
 		const composite = this._compositeKey(snapshot.key.sessionId, snapshot.key.location, snapshot.key.requestId);
 		const existing = this._sessionsByKey.get(composite);
 		const resource = existing?.resource ?? vscode.Uri.from({
@@ -71,6 +71,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		this._sessionsByKey.set(composite, state);
 		this._sessionsByResource.set(resource.toString(), state);
 		this._onDidChangeChatSessionItems.fire();
+		this._logService.trace(`[LiveReplay] showReplay stored state and opening view ${resource.toString()}`);
 		void vscode.commands.executeCommand('vscode.open', resource);
 		void vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
 	}
@@ -91,14 +92,15 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const snapshot = state.snapshot;
 		const projection = snapshot.projection;
 		const ready = snapshot.state === 'ready' || snapshot.state === 'forkActive';
-		this._logService.trace('[LiveReplay] provideChatSessionContent');
+		const handlerEnabled = ready && state.activated;
+		this._logService.trace(`[LiveReplay] provideChatSessionContent state=${snapshot.state} v${snapshot.version} ready=${ready} activated=${state.activated} handler=${handlerEnabled}`);
 		const history = projection ? this._buildDisplayHistory(state) : [
 			new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, 'copilot')
 		];
 
 		return {
 			history,
-			requestHandler: ready && state.activated
+			requestHandler: handlerEnabled
 				? async (request, _context, stream, token) => this._handleRequest(state, request, stream, token)
 				: undefined
 		};
@@ -120,6 +122,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 
 		const history = this._buildPayloadHistory(state.snapshot);
+		this._logService.trace(`[LiveReplay] handleRequest start ${composite} promptLen=${request.prompt?.length ?? 0} payloadMessages=${state.snapshot.payload?.length ?? 0}`);
 		const handler = this._instantiationService.createInstance(
 			ChatParticipantRequestHandler,
 			history,
@@ -129,7 +132,9 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			{ agentName: defaultAgentName, agentId: getChatParticipantIdFromName(defaultAgentName) },
 			Event.None
 		);
-		return handler.getResult();
+		const result = await handler.getResult();
+		this._logService.trace(`[LiveReplay] handleRequest finished ${composite}`);
+		return result;
 	}
 
 	private async _activateReplay(resource: vscode.Uri): Promise<void> {
@@ -302,6 +307,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		if (!snapshot) {
 			return undefined;
 		}
+		this._logService.trace(`[LiveReplay] hydrated state from service ${composite}`);
 		const state: ReplaySessionState = {
 			resource,
 			snapshot,
