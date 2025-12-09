@@ -66,7 +66,7 @@ describe('LiveReplayChatProvider', () => {
 
 		const session = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
 		expect(session.requestHandler).toBeUndefined();
-		expect(session.history).toHaveLength(2);
+		expect(session.history).toHaveLength(4);
 
 		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.startReplayChat', resource);
 
@@ -79,13 +79,13 @@ describe('LiveReplayChatProvider', () => {
 		provider.showReplay(snapshot);
 
 		const session = await provider.provideChatSessionContent(encodedResource, new vscode.CancellationTokenSource().token);
-		expect(session.history).toHaveLength(2);
+		expect(session.history).toHaveLength(4);
 	});
 
 	test('rebuilds sample snapshot when missing state', async () => {
 		const sampleResource = vscode.Uri.from({ scheme: 'copilot-live-replay', path: '/sample-session::1::sample-turn' });
 		const session = await provider.provideChatSessionContent(sampleResource, new vscode.CancellationTokenSource().token);
-		expect(session.history).toHaveLength(2);
+		expect(session.history).toHaveLength(4);
 	});
 
 	test('request handler forwards to ChatParticipantRequestHandler with payload history', async () => {

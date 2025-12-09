@@ -128,6 +128,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const handlerEnabled = ready && state.activated;
 		this._logService.info(`[LiveReplay] provideChatSessionContent state=${snapshot.state} v${snapshot.version} ready=${ready} activated=${state.activated} handler=${handlerEnabled} sections=${snapshot.projection?.sections.length ?? 0}`);
 		const history = projection ? this._buildDisplayHistory(state) : [
+			new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 			new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, REPLAY_PARTICIPANT_ID)
 		];
 
@@ -198,7 +199,10 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const snapshot = state.snapshot;
 		const projection = snapshot.projection;
 		if (!projection) {
-			return [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, REPLAY_PARTICIPANT_ID)];
+			return [
+				new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
+				new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Nothing to replay.')], {}, REPLAY_PARTICIPANT_ID)
+			];
 		}
 
 		const summaryLines: string[] = [];
@@ -243,7 +247,9 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 
 		return [
+			new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
+			new vscode.ChatRequestTurn2('Replay sections', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 			new vscode.ChatResponseTurn2(sectionMarkdown, {}, REPLAY_PARTICIPANT_ID)
 		];
 	}
