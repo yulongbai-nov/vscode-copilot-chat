@@ -19,7 +19,7 @@
   - Enforce Option A: one replay fork per source turn; replace prior fork if re-replayed.
   - Expose command `github.copilot.liveRequestEditor.replayPrompt` and surface in Live Request Editor UI.
   - Render bubbles via chat participant/content provider without model invocation.
-  - When continuing from replay, create/focus a default Copilot chat session seeded with the replay payload/history (attachments/model picker intact), switch focus there with breadcrumb/toast, and keep the replay view projection-only/read-only. Keep interception/auto-override off by default in the fork unless explicitly enabled.
+  - When continuing from replay, create/focus a fork session seeded with the replay payload/history. Current: custom scheme `copilot-live-replay-fork` using default agent id (attachments/model picker available) but still a custom session. Ideal (pending API): native Copilot chat session with injected history; replay view remains projection-only/read-only. Keep interception/auto-override off by default in the fork unless explicitly enabled.
   - Cap rendered sections (e.g., 30) and provide “View replayed prompt (N more)” affordance.
   - In replay view with interception off, disable edit/delete controls and auto-scroll to the latest section.
   - Handle stale/cleared states (canceled send/context switch) by marking replay stale; ignore stale updates (version/hash guard).

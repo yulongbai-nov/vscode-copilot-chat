@@ -138,6 +138,23 @@ describe('LiveReplayChatProvider', () => {
 		expect((session.history[0] as vscode.ChatRequestTurn).participant).not.toBe('copilot-live-replay');
 	});
 
+	test('fork payload history includes synthetic request/response pairs unlike native', async () => {
+		const snapshot = buildSnapshot();
+		provider.showReplay(snapshot);
+		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.startReplayChat', resource);
+
+		const forkResource = vscode.Uri.from({ scheme: 'copilot-live-replay-fork', path: resource.path });
+		const session = await provider.provideChatSessionContent(forkResource, new vscode.CancellationTokenSource().token);
+		// For two payload messages we expect four entries (request/response pairs).
+		expect(session.history).toHaveLength(4);
+		// Native Copilot history would not inject empty response turns after user messages; here we assert ours does.
+		const userReq = session.history[0] as vscode.ChatRequestTurn;
+		const emptyResp = session.history[1] as vscode.ChatResponseTurn2;
+		expect(userReq.participant).not.toBe('copilot-live-replay');
+		// We synthesize a response turn; native wouldn't. Payload-only should keep it empty/metadata-only.
+		expect(emptyResp.response?.length ?? 0).toBe(0);
+	});
+
 	function buildSnapshot(): LiveRequestReplaySnapshot {
 		const payload: Raw.ChatMessage[] = [
 			{

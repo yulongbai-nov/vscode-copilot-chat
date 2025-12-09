@@ -27,16 +27,18 @@ Branch: `feature/replay-ui-integration` (code + docs in tree)
    - Add trimmed/overflow banners as persistent affordances; focus toast/breadcrumb when enabling input; optional “restore previous replay” command.
    - Ensure interception/auto-override toggles are visually disabled in replay when off.
 4) **Native participant handoff for “Start chatting from this replay”**
-   - On start, fork/create a default Copilot chat session seeded with replay payload history (roles preserved, tool calls/results marked as already executed) and switch focus there; keep the replay tab projection-only.
+   - Ideal: On start, fork/create a default Copilot chat session seeded with replay payload history (roles preserved, tool calls/results marked as already executed) and switch focus there; keep the replay tab projection-only.
+   - Current: Fork session uses custom scheme `copilot-live-replay-fork`, payload-only, default agent id; model picker/attachments available, but session is custom (may show preview).
    - Preserve attachments/model picker by using the default participant; avoid replay participant interleave in live responses.
    - Keep replay session read-only; replay view can be closed or left as a reference.
-   - Remove “preview” experience from the live conversation by relying on the default Copilot chat provider for ongoing turns.
+   - Remove “preview” experience from the live conversation once a native Copilot session seeding API is available.
 
 ## Ready State / Defaults
 - Replay off by default; entry is read-only until “Start chatting from this replay.”
 - One fork per turn; replay replacement overwrites prior snapshot; single restore buffer.
 - Cap 30 sections; overflow message; trimmed warning.
 - States: `idle → building → ready → forkActive → stale` (stale on cancel/context change or parity mismatch).
+- Current limitation: “Start chatting from this replay” opens a custom fork session (`copilot-live-replay-fork`) seeded with the replay payload and using the default agent id. It is not the native Copilot chat session (preview badge may remain); no API here to inject history into the built-in Copilot provider.
 
 ## Testing Pointers
 - Unit: projection caps/edited/deleted, version/hash guards, restore buffer, state transitions, original-messages recovery.
