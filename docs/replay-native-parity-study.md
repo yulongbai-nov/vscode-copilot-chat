@@ -16,6 +16,12 @@ Understand how Copilot chat renders sessions natively and how to make the replay
 ### Request handling path
 - The handler created via `ChatParticipantRequestHandler` (used by our replay) mirrors the default flow: it accepts an initial history (the payload) and runs under the default Copilot participant id (see `liveReplayChatProvider.ts:145-169`).
 
+### Native (OpenAI/Copilot) session content builder (closest analogs)
+- There is no separate “OpenAI” content provider here; the default Copilot chat uses the participant directly. The closest explicit builders are:
+  - Cloud sessions: `src/extension/chatSessions/vscode-node/copilotCloudSessionsProvider.ts` uses `ChatSessionContentBuilder` to map stored turns into `ChatRequestTurn`/`ChatResponseTurn2` for the default Copilot participant (`provideChatSessionContent`).
+  - Claude agent: `src/extension/chatSessions/vscode-node/claudeChatSessionContentProvider.ts` builds history from persisted session state for the Claude participant (tests at `test/claudeChatSessionContentProvider.spec.ts`).
+  - CLI agent: `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts` rebuilds history via `ChatSessionContentBuilder` for the CLI participant and tests it in `test/copilotCLIChatSessionParticipant.spec.ts`.
+
 ## Current replay behavior (code)
 - Replay chat provider registers a custom scheme/participant and builds history mixing a replay summary with per-section or payload turns (`src/extension/prompt/vscode-node/liveReplayChatProvider.ts:74-200`).
 - Payload continuation uses `ChatParticipantRequestHandler` but history is still emitted under a mix of replay/default participants.
@@ -52,6 +58,39 @@ Understand how Copilot chat renders sessions natively and how to make the replay
 | UI affordances | Model picker, attachments, modes | Enabled after recent changes | Same as native (capabilities already aligned) |
 | Refresh on edit | Uses stored history; normal chat | Versioned replay URI to force refresh | Keep versioned URI; rebuild payload after edit |
 | Projection view | Not shown; implicit history | Inline section bubbles | Optional toggle (off by default) |
+
+## Flow comparison (mermaid)
+### Native-style session (cloud/CLI/Claude pattern)
+```mermaid
+sequenceDiagram
+    participant UI as Chat UI
+    participant Prov as ChatSessionContentProvider
+    participant Store as Stored Session/History
+    UI->>Prov: open session (URI)
+    Prov->>Store: load persisted turns (request/response, metadata)
+    Store-->>Prov: turns array
+    Prov->>UI: ChatSession { history (default participant), requestHandler }
+    UI->>Prov: user sends message
+    Prov->>Handler: ChatParticipantRequestHandler with history + new request
+    Handler-->>UI: streamed response (default participant)
+```
+
+### Current replay flow
+```mermaid
+sequenceDiagram
+    participant LRE as LiveRequestEditor
+    participant Service as LiveRequestEditorService
+    participant Replay as LiveReplayChatProvider
+    participant UI as Chat UI
+    LRE->>Service: buildReplayForRequest (payload, projection, version)
+    Service-->>Replay: replay snapshot
+    Replay->>UI: open replay URI (?version=v)
+    UI->>Replay: provideChatSessionContent(resource)
+    Replay->>UI: summary bubble (replay participant) + payload turns (default Copilot participant); requestHandler gated until start
+    UI->>Replay: Start chatting from this replay
+    Replay->>Handler: ChatParticipantRequestHandler(history=payload, participant=default Copilot)
+    Handler-->>UI: response under default participant
+```
 
 ## References
 - Chat session contract: `src/extension/vscode.proposed.chatSessionsProvider.d.ts:170-245`
