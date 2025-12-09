@@ -1676,6 +1676,16 @@
 				"locations": [
 					"panel"
 				]
+			},
+			{
+				"id": "github.copilot.liveReplay.projection",
+				"name": "copilotLiveReplay",
+				"fullName": "Copilot Replay Projection",
+				"description": "Displays replayed prompt sections from the Live Request Editor.",
+				"when": "config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"locations": [
+					"panel"
+				]
 			}
 		],
 		"languageModelChatProviders": [
@@ -2082,6 +2092,12 @@
 			"command": "github.copilot.liveRequestEditor.replayPrompt",
 			"title": "%github.copilot.command.liveRequestEditor.replayPrompt%",
 			"icon": "$(history)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.startReplayChat",
+			"title": "Copilot: Start chatting from replay",
 			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
 			"category": "Chat"
 		},
