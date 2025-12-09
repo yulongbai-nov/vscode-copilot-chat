@@ -8,6 +8,14 @@ Understand how Copilot chat renders sessions natively and how to make the replay
 - Session tab metadata comes from `ChatSessionItemProvider` and the contributed session type in `package.json` (chatSessions contribution at `package.json:1258+` for default Copilot participants).
 - The default Copilot participant id (`github.copilot.default`) is what drives normal UI affordances (model picker, attachments, etc.).
 
+### How native sessions build history (examples)
+- Claude agent: `src/extension/chatSessions/vscode-node/claudeChatSessionContentProvider.ts` builds a `ChatSession` with history from stored session data using the agent participant id; tests at `src/extension/chatSessions/vscode-node/test/claudeChatSessionContentProvider.spec.ts` validate history shape.
+- Copilot CLI: `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts` registers item/content providers and uses `ChatSessionContentBuilder` to emit request/response turns; see `provideChatSessionContent` around history construction and `test/copilotCLIChatSessionParticipant.spec.ts` for handler expectations.
+- Cloud sessions: `src/extension/chatSessions/vscode-node/copilotCloudSessionsProvider.ts` uses `ChatSessionContentBuilder` to reconstruct history from stored session info when opening a session tab.
+
+### Request handling path
+- The handler created via `ChatParticipantRequestHandler` (used by our replay) mirrors the default flow: it accepts an initial history (the payload) and runs under the default Copilot participant id (see `liveReplayChatProvider.ts:145-169`).
+
 ## Current replay behavior (code)
 - Replay chat provider registers a custom scheme/participant and builds history mixing a replay summary with per-section or payload turns (`src/extension/prompt/vscode-node/liveReplayChatProvider.ts:74-200`).
 - Payload continuation uses `ChatParticipantRequestHandler` but history is still emitted under a mix of replay/default participants.
@@ -34,8 +42,23 @@ Understand how Copilot chat renders sessions natively and how to make the replay
 3) Keep versioned URIs to refresh after edits; continue hydration from service for missing local state.
 4) (Optional) Use the default Copilot session type for replay sessions to inherit all UI affordances; otherwise, ensure `copilot-live-replay` mirrors capabilities exactly.
 
+## Comparison: Native chat vs Current replay vs Proposed
+
+| Aspect | Native Copilot chat | Current replay | Proposed |
+| --- | --- | --- | --- |
+| Participant id | `github.copilot.default` for all turns | Replay participant for summary + sections; mixed in payload | Summary: replay participant; Payload: default Copilot |
+| History shape | Request/response turns per message; tool calls/results inline | Summary + per-section bubbles (projection) or mixed payload | Summary bubble + full payload as request/response turns |
+| Session type | Copilot chat session | `copilot-live-replay` | Keep `copilot-live-replay` but mirror capabilities; optional future: use default session type |
+| UI affordances | Model picker, attachments, modes | Enabled after recent changes | Same as native (capabilities already aligned) |
+| Refresh on edit | Uses stored history; normal chat | Versioned replay URI to force refresh | Keep versioned URI; rebuild payload after edit |
+| Projection view | Not shown; implicit history | Inline section bubbles | Optional toggle (off by default) |
+
 ## References
 - Chat session contract: `src/extension/vscode.proposed.chatSessionsProvider.d.ts:170-245`
 - Replay provider registration and versioned URI: `src/extension/prompt/vscode-node/liveReplayChatProvider.ts:74-94`
 - Replay content building and handler wiring: `src/extension/prompt/vscode-node/liveReplayChatProvider.ts:100-200`
 - Copilot participant contributions (default agent): `package.json` around `chatParticipants` and `chatSessions` (`package.json:1258+`)
+- Native session builders/tests:
+  - Claude: `src/extension/chatSessions/vscode-node/claudeChatSessionContentProvider.ts`, tests at `src/extension/chatSessions/vscode-node/test/claudeChatSessionContentProvider.spec.ts`.
+  - Copilot CLI: `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts`, tests at `src/extension/chatSessions/vscode-node/test/copilotCLIChatSessionParticipant.spec.ts`.
+  - Copilot cloud sessions: `src/extension/chatSessions/vscode-node/copilotCloudSessionsProvider.ts`.
