@@ -62,7 +62,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const existing = this._sessionsByKey.get(composite);
 		const resource = existing?.resource ?? vscode.Uri.from({
 			scheme: REPLAY_SCHEME,
-			path: `/${encodeURIComponent(composite)}`
+			path: `/${composite}`
 		});
 		const state: ReplaySessionState = {
 			resource,
@@ -71,6 +71,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		};
 		this._sessionsByKey.set(composite, state);
 		this._sessionsByResource.set(resource.toString(), state);
+		this._sessionsByResource.set(resource.toString(true), state);
 		this._onDidChangeChatSessionItems.fire();
 		this._logService.trace(`[LiveReplay] showReplay stored state and opening view ${resource.toString()}`);
 		void vscode.commands.executeCommand('vscode.open', resource);
@@ -113,7 +114,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			state = this._hydrateFromService(resource);
 		}
 		if (!state) {
-			this._logService.warn(`[LiveReplay] provideChatSessionContent missing state for ${resource.toString()}`);
+			const composite = this._decodeComposite(resource);
+			this._logService.warn(`[LiveReplay] provideChatSessionContent missing state for ${resource.toString()} (composite=${composite})`);
 			return {
 				history: [new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('Replay expired or not found. Rebuild from the Live Request Editor.')], {}, 'copilot')],
 				requestHandler: undefined
@@ -321,12 +323,25 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	private _getState(resource: vscode.Uri): ReplaySessionState | undefined {
-		return this._sessionsByResource.get(resource.toString()) ?? this._sessionsByResource.get(resource.toString(true));
+		const byResource = this._sessionsByResource.get(resource.toString()) ?? this._sessionsByResource.get(resource.toString(true));
+		if (byResource) {
+			return byResource;
+		}
+		const composite = this._decodeComposite(resource);
+		if (!composite) {
+			return undefined;
+		}
+		const fromKey = this._sessionsByKey.get(composite);
+		if (fromKey) {
+			this._logService.trace(`[LiveReplay] _getState recovered from composite ${composite}`);
+			this._sessionsByResource.set(resource.toString(), fromKey);
+		}
+		return fromKey;
 	}
 
 	private _hydrateFromService(resource: vscode.Uri): ReplaySessionState | undefined {
-		const composite = resource.path?.replace(/^\//, '') ?? '';
-		const [sessionId, locationStr, requestId] = decodeURIComponent(composite).split('::');
+		const composite = this._decodeComposite(resource);
+		const [sessionId, locationStr, requestId] = composite.split('::');
 		if (!sessionId || !locationStr || !requestId) {
 			return undefined;
 		}
@@ -346,7 +361,18 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		};
 		this._sessionsByKey.set(this._compositeKey(sessionId, location, requestId), state);
 		this._sessionsByResource.set(resource.toString(), state);
+		this._sessionsByResource.set(resource.toString(true), state);
 		return state;
+	}
+
+	private _decodeComposite(resource: vscode.Uri): string {
+		const compositeEncoded = resource.path?.replace(/^\//, '') ?? '';
+		try {
+			// VS Code encodes once; older calls encoded before passing to URI, so decode twice.
+			return decodeURIComponent(decodeURIComponent(compositeEncoded));
+		} catch {
+			return compositeEncoded;
+		}
 	}
 
 	// ChatSessionItemProvider

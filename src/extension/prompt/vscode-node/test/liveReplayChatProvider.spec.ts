@@ -33,7 +33,8 @@ vi.mock('vscode', async () => {
 
 describe('LiveReplayChatProvider', () => {
 	const compositeKey = 'session-1::1::req-1';
-	const resource = vscode.Uri.from({ scheme: 'copilot-live-replay', path: `/${encodeURIComponent(compositeKey)}` });
+	const resource = vscode.Uri.from({ scheme: 'copilot-live-replay', path: `/${compositeKey}` });
+	const encodedResource = vscode.Uri.from({ scheme: 'copilot-live-replay', path: `/${encodeURIComponent(compositeKey)}` });
 	let instantiationService: IInstantiationService;
 	let liveRequestEditorService: ILiveRequestEditorService;
 	let provider: LiveReplayChatProvider;
@@ -70,6 +71,14 @@ describe('LiveReplayChatProvider', () => {
 
 		const activatedSession = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
 		expect(activatedSession.requestHandler).toBeDefined();
+	});
+
+	test('recovers state for encoded resources', async () => {
+		const snapshot = buildSnapshot();
+		provider.showReplay(snapshot);
+
+		const session = await provider.provideChatSessionContent(encodedResource, new vscode.CancellationTokenSource().token);
+		expect(session.history).toHaveLength(2);
 	});
 
 	test('request handler forwards to ChatParticipantRequestHandler with payload history', async () => {
