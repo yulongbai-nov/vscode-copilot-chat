@@ -5219,7 +5219,13 @@
 				"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
 				"canDelegate": false,
 				"capabilities": {
-					"supportsFileAttachments": false
+					"supportsFileAttachments": true,
+					"supportsProblemAttachments": true,
+					"supportsToolAttachments": true,
+					"supportsImageAttachments": true,
+					"supportsSymbolAttachments": true,
+					"supportsSearchResultAttachments": true,
+					"supportsSourceControlAttachments": true
 				}
 			},
 			{
