@@ -40,7 +40,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		@ILogService private readonly _logService: ILogService,
 	) {
 		super();
-		this._logService.trace('[LiveReplay] registering providers');
+		this._logService.info('[LiveReplay] registering providers');
 		const participant = vscode.chat.createChatParticipant(REPLAY_PARTICIPANT_ID, async () => ({}));
 		const contentDisposable = vscode.chat.registerChatSessionContentProvider(REPLAY_SCHEME, this, participant);
 		const itemDisposable = vscode.chat.registerChatSessionItemProvider(REPLAY_SCHEME, this);
@@ -57,8 +57,8 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	}
 
 	showReplay(snapshot: LiveRequestReplaySnapshot): void {
-		this._logService.trace(`[LiveReplay] showReplay begin ${snapshot.key.sessionId}/${snapshot.key.requestId} state=${snapshot.state} v${snapshot.version} sections=${snapshot.projection?.sections.length ?? 0} overflow=${snapshot.projection?.overflowCount ?? 0}`);
 		const composite = this._compositeKey(snapshot.key.sessionId, snapshot.key.location, snapshot.key.requestId);
+		this._logService.info(`[LiveReplay] showReplay begin ${composite} state=${snapshot.state} v${snapshot.version} sections=${snapshot.projection?.sections.length ?? 0} overflow=${snapshot.projection?.overflowCount ?? 0}`);
 		const existing = this._sessionsByKey.get(composite);
 		const resource = existing?.resource ?? vscode.Uri.from({
 			scheme: REPLAY_SCHEME,
@@ -73,7 +73,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		this._sessionsByResource.set(resource.toString(), state);
 		this._sessionsByResource.set(resource.toString(true), state);
 		this._onDidChangeChatSessionItems.fire();
-		this._logService.trace(`[LiveReplay] showReplay stored state and opening view ${resource.toString()}`);
+		this._logService.info(`[LiveReplay] showReplay stored state and opening view ${resource.toString()} (key=${resource.toString(true)})`);
 		void vscode.commands.executeCommand('vscode.open', resource);
 		void vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
 	}
@@ -89,7 +89,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 		if (!state) {
 			const composite = this._decodeComposite(resource);
-			this._logService.warn(`[LiveReplay] provideChatSessionContent missing state for ${resource.toString()} (composite=${composite})`);
+			this._logService.warn(`[LiveReplay] provideChatSessionContent missing state for ${resource.toString()} (composite=${composite}) keys=${Array.from(this._sessionsByResource.keys()).join(',')}`);
 			if (composite.startsWith('sample-session')) {
 				this._logService.trace('[LiveReplay] provideChatSessionContent rebuilding sample snapshot');
 				state = {
@@ -333,17 +333,20 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const composite = this._decodeComposite(resource);
 		const [sessionId, locationStr, requestId] = composite.split('::');
 		if (!sessionId || !locationStr || !requestId) {
+			this._logService.warn(`[LiveReplay] hydrate failed: invalid composite ${composite}`);
 			return undefined;
 		}
 		const location = Number(locationStr);
 		if (Number.isNaN(location)) {
+			this._logService.warn(`[LiveReplay] hydrate failed: location NaN in ${composite}`);
 			return undefined;
 		}
 		const snapshot = this._liveRequestEditorService.getReplaySnapshot({ sessionId, location, requestId });
 		if (!snapshot) {
+			this._logService.warn(`[LiveReplay] hydrate failed: no snapshot for ${composite}`);
 			return undefined;
 		}
-		this._logService.trace(`[LiveReplay] hydrated state from service ${composite}`);
+		this._logService.info(`[LiveReplay] hydrated state from service ${composite}`);
 		const state: ReplaySessionState = {
 			resource,
 			snapshot,
