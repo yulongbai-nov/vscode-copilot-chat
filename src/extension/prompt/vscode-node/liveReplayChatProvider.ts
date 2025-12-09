@@ -75,14 +75,15 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const composite = this._compositeKey(snapshot.key.sessionId, snapshot.key.location, snapshot.key.requestId);
 		this._logService.info(`[LiveReplay] showReplay begin ${composite} state=${snapshot.state} v${snapshot.version} sections=${snapshot.projection?.sections.length ?? 0} overflow=${snapshot.projection?.overflowCount ?? 0}`);
 		const existing = this._sessionsByKey.get(composite);
-		const resource = existing?.resource ?? vscode.Uri.from({
+		const resource = vscode.Uri.from({
 			scheme: REPLAY_SCHEME,
-			path: `/${composite}`
+			path: `/${composite}`,
+			query: String(snapshot.version ?? 0)
 		});
 		const state: ReplaySessionState = {
 			resource,
 			snapshot,
-			activated: false
+			activated: existing?.activated ?? false
 		};
 		this._sessionsByKey.set(composite, state);
 		this._rememberState(state);
