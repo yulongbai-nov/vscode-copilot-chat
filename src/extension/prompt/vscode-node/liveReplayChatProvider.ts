@@ -6,6 +6,7 @@
 import { Raw } from '@vscode/prompt-tsx';
 import * as vscode from 'vscode';
 import { defaultAgentName, getChatParticipantIdFromName } from '../../../platform/chat/common/chatAgents';
+import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { Event, Emitter } from '../../../util/vs/base/common/event';
@@ -74,6 +75,36 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		this._logService.trace(`[LiveReplay] showReplay stored state and opening view ${resource.toString()}`);
 		void vscode.commands.executeCommand('vscode.open', resource);
 		void vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+	}
+
+	showSampleReplay(): void {
+		const now = Date.now();
+		const payload: Raw.ChatMessage[] = [
+			{ role: Raw.ChatRole.System, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'System prep' }] },
+			{ role: Raw.ChatRole.User, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'Edited user message' }] }
+		];
+		const snapshot: LiveRequestReplaySnapshot = {
+			key: { sessionId: 'sample-session', location: ChatLocation.Panel, requestId: 'sample-turn' },
+			state: 'ready',
+			version: 1,
+			updatedAt: now,
+			payload,
+			payloadHash: 1,
+			projection: {
+				sections: [
+					{ id: 'sys', kind: 'system', label: 'System', content: 'System prep', collapsed: true, edited: false, sourceMessageIndex: 0 },
+					{ id: 'usr', kind: 'user', label: 'User', content: 'Edited user message', collapsed: false, edited: true, sourceMessageIndex: 1 }
+				],
+				totalSections: 2,
+				overflowCount: 0,
+				editedCount: 1,
+				deletedCount: 0
+			},
+			projectionHash: 1,
+			parentSessionId: 'sample-session',
+			parentTurnId: 'sample-turn'
+		};
+		this.showReplay(snapshot);
 	}
 
 	async provideChatSessionContent(resource: vscode.Uri, _token: vscode.CancellationToken): Promise<vscode.ChatSession> {

@@ -2092,6 +2092,12 @@
 			"category": "Chat"
 		},
 		{
+			"command": "github.copilot.liveRequestEditor.debugReplaySample",
+			"title": "Copilot: Show sample replay (debug)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+			"category": "Chat"
+		},
+		{
 			"command": "github.copilot.liveRequestEditor.reset",
 			"title": "Live Request Editor: Reset",
 			"icon": "$(refresh)",

@@ -203,6 +203,13 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const debugSampleReplayCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.debugReplaySample',
+			async () => {
+				this._replayChatProvider?.showSampleReplay();
+			}
+		);
+
 		const copyMetadataValue = vscode.commands.registerCommand(
 			'github.copilot.liveRequestMetadata.copyValue',
 			async (value?: string, label?: string) => {
@@ -220,6 +227,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(configureMetadataCommand);
 		this._disposables.add(copyMetadataValue);
 		this._disposables.add(replayPromptCommand);
+		this._disposables.add(debugSampleReplayCommand);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {
