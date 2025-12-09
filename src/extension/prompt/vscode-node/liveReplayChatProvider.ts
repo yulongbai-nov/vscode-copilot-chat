@@ -195,7 +195,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		this._onDidChangeChatSessionItems.fire();
 	}
 
-	private _buildDisplayHistory(state: ReplaySessionState): vscode.ChatResponseTurn2[] {
+	private _buildDisplayHistory(state: ReplaySessionState): Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2> {
 		const snapshot = state.snapshot;
 		const projection = snapshot.projection;
 		if (!projection) {
@@ -235,23 +235,33 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		}
 		summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: 'Open Live Request Editor', command: OPEN_LRE_COMMAND }));
 
-		const sectionMarkdown: vscode.ChatResponseMarkdownPart[] = [];
-		for (const section of projection.sections) {
-			sectionMarkdown.push(new vscode.ChatResponseMarkdownPart(this._formatSection(section)));
-		}
-		if (projection.overflowCount > 0) {
-			sectionMarkdown.push(new vscode.ChatResponseMarkdownPart(`…and ${projection.overflowCount} more sections not shown.`));
-		}
-		if (projection.trimmed) {
-			sectionMarkdown.push(new vscode.ChatResponseMarkdownPart('⚠️ Prompt was trimmed; replay may omit truncated content.'));
-		}
-
-		return [
+		const history: Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2> = [
 			new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 			new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),
 			new vscode.ChatRequestTurn2('Replay sections', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
-			new vscode.ChatResponseTurn2(sectionMarkdown, {}, REPLAY_PARTICIPANT_ID)
 		];
+		for (const section of projection.sections) {
+			history.push(
+				new vscode.ChatRequestTurn2(
+					`Section: ${section.label ?? section.kind}`,
+					undefined,
+					[],
+					REPLAY_PARTICIPANT_ID,
+					[],
+					undefined,
+					undefined
+				),
+				new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(this._formatSection(section))], {}, REPLAY_PARTICIPANT_ID)
+			);
+		}
+		if (projection.overflowCount > 0) {
+			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart(`…and ${projection.overflowCount} more sections not shown.`)], {}, REPLAY_PARTICIPANT_ID));
+		}
+		if (projection.trimmed) {
+			history.push(new vscode.ChatResponseTurn2([new vscode.ChatResponseMarkdownPart('⚠️ Prompt was trimmed; replay may omit truncated content.')], {}, REPLAY_PARTICIPANT_ID));
+		}
+
+		return history;
 	}
 
 	private _formatSection(section: LiveRequestReplaySection): string {
