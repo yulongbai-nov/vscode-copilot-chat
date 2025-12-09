@@ -34,6 +34,20 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	private readonly _onDidCommitChatSessionItem = new Emitter<{ original: vscode.ChatSessionItem; modified: vscode.ChatSessionItem }>();
 	readonly onDidCommitChatSessionItem = this._onDidCommitChatSessionItem.event;
 
+	private _rememberState(state: ReplaySessionState): void {
+		const resource = state.resource;
+		const keys = [
+			resource.toString(),
+			resource.toString(true),
+			resource.path,
+			resource.path ? decodeURIComponent(resource.path) : undefined
+		].filter(Boolean) as string[];
+		for (const key of keys) {
+			this._sessionsByResource.set(key, state);
+		}
+		this._logService.trace(`[LiveReplay] cached state for keys=${keys.join('|')}`);
+	}
+
 	constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
@@ -70,8 +84,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			activated: false
 		};
 		this._sessionsByKey.set(composite, state);
-		this._sessionsByResource.set(resource.toString(), state);
-		this._sessionsByResource.set(resource.toString(true), state);
+		this._rememberState(state);
 		this._onDidChangeChatSessionItems.fire();
 		this._logService.info(`[LiveReplay] showReplay stored state and opening view ${resource.toString()} (key=${resource.toString(true)})`);
 		void vscode.commands.executeCommand('vscode.open', resource);
@@ -98,8 +111,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 					activated: false
 				};
 				this._sessionsByKey.set(composite, state);
-				this._sessionsByResource.set(resource.toString(), state);
-				this._sessionsByResource.set(resource.toString(true), state);
+				this._rememberState(state);
 			}
 		}
 		if (!state) {
@@ -312,7 +324,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 	private _getState(resource: vscode.Uri): ReplaySessionState | undefined {
 		const keyA = resource.toString();
 		const keyB = resource.toString(true);
-		const byResource = this._sessionsByResource.get(keyA) ?? this._sessionsByResource.get(keyB);
+		const byResource = this._sessionsByResource.get(keyA) ?? this._sessionsByResource.get(keyB) ?? this._sessionsByResource.get(resource.path) ?? this._sessionsByResource.get(decodeURIComponent(resource.path ?? ''));
 		if (byResource) {
 			return byResource;
 		}
@@ -353,8 +365,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 			activated: snapshot.state === 'forkActive'
 		};
 		this._sessionsByKey.set(this._compositeKey(sessionId, location, requestId), state);
-		this._sessionsByResource.set(resource.toString(), state);
-		this._sessionsByResource.set(resource.toString(true), state);
+		this._rememberState(state);
 		return state;
 	}
 
