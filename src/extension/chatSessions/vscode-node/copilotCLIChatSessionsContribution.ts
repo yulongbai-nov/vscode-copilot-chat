@@ -188,6 +188,7 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 
 	private readonly _onDidCommitChatSessionItem = this._register(new Emitter<{ original: vscode.ChatSessionItem; modified: vscode.ChatSessionItem }>());
 	public readonly onDidCommitChatSessionItem: Event<{ original: vscode.ChatSessionItem; modified: vscode.ChatSessionItem }> = this._onDidCommitChatSessionItem.event;
+	private readonly _customLabels = new Map<string, string>();
 	constructor(
 		readonly worktreeManager: CopilotCLIWorktreeManager,
 		@ICopilotCLISessionService private readonly copilotcliSessionService: ICopilotCLISessionService,
@@ -210,6 +211,11 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 		this._onDidCommitChatSessionItem.fire({ original, modified });
 	}
 
+	public setCustomLabel(sessionId: string, label: string): void {
+		this._customLabels.set(sessionId, label);
+		this.notifySessionsChange();
+	}
+
 	public async provideChatSessionItems(token: vscode.CancellationToken): Promise<vscode.ChatSessionItem[]> {
 		const sessions = await this.copilotcliSessionService.getAllSessions(token);
 		const diskSessions = await Promise.all(sessions.map(async session => this._toChatSessionItem(session)));
@@ -225,7 +231,7 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 		const worktreePath = this.worktreeManager.getWorktreePath(session.id);
 		const worktreeRelativePath = this.worktreeManager.getWorktreeRelativePath(session.id);
 
-		const label = session.label;
+		const label = this._customLabels.get(session.id) ?? session.label;
 		const tooltipLines = [vscode.l10n.t(`Background agent session: {0}`, label)];
 		let description: vscode.MarkdownString | undefined;
 		let statistics: { files: number; insertions: number; deletions: number } | undefined;
@@ -941,7 +947,8 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 			return;
 		}
 
-		const currentLabel = sessionItem.label ?? SessionIdForCLI.parse(sessionItem.resource);
+		const sessionId = SessionIdForCLI.parse(sessionItem.resource);
+		const currentLabel = sessionItem.label ?? sessionId;
 		const newLabel = await vscode.window.showInputBox({
 			prompt: vscode.l10n.t('Rename Copilot CLI session'),
 			value: currentLabel,
@@ -953,11 +960,7 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 			return;
 		}
 
-		const modified: vscode.ChatSessionItem = {
-			...sessionItem,
-			label: trimmed
-		};
-		copilotcliSessionItemProvider.swap(sessionItem, modified);
+		copilotcliSessionItemProvider.setCustomLabel(sessionId, trimmed);
 	}));
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.replaySampleNative', async (sessionItem?: vscode.ChatSessionItem) => {
 		if (!sessionItem?.resource) {
