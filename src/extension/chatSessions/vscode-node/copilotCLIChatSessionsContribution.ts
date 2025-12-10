@@ -936,6 +936,91 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.newTerminalSession', async () => {
 		await copilotcliSessionItemProvider.createCopilotCLITerminal();
 	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.rename', async (sessionItem?: vscode.ChatSessionItem) => {
+		if (!sessionItem?.resource) {
+			return;
+		}
+
+		const currentLabel = sessionItem.label ?? SessionIdForCLI.parse(sessionItem.resource);
+		const newLabel = await vscode.window.showInputBox({
+			prompt: vscode.l10n.t('Rename Copilot CLI session'),
+			value: currentLabel,
+			ignoreFocusOut: true
+		});
+
+		const trimmed = newLabel?.trim();
+		if (!trimmed) {
+			return;
+		}
+
+		const modified: vscode.ChatSessionItem = {
+			...sessionItem,
+			label: trimmed
+		};
+		copilotcliSessionItemProvider.swap(sessionItem, modified);
+	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.replaySampleNative', async (sessionItem?: vscode.ChatSessionItem) => {
+		if (!sessionItem?.resource) {
+			return;
+		}
+
+		const sourceId = SessionIdForCLI.parse(sessionItem.resource);
+
+		// Open the source session in readonly mode and get its history
+		const sourceRef = await copilotCLISessionService.getSession(
+			sourceId,
+			{ model: undefined, workingDirectory: undefined, isolationEnabled: false, readonly: true, agent: undefined },
+			new vscode.CancellationTokenSource().token
+		);
+		if (!sourceRef) {
+			vscode.window.showWarningMessage(vscode.l10n.t('Source Copilot CLI session not found.'));
+			return;
+		}
+
+		try {
+			const sourceSession = sourceRef.object;
+			const sourceHistory = sourceSession.getChatHistory();
+			const sourceModelId = await sourceSession.getSelectedModelId();
+			const sourceOptions = sourceSession.options;
+
+			// Create a new session with similar options
+			const newRef = await copilotCLISessionService.createSession(
+				{
+					model: sourceModelId,
+					workingDirectory: sourceOptions.workingDirectory,
+					isolationEnabled: sourceOptions.isolationEnabled,
+					agent: undefined
+				},
+				new vscode.CancellationTokenSource().token
+			);
+
+			const newSession = newRef.object;
+
+			// Replay user/assistant turns into the new session as synthetic messages.
+			for (const turn of sourceHistory) {
+				if (turn instanceof vscode.ChatRequestTurn2) {
+					const text = turn.prompt || '';
+					if (text.trim().length) {
+						newSession.addUserMessage(text);
+					}
+				} else if (turn instanceof vscode.ChatResponseTurn2) {
+					const parts = turn.response ?? [];
+					const markdownParts = parts.filter(p => p instanceof vscode.ChatResponseMarkdownPart) as vscode.ChatResponseMarkdownPart[];
+					const text = markdownParts.map(p => p.value).join('\n\n');
+					if (text.trim().length) {
+						newSession.addUserAssistantMessage(text);
+					}
+				}
+			}
+
+			// Refresh sessions so the new one appears, then open it.
+			copilotcliSessionItemProvider.notifySessionsChange();
+			const newResource = SessionIdForCLI.getResource(newSession.sessionId);
+			await vscode.commands.executeCommand('vscode.open', newResource);
+		} finally {
+			sourceRef.dispose();
+		}
+	}));
 	disposableStore.add(vscode.commands.registerCommand('agentSession.copilotcli.openChanges', async (sessionItemResource?: vscode.Uri) => {
 		if (!sessionItemResource) {
 			return;

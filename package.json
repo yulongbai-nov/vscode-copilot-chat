@@ -1315,7 +1315,7 @@
 				"locations": [
 					"editor"
 				],
-				"commands": [
+			"commands": [
 					{
 						"name": "generate",
 						"when": "!config.chat.edits2.enabled",
@@ -1866,12 +1866,22 @@
 				"icon": "$(terminal)",
 				"category": "Copilot CLI"
 			},
-			{
-				"command": "github.copilot.cli.sessions.newTerminalSession",
-				"title": "%github.copilot.cli.sessions.newTerminalSession%",
-				"icon": "$(terminal)",
-				"category": "Copilot CLI"
-			},
+				{
+					"command": "github.copilot.cli.sessions.newTerminalSession",
+					"title": "%github.copilot.cli.sessions.newTerminalSession%",
+					"icon": "$(terminal)",
+					"category": "Copilot CLI"
+				},
+				{
+					"command": "github.copilot.cli.sessions.replaySampleNative",
+					"title": "%github.copilot.cli.sessions.replaySampleNative%",
+					"category": "Copilot CLI"
+				},
+				{
+					"command": "github.copilot.cli.sessions.rename",
+					"title": "%github.copilot.cli.sessions.rename%",
+					"category": "Copilot CLI"
+				},
 			{
 				"command": "github.copilot.chat.replay",
 				"title": "Start Chat Replay",
@@ -4784,11 +4794,11 @@
 					"when": "config.git.enabled && !git.missing && !isInDiffEditor && !isMergeEditor && resource in git.mergeChanges && git.activeResourceHasMergeConflicts"
 				}
 			],
-			"chat/chatSessions": [
-				{
-					"command": "github.copilot.cli.sessions.resumeInTerminal",
-					"when": "chatSessionType == copilotcli",
-					"group": "inline@1"
+				"chat/chatSessions": [
+					{
+						"command": "github.copilot.cli.sessions.resumeInTerminal",
+						"when": "chatSessionType == copilotcli",
+						"group": "inline@1"
 				},
 				{
 					"command": "github.copilot.cli.sessions.delete",
@@ -4815,12 +4825,22 @@
 					"when": "chatSessionType == copilot-cloud-agent",
 					"group": "context"
 				},
-				{
-					"command": "github.copilot.cli.sessions.delete",
-					"when": "chatSessionType == copilotcli && config.chat.agentSessionsViewLocation == 'single-view'",
-					"group": "context"
-				}
-			]
+					{
+						"command": "github.copilot.cli.sessions.delete",
+						"when": "chatSessionType == copilotcli && config.chat.agentSessionsViewLocation == 'single-view'",
+						"group": "context"
+					},
+					{
+						"command": "github.copilot.cli.sessions.rename",
+						"when": "chatSessionType == copilotcli",
+						"group": "context@5"
+					},
+					{
+						"command": "github.copilot.cli.sessions.replaySampleNative",
+						"when": "chatSessionType == copilotcli",
+						"group": "context@10"
+					}
+				]
 		},
 		"icons": {
 			"copilot-logo": {

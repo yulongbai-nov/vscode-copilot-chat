@@ -136,6 +136,23 @@ describe('CopilotCLITools', () => {
 			const bashInvocation = toolInvocations[0] as ChatToolInvocationPart;
 			expect(getInvocationMessageText(bashInvocation)).toContain('Echo');
 		});
+
+		it('ignores non-string content instead of showing [object Object]', () => {
+			const events: any[] = [
+				{ type: 'user.message', data: { content: { text: 'Hello' }, attachments: [] } },
+				{ type: 'assistant.message', data: { content: { text: 'World' } } }
+			];
+			const turns = buildChatHistoryFromEvents(events);
+			expect(turns).toHaveLength(1); // only a (possibly empty) response turn
+			const responseTurn = turns[0] as ChatResponseTurn2;
+			const responseParts: any = (responseTurn as any).response;
+			const parts: any[] = (responseParts.parts ?? responseParts._parts ?? responseParts);
+			const markdownPart = parts.find(p => p instanceof ChatResponseMarkdownPart);
+			if (markdownPart) {
+				const value = (markdownPart as any).value?.value || (markdownPart as any).value;
+				expect(String(value)).not.toContain('[object Object]');
+			}
+		});
 	});
 
 	describe('createCopilotCLIToolInvocation', () => {
@@ -223,4 +240,3 @@ describe('CopilotCLITools', () => {
 		});
 	});
 });
-

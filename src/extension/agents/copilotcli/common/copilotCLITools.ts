@@ -293,6 +293,8 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 		details = getVSCodeRequestId?.(event.id) ?? details;
 		switch (event.type) {
 			case 'user.message': {
+				const rawContent = event.data.content;
+				const content = typeof rawContent === 'string' ? rawContent : '';
 				// Flush any pending response parts before adding user message
 				if (currentResponseParts.length > 0) {
 					turns.push(new ChatResponseTurn2(currentResponseParts, {}, ''));
@@ -309,7 +311,7 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 				const references: ChatPromptReference[] = [];
 
 				try {
-					references.push(...extractChatPromptReferences(event.data.content || ''));
+					references.push(...extractChatPromptReferences(content || ''));
 				} catch (ex) {
 					// ignore errors from parsing references
 				}
@@ -324,7 +326,7 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 				((event.data.attachments || []) as Attachment[])
 					.filter(attachment => !isInstructionAttachmentPath(attachment.path))
 					.forEach(attachment => {
-						const range = attachment.displayName ? getRangeInPrompt(event.data.content || '', attachment.displayName) : undefined;
+						const range = attachment.displayName ? getRangeInPrompt(content || '', attachment.displayName) : undefined;
 						const attachmentPath = attachment.type === 'directory' ?
 							getFolderAttachmentPath(attachment.path) :
 							attachment.path;
@@ -339,13 +341,15 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 							range
 						});
 					});
-				turns.push(new ChatRequestTurn2(stripReminders(event.data.content || ''), undefined, references, '', [], undefined, details?.requestId));
+				turns.push(new ChatRequestTurn2(stripReminders(content || ''), undefined, references, '', [], undefined, details?.requestId));
 				break;
 			}
 			case 'assistant.message': {
-				if (event.data.content) {
+				const rawContent = event.data.content;
+				const content = typeof rawContent === 'string' ? rawContent : '';
+				if (content) {
 					// Extract PR metadata if present
-					const { cleanedContent, prPart } = extractPRMetadata(event.data.content);
+					const { cleanedContent, prPart } = extractPRMetadata(content);
 
 					// Add PR part first if it exists
 					if (prPart) {
