@@ -1,5 +1,7 @@
 # Replay → Native Copilot Chat Handoff – Investigation (Dec 2025)
 
+See also: `docs/copilot-chat-view-apis.md` (especially the **Replay → native Copilot handoff constraints** section) for a detailed reference on the underlying VS Code/Core vs extension APIs.
+
 ## Context / Goal
 - We want “Start chatting from this replay” to move the user into a normal Copilot chat session (default participant, model picker, attachments) seeded with the replay payload/history.
 - The replay tab should stay projection-only (debug/meta). Live turns should come from the standard Copilot experience (no replay participant interleave, no “preview” label on the active chat).
