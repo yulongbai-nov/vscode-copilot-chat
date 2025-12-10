@@ -961,6 +961,7 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 		}
 
 		copilotcliSessionItemProvider.setCustomLabel(sessionId, trimmed);
+		await vscode.commands.executeCommand('vscode.open', sessionItem.resource);
 	}));
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.replaySampleNative', async (sessionItem?: vscode.ChatSessionItem) => {
 		if (!sessionItem?.resource) {
