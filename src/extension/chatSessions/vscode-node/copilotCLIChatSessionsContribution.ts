@@ -972,6 +972,11 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 		}
 
 		await copilotcliSessionItemProvider.setCustomLabel(sessionId, trimmed);
+		const modified: vscode.ChatSessionItem = {
+			...sessionItem,
+			label: trimmed
+		};
+		copilotcliSessionItemProvider.swap(sessionItem, modified);
 		await vscode.commands.executeCommand('vscode.open', sessionItem.resource);
 	}));
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.replaySampleNative', async (sessionItem?: vscode.ChatSessionItem) => {
