@@ -195,12 +195,18 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 		@ICopilotCLITerminalIntegration private readonly terminalIntegration: ICopilotCLITerminalIntegration,
 		@IGitService private readonly gitService: IGitService,
 		@IRunCommandExecutionService private readonly commandExecutionService: IRunCommandExecutionService,
+		@IVSCodeExtensionContext private readonly extensionContext: IVSCodeExtensionContext,
 	) {
 		super();
 		this._register(this.terminalIntegration);
 		this._register(this.copilotcliSessionService.onDidChangeSessions(() => {
 			this.notifySessionsChange();
 		}));
+
+		const storedLabels = this.extensionContext.globalState.get<Record<string, string>>('github.copilot.cli.sessionLabels', {});
+		for (const [id, label] of Object.entries(storedLabels)) {
+			this._customLabels.set(id, label);
+		}
 	}
 
 	public notifySessionsChange(): void {
@@ -211,8 +217,13 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 		this._onDidCommitChatSessionItem.fire({ original, modified });
 	}
 
-	public setCustomLabel(sessionId: string, label: string): void {
+	public async setCustomLabel(sessionId: string, label: string): Promise<void> {
 		this._customLabels.set(sessionId, label);
+		const payload: Record<string, string> = {};
+		for (const [id, lbl] of this._customLabels) {
+			payload[id] = lbl;
+		}
+		await this.extensionContext.globalState.update('github.copilot.cli.sessionLabels', payload);
 		this.notifySessionsChange();
 	}
 
@@ -960,7 +971,7 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 			return;
 		}
 
-		copilotcliSessionItemProvider.setCustomLabel(sessionId, trimmed);
+		await copilotcliSessionItemProvider.setCustomLabel(sessionId, trimmed);
 		await vscode.commands.executeCommand('vscode.open', sessionItem.resource);
 	}));
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.replaySampleNative', async (sessionItem?: vscode.ChatSessionItem) => {
