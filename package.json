@@ -1883,6 +1883,11 @@
 				"category": "Copilot CLI"
 			},
 			{
+				"command": "github.copilot.liveRequestEditor.showReplayPayloadDiff",
+				"title": "%github.copilot.liveRequestEditor.showReplayPayloadDiff%",
+				"category": "Copilot CLI"
+			},
+			{
 				"command": "github.copilot.cli.sessions.createSampleNative",
 				"title": "%github.copilot.cli.sessions.createSampleNative%",
 				"category": "Copilot CLI"

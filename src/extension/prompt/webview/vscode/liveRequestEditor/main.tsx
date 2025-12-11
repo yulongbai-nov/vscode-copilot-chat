@@ -1084,6 +1084,16 @@ const App: React.FC = () => {
 		});
 	}, [request, sendMessage]);
 
+	const handleShowPayloadDiff = React.useCallback(() => {
+		if (!request) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.showReplayPayloadDiff',
+			args: [{ sessionId: request.sessionId, location: request.location }]
+		});
+	}, [request, sendMessage]);
+
 	const handleToggleReplayView = React.useCallback(() => {
 		const targetUri = replayUri ?? lastReplayUri;
 		if (!targetUri) {
@@ -1288,6 +1298,9 @@ const App: React.FC = () => {
 								</vscode-button>
 								<vscode-button appearance="secondary" onClick={handleReplayInCli}>
 									Replay edited prompt in CLI session
+								</vscode-button>
+								<vscode-button appearance="secondary" onClick={handleShowPayloadDiff}>
+									Show payload diff
 								</vscode-button>
 								<vscode-button
 									appearance="secondary"

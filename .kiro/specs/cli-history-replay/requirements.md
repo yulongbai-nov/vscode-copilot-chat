@@ -107,3 +107,20 @@ The feature is intended as a sample / internal tool to explore “native-parity�
    - IF the message role is `assistant` (or any non-user role that produces visible text), call `addUserAssistantMessage(<rendered text>)` on the CLI session.
 4. THE rendering of each replay payload message into text SHALL follow the same rules used by the Live Request Editor replay pipeline (e.g. the same logic as `_renderMessageText(...)`), so that what appears in the forked CLI session matches what the user would see in the replay payload view.
 5. AFTER seeding, THE system SHALL apply a distinct, human-readable label to the forked CLI session (e.g. `Replay from Live Request Editor · <shortId>`) via `CopilotCLIChatSessionItemProvider.setCustomLabel(...)`, refresh the CLI sessions view, and open the new session in the Copilot CLI chat editor so the user can continue from the forked state.
+
+### Requirement 9 – Diff original vs edited payload for Live Request Editor replay
+
+**User Story:** As a Copilot engineer debugging replay behaviour, I want a quick way to see the exact JSON payload difference between the original request and the edited request used for replay/forking, so that I can inspect what changed at the Raw level without manually copying JSON out of logs.
+
+#### Acceptance Criteria
+
+1. THE system SHALL expose a command (e.g. `github.copilot.liveRequestEditor.showReplayPayloadDiff`) that, given a `LiveRequestReplayKey` or `LiveRequestSessionKey`, opens a VS Code diff editor showing the **original** vs **edited** `Raw.ChatMessage[]` payloads for the current Live Request Editor replay.  
+2. WHEN invoked from the Live Request Editor replay row for a given request, THE system SHALL:
+   - Use `LiveRequestEditorService` to obtain the current edited payload (the same payload that `buildReplayForRequest(...)` would produce for send/CLI fork), and  
+   - Rebuild the original payload from `EditableChatRequest.originalMessages` (or equivalent source of truth), ensuring both sides use the same serialization shape (for example, pretty-printed JSON with stable key ordering).  
+3. THE diff view SHALL:
+   - Use in-memory, untitled documents (no workspace files),  
+   - Label the left side clearly as “Original payload” and the right side as “Edited payload”, and  
+   - Use a stable, descriptive title (for example, `Live Request Editor · Payload diff · <shortId>`).  
+4. THE Live Request Editor webview replay metadata row SHALL surface a **“Show payload diff”** button adjacent to the existing replay actions (for example, next to “Replay edited prompt in CLI session”), which invokes the diff command for the currently selected request/replay.  
+5. THE diff helper SHALL be read-only and SHALL NOT modify the underlying request, replay state, or any Copilot CLI sessions; its sole purpose is observability.  

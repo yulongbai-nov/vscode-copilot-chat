@@ -291,11 +291,27 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					this._resolvePendingIntercept('cancel', 'user');
 					break;
 
-				case 'command':
+				case 'command': {
 					if (typeof payload.command === 'string') {
-						await vscode.commands.executeCommand(payload.command, ...(payload.args ?? []));
+						// Special-case payload diff so we can use the current request
+						// even if the webview only has a sessionId/location pair.
+						if (payload.command === 'github.copilot.liveRequestEditor.showReplayPayloadDiff') {
+							const arg = (payload.args?.[0] ?? {}) as { sessionId?: string; location?: ChatLocation };
+							const key = (arg.sessionId && typeof arg.location === 'number')
+								? { sessionId: arg.sessionId, location: arg.location as ChatLocation }
+								: this._currentRequest
+									? { sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
+									: undefined;
+							if (!key) {
+								break;
+							}
+							await this._showReplayPayloadDiff(key);
+						} else {
+							await vscode.commands.executeCommand(payload.command, ...(payload.args ?? []));
+						}
 					}
 					break;
+				}
 				case 'showOverrideDiff': {
 					const message = payload;
 					if (typeof message.slotIndex === 'number') {
@@ -538,6 +554,38 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			return undefined;
 		}
 		return { sessionId, location: location as ChatLocation };
+	}
+
+	private async _showReplayPayloadDiff(key: LiveRequestSessionKey): Promise<void> {
+		const request = this._liveRequestEditorService.getRequest(key);
+		if (!request) {
+			void vscode.window.showInformationMessage('No Live Request Editor payload is available for this request.');
+			return;
+		}
+
+		// Original vs edited payloads, serialized with stable formatting.
+		const originalPayload = request.originalMessages;
+		const editedResult = this._liveRequestEditorService.getMessagesForSend(key, request.originalMessages);
+		if (editedResult.error) {
+			void vscode.window.showWarningMessage('Cannot build payload diff because the edited request is invalid. Reset the prompt and try again.');
+			return;
+		}
+
+		const beforeJson = JSON.stringify(originalPayload, null, 2);
+		const afterJson = JSON.stringify(editedResult.messages, null, 2);
+
+		const shortId = request.sessionId.slice(-6);
+		const left = await vscode.workspace.openTextDocument({
+			language: 'json',
+			content: beforeJson
+		});
+		const right = await vscode.workspace.openTextDocument({
+			language: 'json',
+			content: afterJson
+		});
+
+		const title = vscode.l10n.t('Live Request Editor · Payload diff · {0}', shortId);
+		await vscode.commands.executeCommand('vscode.diff', left.uri, right.uri, title);
 	}
 
 	private async _showOverrideDiff(scope: LiveRequestOverrideScope, slotIndex: number, sessionKey?: LiveRequestSessionKey): Promise<void> {
