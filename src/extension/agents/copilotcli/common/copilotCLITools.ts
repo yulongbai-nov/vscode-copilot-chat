@@ -346,7 +346,12 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 			}
 			case 'assistant.message': {
 				const rawContent = event.data.content;
-				const content = typeof rawContent === 'string' ? rawContent : '';
+				let content: string;
+				if (typeof rawContent === 'string') {
+					content = rawContent === '[object Object]' ? '[non-text content]' : rawContent;
+				} else {
+					content = rawContent ? '[non-text content]' : '';
+				}
 				if (content) {
 					// Extract PR metadata if present
 					const { cleanedContent, prPart } = extractPRMetadata(content);

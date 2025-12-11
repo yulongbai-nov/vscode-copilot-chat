@@ -171,8 +171,15 @@ export class CopilotCLISession extends DisposableStore implements ICopilotCLISes
 				sdkRequestId = event.id;
 			})));
 			disposables.add(toDisposable(this._sdkSession.on('assistant.message', (event) => {
-				if (typeof event.data.content === 'string' && event.data.content.length) {
-					this._stream?.markdown(event.data.content);
+				const rawContent = event.data.content;
+				let content: string | undefined;
+				if (typeof rawContent === 'string') {
+					content = rawContent === '[object Object]' ? '[non-text content]' : rawContent;
+				} else if (rawContent) {
+					content = '[non-text content]';
+				}
+				if (content && content.length) {
+					this._stream?.markdown(content);
 				}
 			})));
 			disposables.add(toDisposable(this._sdkSession.on('tool.execution_start', (event) => {

@@ -137,19 +137,36 @@ describe('CopilotCLITools', () => {
 			expect(getInvocationMessageText(bashInvocation)).toContain('Echo');
 		});
 
-		it('ignores non-string content instead of showing [object Object]', () => {
+		it('renders placeholder for non-string content instead of [object Object]', () => {
 			const events: any[] = [
 				{ type: 'user.message', data: { content: { text: 'Hello' }, attachments: [] } },
 				{ type: 'assistant.message', data: { content: { text: 'World' } } }
 			];
 			const turns = buildChatHistoryFromEvents(events);
-			expect(turns).toHaveLength(1); // only a (possibly empty) response turn
-			const responseTurn = turns[0] as ChatResponseTurn2;
+			const responseTurn = turns.find(t => t instanceof ChatResponseTurn2) as ChatResponseTurn2;
 			const responseParts: any = (responseTurn as any).response;
 			const parts: any[] = (responseParts.parts ?? responseParts._parts ?? responseParts);
 			const markdownPart = parts.find(p => p instanceof ChatResponseMarkdownPart);
 			if (markdownPart) {
 				const value = (markdownPart as any).value?.value || (markdownPart as any).value;
+				expect(String(value)).toContain('[non-text content]');
+			}
+		});
+
+		it('renders placeholder when assistant content is literal [object Object] string', () => {
+			const events: any[] = [
+				{ type: 'assistant.message', data: { content: '[object Object]' } }
+			];
+			const turns = buildChatHistoryFromEvents(events);
+			expect(turns).toHaveLength(1);
+			const responseTurn = turns[0] as ChatResponseTurn2;
+			const responseParts: any = (responseTurn as any).response;
+			const parts: any[] = (responseParts.parts ?? responseParts._parts ?? responseParts);
+			const markdownPart = parts.find(p => p instanceof ChatResponseMarkdownPart);
+			expect(markdownPart).toBeTruthy();
+			if (markdownPart) {
+				const value = (markdownPart as any).value?.value || (markdownPart as any).value;
+				expect(String(value)).toContain('[non-text content]');
 				expect(String(value)).not.toContain('[object Object]');
 			}
 		});
