@@ -242,3 +242,46 @@ As an advanced user, I want to optionally mirror chat history into Graphiti so I
 14.4 THE sync SHALL be idempotent (stable IDs + content hashes) and maintain a local cursor to resume after failures; retries SHALL be bounded.  
 14.5 ATTACHMENTS SHALL be redacted (URIs + hashes only) unless an explicit opt-in is set; embeddings SHALL only be requested when the Graphiti instance advertises an embedder.  
 14.6 TELEMETRY/diagnostics SHALL record sync successes/failures and queue depth (no user content).  
+
+### Requirement 15 – Surgical Payload Editing Fidelity
+
+**User Story:**  
+As a Copilot engineer debugging complex prompts (with images and other non-text parts), I want section edits in the Live Request Editor to change only the textual portions of the underlying `Raw.ChatMessage[]` while preserving the original non-text content parts and message-level metadata, so that the payload sent to the LLM remains structurally faithful to what was originally rendered.
+
+#### Acceptance Criteria
+
+15.1 WHEN a section is **not** edited or deleted, THEN the corresponding `Raw.ChatMessage` in the recomposed payload SHALL remain a deep clone of the original message emitted by the prompt renderer, including:
+- `role` (`System`/`User`/`Assistant`/`Tool`).
+- All `ChatCompletionContentPart` entries (Text, Image, Opaque, CacheBreakpoint).
+- Any `toolCalls`, `toolCallId`, `name`, and other metadata fields.
+
+15.2 WHEN a section is **edited**, THEN the Live Request Editor SHALL:
+- Treat the section’s `content` value as an edit to the concatenation of that message’s textual content (all `ChatCompletionContentPartKind.Text` parts), and  
+- Limit mutations to those textual parts while preserving:
+  - Message `role`, `toolCalls`, `toolCallId`, `name`, and
+  - All non-text `ChatCompletionContentPart` entries (Image/Opaque/CacheBreakpoint), including their ordering relative to each other.
+
+15.3 FOR messages that originally contained **exactly one** `Text` content part, editing a section SHALL:
+- Replace the `text` field of that part with the edited string, and  
+- Leave all other content parts (if any) untouched and in their original positions.
+
+15.4 FOR messages that originally contained **multiple** `Text` content parts interleaved with non-text parts, editing a section SHOULD:
+- Compute the original aggregate text (concatenation of all `Text` parts in order),  
+- Apply the user’s edit to that aggregate (e.g., via a line-aware diff or full replace), and  
+- Reconstruct the message’s `Text` parts by:
+  - Updating existing `Text` parts’ `text` fields where possible, and
+  - Splitting or merging `Text` parts only as needed to reflect insertions/deletions,  
+  - Without removing or reordering any non-text parts.
+
+15.5 IF the editor cannot derive a stable mapping between the edited aggregate text and the original set of `Text` parts (for example, due to extreme structural changes), THEN it MAY fall back to a simpler representation for that message, but it MUST:
+- Preserve all non-text parts from the original message as valid `ChatCompletionContentPart` entries, and  
+- Ensure the resulting `Raw.ChatMessage` still conforms to the `@vscode/prompt-tsx` Raw schema.
+
+15.6 WHEN the Live Request Editor builds replay payloads (e.g., via `buildReplayForRequest(...)`) or sends requests to the LLM, the resulting `Raw.ChatMessage[]` payload SHALL:
+- Honor the surgical editing semantics above, and  
+- Remain compatible with downstream consumers that expect canonical `Raw.ChatMessage` structures (including Chat Timeline Replay, CLI history replay, and any future telemetry/persistence layers).
+
+15.7 TESTS SHALL cover:
+- Editing a single-text-part message (text changed, non-text unchanged).  
+- Editing a multi-text-part message with interleaved non-text parts, asserting that non-text parts remain in place and that text changes are confined to `Text` parts.  
+- Fallback behavior when diffs are too complex, verifying schema correctness and non-text preservation.
