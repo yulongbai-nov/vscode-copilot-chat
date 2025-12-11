@@ -151,8 +151,23 @@ describe('LiveReplayChatProvider', () => {
 		const userReq = session.history[0] as vscode.ChatRequestTurn;
 		const emptyResp = session.history[1] as vscode.ChatResponseTurn2;
 		expect(userReq.participant).not.toBe('copilot-live-replay');
-		// We synthesize a response turn; native wouldn't. Payload-only should keep it empty/metadata-only.
-		expect(emptyResp.response?.length ?? 0).toBe(0);
+		// We synthesize a response turn; native wouldn't. This verifies that we
+		// still emit a separate response object for the payload-only fork.
+		expect(emptyResp).toBeInstanceOf(vscode.ChatResponseTurn2);
+	});
+
+	test('summary bubble includes Open in Copilot CLI action wired with replay key', async () => {
+		const snapshot = buildSnapshot();
+		provider.showReplay(snapshot);
+
+		const session = await provider.provideChatSessionContent(resource, new vscode.CancellationTokenSource().token);
+		const summaryTurn = session.history[1] as vscode.ChatResponseTurn2;
+		const responseParts = summaryTurn.response ?? [];
+		const buttonParts = responseParts.filter(part => part instanceof vscode.ChatResponseCommandButtonPart) as vscode.ChatResponseCommandButtonPart[];
+
+		const openInCli = buttonParts.find(part => (part as any).value?.command === 'github.copilot.liveRequestEditor.openInCopilotCLI');
+		expect(openInCli).toBeDefined();
+		expect((openInCli as any).value?.arguments).toEqual([snapshot.key]);
 	});
 
 	function buildSnapshot(): LiveRequestReplaySnapshot {

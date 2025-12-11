@@ -29,6 +29,9 @@ import { ICopilotCLISession } from '../../agents/copilotcli/node/copilotcliSessi
 import { ICopilotCLISessionItem, ICopilotCLISessionService } from '../../agents/copilotcli/node/copilotcliSessionService';
 import { PermissionRequest, requestPermission } from '../../agents/copilotcli/node/permissionHelpers';
 import { ChatVariablesCollection, isPromptFile } from '../../prompt/common/chatVariablesCollection';
+import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
+import { LiveRequestReplayKey } from '../../prompt/common/liveRequestEditorModel';
+import { Raw } from '@vscode/prompt-tsx';
 import { ChatSummarizerProvider } from '../../prompt/node/summarizer';
 import { IToolsService } from '../../tools/common/toolsService';
 import { ICopilotCLITerminalIntegration } from './copilotCLITerminalIntegration';
@@ -902,7 +905,7 @@ export class CopilotCLIChatSessionParticipant extends Disposable {
 	}
 }
 
-export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCLIChatSessionItemProvider, copilotCLISessionService: ICopilotCLISessionService, gitService: IGitService): IDisposable {
+export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCLIChatSessionItemProvider, copilotCLISessionService: ICopilotCLISessionService, gitService: IGitService, liveRequestEditorService: ILiveRequestEditorService): IDisposable {
 	const disposableStore = new DisposableStore();
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.copilotcli.sessions.refresh', () => {
 		copilotcliSessionItemProvider.notifySessionsChange();
@@ -1068,6 +1071,55 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 			sourceRef.dispose();
 		}
 	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.liveRequestEditor.openInCopilotCLI', async (key?: LiveRequestReplayKey) => {
+		if (!key) {
+			return;
+		}
+
+		const snapshot = liveRequestEditorService.getReplaySnapshot(key);
+		if (!snapshot || !snapshot.payload || snapshot.payload.length === 0) {
+			vscode.window.showInformationMessage(vscode.l10n.t('Nothing to replay for this request.'));
+			return;
+		}
+
+		// Create a new Copilot CLI session seeded from the replay payload.
+		const cancellationSource = new vscode.CancellationTokenSource();
+		const newRef = await copilotCLISessionService.createSession(
+			{
+				model: snapshot.model,
+				workingDirectory: undefined,
+				isolationEnabled: false,
+				agent: undefined
+			},
+			cancellationSource.token
+		);
+
+		const newSession = newRef.object;
+
+		try {
+			for (const message of snapshot.payload ?? []) {
+				const text = renderReplayMessageText(message).trim();
+				if (!text) {
+					continue;
+				}
+				if (message.role === Raw.ChatRole.User) {
+					newSession.addUserMessage(text);
+				} else {
+					newSession.addUserAssistantMessage(text);
+				}
+			}
+
+			const shortId = newSession.sessionId.slice(-6);
+			const label = vscode.l10n.t('Replay from Live Request Editor · {0}', shortId);
+			await copilotcliSessionItemProvider.setCustomLabel(newSession.sessionId, label);
+
+			copilotcliSessionItemProvider.notifySessionsChange();
+			const newResource = SessionIdForCLI.getResource(newSession.sessionId);
+			await vscode.commands.executeCommand('vscode.open', newResource);
+		} finally {
+			newRef.dispose();
+		}
+	}));
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.createSampleNative', async () => {
 		// Create a brand new Copilot CLI session with a small, hard-coded history.
 		const newRef = await copilotCLISessionService.createSession(
@@ -1173,4 +1225,23 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 		});
 	}));
 	return disposableStore;
+}
+
+function renderReplayMessageText(message: Raw.ChatMessage): string {
+	const pieces: string[] = [];
+	for (const part of message.content ?? []) {
+		const unknownPart = part as { text?: unknown; content?: unknown; type?: unknown; toolCallId?: unknown };
+		if (part.type === Raw.ChatCompletionContentPartKind.Text) {
+			pieces.push(part.text ?? '');
+		} else if ('text' in part && typeof part.text === 'string') {
+			pieces.push(part.text);
+		} else if (typeof unknownPart.content === 'string') {
+			pieces.push(unknownPart.content);
+		} else if (unknownPart.type === 'image_url') {
+			pieces.push('[image]');
+		} else if (unknownPart.toolCallId) {
+			pieces.push(`Tool call: ${unknownPart.toolCallId}`);
+		}
+	}
+	return pieces.join('\n');
 }

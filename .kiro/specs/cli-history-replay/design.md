@@ -152,6 +152,11 @@ High-level flow for the sample replay:
 
 ## Future Enhancements (Out of Scope for MVP)
 
+- Add a Live Request Editor → Copilot CLI fork path:
+  - From a `LiveRequestReplaySnapshot` (edited prompt + replay payload), provide a button in the replay summary that:
+    - Creates a new `CopilotCLISession` via `ICopilotCLISessionService.createSession(...)`.
+    - Seeds its history by iterating the replay payload (`Raw.ChatMessage[]`) and calling `addUserMessage(...)` / `addUserAssistantMessage(...)` with text rendered using the same rules as the Live Replay view.
+    - Labels the new session clearly (e.g. `Replay from Live Request Editor · <shortId>`) and opens it in the Copilot CLI chat view so the user can continue from that forked state using native CLI behaviour.
 - Attach a lightweight “source session” link/metadata to the new session (e.g., first synthetic assistant message includes a backlink).
 - Support replaying only a selected prefix or range of turns.
 - Integrate with Live Request Editor replay snapshots as an alternate history source.

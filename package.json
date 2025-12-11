@@ -1878,6 +1878,11 @@
 				"category": "Copilot CLI"
 			},
 			{
+				"command": "github.copilot.liveRequestEditor.openInCopilotCLI",
+				"title": "%github.copilot.liveRequestEditor.openInCopilotCLI%",
+				"category": "Copilot CLI"
+			},
+			{
 				"command": "github.copilot.cli.sessions.createSampleNative",
 				"title": "%github.copilot.cli.sessions.createSampleNative%",
 				"category": "Copilot CLI"

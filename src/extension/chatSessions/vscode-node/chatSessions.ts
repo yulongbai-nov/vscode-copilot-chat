@@ -31,6 +31,7 @@ import { CopilotCLITerminalIntegration, ICopilotCLITerminalIntegration } from '.
 import { CopilotCloudSessionsProvider } from './copilotCloudSessionsProvider';
 import { PRContentProvider } from './prContentProvider';
 import { IPullRequestFileChangesService, PullRequestFileChangesService } from './pullRequestFileChangesService';
+import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
 
 
 // https://github.com/microsoft/vscode-pull-request-github/blob/8a5c9a145cd80ee364a3bed9cf616b2bd8ac74c2/src/github/copilotApi.ts#L56-L71
@@ -119,9 +120,10 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 			copilotCLIWorktreeManager
 		));
 		const copilotCLISessionService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(ICopilotCLISessionService));
+		const liveRequestEditorService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(ILiveRequestEditorService));
 		const copilotcliParticipant = vscode.chat.createChatParticipant(this.copilotcliSessionType, copilotcliChatSessionParticipant.createHandler());
 		this._register(vscode.chat.registerChatSessionContentProvider(this.copilotcliSessionType, copilotcliChatSessionContentProvider, copilotcliParticipant));
-		this._register(registerCLIChatCommands(copilotcliSessionItemProvider, copilotCLISessionService, gitService));
+		this._register(registerCLIChatCommands(copilotcliSessionItemProvider, copilotCLISessionService, gitService, liveRequestEditorService));
 	}
 
 	private registerCopilotCloudAgent() {

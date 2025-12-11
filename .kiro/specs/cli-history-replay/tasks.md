@@ -38,3 +38,10 @@
   - [ ] 7.2 Design a cross-session mapping so that when an agent turn is logically associated with a CLI background session, we can identify the corresponding `CopilotCLISession`.  
   - [ ] 7.3 Prototype a hook that, given an agent’s final assistant response text, can safely append that text into the associated CLI session via `addUserAssistantMessage(...)` without breaking existing history semantics.  
   - [ ] 7.4 Evaluate how this mapping interacts with replay (e.g. whether replay should include agent-only turns) and document any limitations in `docs/cli-history-replay-handoff.md`.  
+
+- [x] 8. Replay edited prompt into new CLI session from Live Replay  
+  - [x] 8.1 Add a new command id (e.g. `github.copilot.liveRequestEditor.openInCopilotCLI`) in `package.json` and surface it via a button in the Live Replay summary bubble (e.g. “Open in Copilot CLI”).  
+  - [x] 8.2 Extend `registerCLIChatCommands(...)` in `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts` to register a handler for this command that accepts a `LiveRequestReplayKey` argument.  
+  - [x] 8.3 Within the handler, use `ILiveRequestEditorService.getReplaySnapshot(key)` to fetch the replay payload, create a new CLI session via `ICopilotCLISessionService.createSession(...)`, and seed its history by iterating `snapshot.payload` and calling `addUserMessage(...)` / `addUserAssistantMessage(...)` with text rendered using the same rules as `LiveReplayChatProvider._renderMessageText(...)`.  
+  - [x] 8.4 Apply a distinct label (e.g. `Replay from Live Request Editor · <shortId>`) via `CopilotCLIChatSessionItemProvider.setCustomLabel(...)`, refresh the CLI sessions list, and open the new CLI session in the chat editor.  
+  - [x] 8.5 Add unit coverage to validate that the Live Replay summary includes the new CLI button wired to the correct command id, and that the CLI replay-from-replay path correctly renders simple system/user/assistant payload messages into seeded CLI history.  

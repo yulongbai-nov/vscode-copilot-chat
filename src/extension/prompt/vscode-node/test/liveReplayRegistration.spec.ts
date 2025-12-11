@@ -74,6 +74,7 @@ describe('LiveReplay registration', () => {
 
 		expect(commands.some((c: any) => c.command === 'github.copilot.liveRequestEditor.startReplayChat')).toBe(true);
 		expect(commands.some((c: any) => c.command === 'github.copilot.liveRequestEditor.debugReplaySample')).toBe(true);
+		expect(commands.some((c: any) => c.command === 'github.copilot.liveRequestEditor.openInCopilotCLI')).toBe(true);
 		expect(chatSessions.some((s: any) => s.type === 'copilot-live-replay')).toBe(true);
 	});
 });

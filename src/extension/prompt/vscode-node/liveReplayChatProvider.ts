@@ -22,6 +22,7 @@ const REPLAY_PARTICIPANT_ID = REPLAY_SCHEME;
 const START_REPLAY_COMMAND = 'github.copilot.liveRequestEditor.startReplayChat';
 const OPEN_LRE_COMMAND = 'github.copilot.liveRequestEditor.show';
 const TOGGLE_VIEW_COMMAND = 'github.copilot.liveRequestEditor.toggleReplayView';
+const OPEN_IN_CLI_COMMAND = 'github.copilot.liveRequestEditor.openInCopilotCLI';
 
 interface ReplaySessionState {
 	readonly resource: vscode.Uri;
@@ -264,6 +265,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 				summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: startLabel, command: START_REPLAY_COMMAND, arguments: [state.resource] }));
 			}
 			summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: 'Open Live Request Editor', command: OPEN_LRE_COMMAND }));
+			summaryParts.push(new vscode.ChatResponseCommandButtonPart({ title: 'Open in Copilot CLI', command: OPEN_IN_CLI_COMMAND, arguments: [snapshot.key] }));
 			history.push(
 				new vscode.ChatRequestTurn2('Replay summary', undefined, [], REPLAY_PARTICIPANT_ID, [], undefined, undefined),
 				new vscode.ChatResponseTurn2(summaryParts, {}, REPLAY_PARTICIPANT_ID),

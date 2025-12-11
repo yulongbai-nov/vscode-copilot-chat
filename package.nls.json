@@ -136,6 +136,7 @@
 		"github.copilot.cli.sessions.replaySampleNative": "Replay Session in New CLI Session (Sample)",
 		"github.copilot.cli.sessions.createSampleNative": "Create Sample Copilot CLI Session",
 		"github.copilot.cli.sessions.rename": "Rename CLI Session…",
+		"github.copilot.liveRequestEditor.openInCopilotCLI": "Open Replay in Copilot CLI Session",
 	"github.copilot.git.generateCommitMessage": "Generate Commit Message",
 	"github.copilot.git.resolveMergeConflicts": "Resolve Conflicts with AI",
 	"github.copilot.devcontainer.generateDevContainerConfig": "Generate Dev Container Configuration",
