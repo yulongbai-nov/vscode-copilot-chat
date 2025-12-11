@@ -80,4 +80,16 @@ The feature is intended as a sample / internal tool to explore “native-parity�
 1. THE system SHALL expose a command (e.g. `github.copilot.cli.sessions.createSampleNative`) that creates a new Copilot CLI session without requiring a selected source session.
 2. WHEN this command is executed, THE system SHALL call `ICopilotCLISessionService.createSession(...)` to obtain a fresh `CopilotCLISession` wrapper and SHALL NOT read or mutate any existing session state.
 3. AFTER the session is created, THE system SHALL seed it with at least one user message and one assistant message using `addUserMessage(...)` and `addUserAssistantMessage(...)`, using simple, hard-coded text that explains the demo.
-4. AFTER seeding, THE system SHALL refresh the Copilot CLI sessions view and open the new session in the standard CLI chat editor so the pre-made history is immediately visible.
+4. AFTER seeding, THE system SHALL assign a distinct, human-readable label to the session (e.g. `Sample CLI session · <shortId>`) via `CopilotCLIChatSessionItemProvider.setCustomLabel(...)` so it is clearly identifiable in the sessions list.
+5. AFTER labelling, THE system SHALL refresh the Copilot CLI sessions view and open the new session in the standard CLI chat editor so the pre-made history is immediately visible.
+
+### Requirement 7 – Forked CLI sessions and agent parity (future)
+
+**User Story:** As a Copilot engineer, when I “fork” a CLI session via replay and then continue the conversation, I want the forked CLI session to include the same final assistant response that I saw in the intercepted/agent view (e.g. a code-generation joke), so that the CLI history and the agent view stay in sync.
+
+#### Acceptance Criteria (not yet implemented)
+
+1. THE system SHOULD maintain a mapping between the higher-level agent/Live Request Editor session id and the underlying Copilot CLI session id so that turns can be correlated across both layers.
+2. WHEN the agent pipeline produces a final assistant response for a turn that is logically associated with a CLI background session, THE system SHOULD also add that response into the CLI session via `CopilotCLISession.addUserAssistantMessage(...)` (or an equivalent hook), so that it appears in the CLI JSONL event log.
+3. WHEN the CLI history replay sample command is used to fork a new CLI session from an existing one, THEN the replayed history SHOULD include any such synchronized agent responses, allowing the user to continue the conversation from the latest visible answer.
+4. THESE behaviours SHALL be introduced behind a clearly documented feature flag or experimental path, as they depend on additional cross-session mapping infrastructure that does not exist in the current MVP.

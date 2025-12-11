@@ -78,6 +78,15 @@ Replay markdown extraction bug:
   - In `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts#L1026`, we now unwrap the underlying string from `ChatResponseMarkdownPart.value` (handling both `string` and `{ value: string }` shapes) before calling `addUserAssistantMessage(...)`.
   - This preserves the original markdown text across multiple replays and avoids introducing new `"[object Object]"` artifacts.
 
+Known limitation: agent vs CLI session parity
+
+- Today, the replay sample only has access to the **Copilot CLI session event log** (via `ICopilotCLISession.getChatHistory()` and the underlying JSONL in `~/.copilot/session-state`).
+- Some responses you see in the chat UI (for example, a code-generation joke with a C++ snippet that references `github.copilot.chat.codeGeneration.instructions`) may be produced by a **higher-level agent / Live Request Editor session** with its own session id (e.g. `218fcb3b-…`), and are not currently written back into the CLI JSONL.
+- As a result:
+  - The CLI replay sample will faithfully replay what is in the CLI JSONL (e.g. greetings, prompt inspector output, replay explanations).
+  - It cannot yet include agent-only turns like the C++ joke, because there is no established mapping from the agent session id back to the corresponding CLI session id, nor a hook that mirrors the agent’s final assistant text into the CLI session via `addUserAssistantMessage(...)`.
+- Requirement 7 in `.kiro/specs/cli-history-replay/requirements.md` tracks this as future work; implementing it will require new cross-session wiring between the agent pipeline and `CopilotCLISession`.
+
 ---
 
 ## 3. `[object Object]` Handling in CLI History

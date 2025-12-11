@@ -30,4 +30,11 @@
   - [ ] 6.1 Add a `github.copilot.cli.sessions.createSampleNative` command in `package.json` under `contributes.commands` (category: "Copilot CLI").  
   - [ ] 6.2 Implement the handler in `registerCLIChatCommands(...)` to create a brand new `CopilotCLISession` (no source session) via `ICopilotCLISessionService.createSession(...)`.  
   - [ ] 6.3 Seed the new session with a small, hard-coded history using `addUserMessage(...)` / `addUserAssistantMessage(...)` to demonstrate native-parity history (no replay dependency).  
-  - [ ] 6.4 Refresh the CLI sessions view and open the new session so it is immediately visible in the standard Copilot CLI chat editor.  
+  - [ ] 6.4 Apply a custom label for the sample session (e.g. `Sample CLI session · <shortId>`) using `CopilotCLIChatSessionItemProvider.setCustomLabel(...)` so it stands out in the sessions list.  
+  - [ ] 6.5 Refresh the CLI sessions view and open the new session so it is immediately visible in the standard Copilot CLI chat editor.  
+
+- [ ] 7. Align forked CLI sessions with agent responses (future)  
+  - [ ] 7.1 Investigate how Live Request Editor / agent sessions (e.g. `LiveRequestSessionKey.sessionId`) map onto Copilot CLI session ids and what metadata is available to correlate them.  
+  - [ ] 7.2 Design a cross-session mapping so that when an agent turn is logically associated with a CLI background session, we can identify the corresponding `CopilotCLISession`.  
+  - [ ] 7.3 Prototype a hook that, given an agent’s final assistant response text, can safely append that text into the associated CLI session via `addUserAssistantMessage(...)` without breaking existing history semantics.  
+  - [ ] 7.4 Evaluate how this mapping interacts with replay (e.g. whether replay should include agent-only turns) and document any limitations in `docs/cli-history-replay-handoff.md`.  

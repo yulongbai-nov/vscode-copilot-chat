@@ -60,6 +60,7 @@ In addition, we add a **simple sample command** that creates a brand new Copilot
 - `github.copilot.cli.sessions.createSampleNative`:
   - Uses `ICopilotCLISessionService.createSession(...)` to open a fresh session (no source/replay).
   - Immediately calls `addUserMessage(...)` / `addUserAssistantMessage(...)` a few times with fixed strings (e.g. “hi”, “This is a sample Copilot CLI session created by the extension.”).
+  - Applies a custom label via `CopilotCLIChatSessionItemProvider.setCustomLabel(...)` (for example, `Sample CLI session · <shortId>`) so these demo sessions are easy to recognize in the sessions list.
   - Refreshes the sessions view and opens the new session so the pre-made history is visible in the native CLI chat editor.
 
 ### Components and flow
@@ -154,3 +155,6 @@ High-level flow for the sample replay:
 - Attach a lightweight “source session” link/metadata to the new session (e.g., first synthetic assistant message includes a backlink).
 - Support replaying only a selected prefix or range of turns.
 - Integrate with Live Request Editor replay snapshots as an alternate history source.
+- Align “forked” CLI sessions with agent/Live Request Editor sessions so that:
+  - the same logical turn (e.g. a C++ joke generated via code-generation instructions) is visible both in the intercepted agent session and in the CLI session event log, and
+  - replayed CLI sessions can faithfully include those final agent responses. This will require an explicit mapping between the higher-level agent session id and the underlying CLI session id, and a hook that adds the agent’s final assistant message into the corresponding CLI session via `addUserAssistantMessage(...)`.

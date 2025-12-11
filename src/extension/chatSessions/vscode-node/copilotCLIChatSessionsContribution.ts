@@ -1043,6 +1043,13 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 				}
 			}
 
+			// Give the replayed session a distinct, descriptive label so it is easy
+			// to distinguish from the source/session list entries.
+			const baseLabel = sessionItem.label ?? sourceId;
+			const shortId = newSession.sessionId.slice(-6);
+			const replayLabel = vscode.l10n.t('Replay sample · {0} · {1}', baseLabel, shortId);
+			await copilotcliSessionItemProvider.setCustomLabel(newSession.sessionId, replayLabel);
+
 			// Append a short demo explanation so the new session is self-describing.
 			newSession.addUserMessage('Explain what this Copilot CLI replay sample session is doing.');
 			newSession.addUserAssistantMessage(
@@ -1067,7 +1074,6 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 			{ model: undefined, workingDirectory: undefined, isolationEnabled: false, agent: undefined },
 			new vscode.CancellationTokenSource().token
 		);
-
 		const newSession = newRef.object;
 
 		try {
@@ -1084,6 +1090,12 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 					'You can use it to verify how native CLI sessions render in the chat view and how history replay behaves.'
 				].join(' ')
 			);
+
+			// Apply a custom label so the sample session is clearly identified
+			// and does not get confused with other CLI sessions in the list.
+			const shortId = newSession.sessionId.slice(-6);
+			const sampleLabel = vscode.l10n.t('Sample CLI session · {0}', shortId);
+			await copilotcliSessionItemProvider.setCustomLabel(newSession.sessionId, sampleLabel);
 
 			// Refresh sessions so the new one appears, then open it.
 			copilotcliSessionItemProvider.notifySessionsChange();
