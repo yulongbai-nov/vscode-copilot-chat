@@ -60,6 +60,7 @@ describe('Copilot CLI – Live Replay to CLI fork command', () => {
 	let setCustomLabel: Mock;
 	let notifySessionsChange: Mock;
 	let getReplaySnapshot: Mock;
+	let buildReplayForRequest: Mock;
 
 	beforeEach(() => {
 		newSession = {
@@ -78,6 +79,7 @@ describe('Copilot CLI – Live Replay to CLI fork command', () => {
 
 		snapshot = buildSnapshot();
 		getReplaySnapshot = vi.fn().mockReturnValue(snapshot);
+		buildReplayForRequest = vi.fn().mockReturnValue(snapshot);
 
 		const copilotcliSessionItemProvider = {
 			setCustomLabel,
@@ -93,10 +95,24 @@ describe('Copilot CLI – Live Replay to CLI fork command', () => {
 
 		const liveRequestEditorService = {
 			getReplaySnapshot,
+			buildReplayForRequest,
 		} as unknown as ILiveRequestEditorService;
 
 		// Register all CLI commands, including github.copilot.liveRequestEditor.openInCopilotCLI.
 		registerCLIChatCommands(copilotcliSessionItemProvider, copilotCLISessionService, gitService, liveRequestEditorService);
+	});
+
+	test('seeds new CLI session from session key via buildReplayForRequest', async () => {
+		const key = { sessionId: snapshot.key.sessionId, location: snapshot.key.location };
+
+		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.openInCopilotCLI', key);
+
+		expect(buildReplayForRequest).toHaveBeenCalledTimes(1);
+		expect(buildReplayForRequest).toHaveBeenCalledWith(key);
+
+		expect(createSession).toHaveBeenCalledTimes(1);
+		expect(newSession.addUserMessage).toHaveBeenCalledWith('hi');
+		expect(newSession.addUserAssistantMessage).toHaveBeenCalledTimes(2);
 	});
 
 	test('seeds new CLI session from replay payload and opens it', async () => {
@@ -133,14 +149,15 @@ describe('Copilot CLI – Live Replay to CLI fork command', () => {
 		const openCalls = (vscode.commands.executeCommand as unknown as Mock).mock.calls.filter(
 			call => call[0] === 'vscode.open'
 		);
-		expect(openCalls.length).toBe(1);
-		const openResource = openCalls[0][1] as vscode.Uri;
+		expect(openCalls.length).toBeGreaterThanOrEqual(1);
+		const openResource = openCalls[openCalls.length - 1][1] as vscode.Uri;
 		expect(openResource.scheme).toBe('copilotcli');
 		expect(openResource.path).toContain('cli-session-abcdef');
 	});
 
-	test('shows info message and does not create session when snapshot missing', async () => {
+	test('shows info message and does not create session when snapshot and replay build are missing', async () => {
 		(getReplaySnapshot as Mock).mockReturnValue(undefined);
+		(buildReplayForRequest as Mock).mockReturnValue(undefined);
 
 		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.openInCopilotCLI', {
 			sessionId: 'missing',

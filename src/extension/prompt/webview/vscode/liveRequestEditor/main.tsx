@@ -1074,6 +1074,16 @@ const App: React.FC = () => {
 		sendMessage('command', { command: 'github.copilot.liveRequestEditor.replayPrompt' });
 	}, [sendMessage]);
 
+	const handleReplayInCli = React.useCallback(() => {
+		if (!request) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.openInCopilotCLI',
+			args: [{ sessionId: request.sessionId, location: request.location }]
+		});
+	}, [request, sendMessage]);
+
 	const handleToggleReplayView = React.useCallback(() => {
 		const targetUri = replayUri ?? lastReplayUri;
 		if (!targetUri) {
@@ -1275,6 +1285,9 @@ const App: React.FC = () => {
 							<div className="replay-row-action">
 								<vscode-button appearance="secondary" onClick={handleReplay}>
 									Replay edited prompt
+								</vscode-button>
+								<vscode-button appearance="secondary" onClick={handleReplayInCli}>
+									Replay edited prompt in CLI session
 								</vscode-button>
 								<vscode-button
 									appearance="secondary"

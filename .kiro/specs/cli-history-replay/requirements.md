@@ -94,16 +94,16 @@ The feature is intended as a sample / internal tool to explore “native-parity�
 3. WHEN the CLI history replay sample command is used to fork a new CLI session from an existing one, THEN the replayed history SHOULD include any such synchronized agent responses, allowing the user to continue the conversation from the latest visible answer.
 4. THESE behaviours SHALL be introduced behind a clearly documented feature flag or experimental path, as they depend on additional cross-session mapping infrastructure that does not exist in the current MVP.
 
-### Requirement 8 – Replay edited prompt into new CLI session from Live Replay
+### Requirement 8 – Replay edited prompt into new CLI session from Live Request Editor
 
-**User Story:** As a Copilot engineer, when I have edited a prompt in the Live Request Editor and inspected its replay, I want to “fork” that replay into a new Copilot CLI session so that I can continue the conversation from the edited prompt and final answer, but under the native CLI session model.
+**User Story:** As a Copilot engineer, when I have edited a prompt in the Live Request Editor, I want to “fork” that edited prompt (and its final answer) into a new Copilot CLI session so that I can continue the conversation from that state under the native CLI session model, without going through a separate replay chat provider.
 
 #### Acceptance Criteria
 
-1. THE system SHALL expose a command (e.g. `github.copilot.liveRequestEditor.openInCopilotCLI`) that can be invoked from the Live Replay view to create a new Copilot CLI session from a given `LiveRequestReplaySnapshot`.
-2. WHEN this command is executed for a replay snapshot, THE system SHALL create a new `CopilotCLISession` via `ICopilotCLISessionService.createSession(...)` without mutating the original CLI session (if any).
+1. THE system SHALL expose a command (e.g. `github.copilot.liveRequestEditor.openInCopilotCLI`) that can be invoked from the Live Request Editor UI (for the currently edited request) to create a new Copilot CLI session.
+2. WHEN this command is executed for an edited request, THE system SHALL create a new `CopilotCLISession` via `ICopilotCLISessionService.createSession(...)` without mutating the original CLI session (if any).
 3. AFTER the CLI session is created, THE system SHALL seed its history by iterating the replay payload (`Raw.ChatMessage[]`) and, for each message:
    - IF the message role is `user`, call `addUserMessage(<rendered text>)` on the CLI session.
    - IF the message role is `assistant` (or any non-user role that produces visible text), call `addUserAssistantMessage(<rendered text>)` on the CLI session.
-4. THE rendering of each replay payload message into text SHALL follow the same rules used by the Live Replay chat provider’s `_renderMessageText(...)` helper, so that what appears in the forked CLI session matches what the user saw in the replay view.
+4. THE rendering of each replay payload message into text SHALL follow the same rules used by the Live Request Editor replay pipeline (e.g. the same logic as `_renderMessageText(...)`), so that what appears in the forked CLI session matches what the user would see in the replay payload view.
 5. AFTER seeding, THE system SHALL apply a distinct, human-readable label to the forked CLI session (e.g. `Replay from Live Request Editor · <shortId>`) via `CopilotCLIChatSessionItemProvider.setCustomLabel(...)`, refresh the CLI sessions view, and open the new session in the Copilot CLI chat editor so the user can continue from the forked state.
