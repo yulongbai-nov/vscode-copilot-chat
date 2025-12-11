@@ -906,10 +906,26 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			}
 
 			if (section.editedContent !== undefined) {
-				message.content = [{
-					type: Raw.ChatCompletionContentPartKind.Text,
-					text: section.editedContent
-				}];
+				// Preserve any non-text content parts (e.g. image_url, opaque tool
+				// payloads) while updating the textual portion of the message.
+				const existingParts = Array.isArray(message.content) ? message.content : [];
+				const nonTextParts = existingParts.filter(part => {
+					const candidate = part as { type?: unknown; text?: unknown };
+					if (candidate.type === Raw.ChatCompletionContentPartKind.Text) {
+						return false;
+					}
+					if (typeof candidate.text === 'string') {
+						return false;
+					}
+					return true;
+				});
+				message.content = [
+					{
+						type: Raw.ChatCompletionContentPartKind.Text,
+						text: section.editedContent
+					},
+					...nonTextParts
+				];
 				isDirty = true;
 			}
 

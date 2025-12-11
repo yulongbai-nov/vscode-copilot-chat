@@ -34,16 +34,17 @@ function createRenderResult(text: string): RenderPromptResult {
 	};
 }
 
-function createRenderResultWithMessages(texts: string[]): RenderPromptResult {
+function createRenderResultWithMessages(texts: string[], extraMessages: Raw.ChatMessage[] = []): RenderPromptResult {
+	const baseMessages: Raw.ChatMessage[] = texts.map((text, index) => ({
+		role: index === 0 ? Raw.ChatRole.System : Raw.ChatRole.User,
+		content: [{
+			type: Raw.ChatCompletionContentPartKind.Text,
+			text
+		}]
+	}));
 	return {
 		...nullRenderPromptResult(),
-		messages: texts.map((text, index) => ({
-			role: index === 0 ? Raw.ChatRole.System : Raw.ChatRole.User,
-			content: [{
-				type: Raw.ChatCompletionContentPartKind.Text,
-				text
-			}]
-		}))
+		messages: [...baseMessages, ...extraMessages]
 	};
 }
 
@@ -602,6 +603,42 @@ describe('LiveRequestEditorService interception', () => {
 			replay.projection.requestOptions.temperature = 0.9;
 		}
 		expect(request.metadata.requestOptions?.temperature).toBe(0.3);
+	});
+
+	test('edited sections preserve non-text content parts in replay payload', async () => {
+		const { service } = await createService();
+		// Build a render result that includes a user message with text + image_url parts.
+		const imageMessage: Raw.ChatMessage = {
+			role: Raw.ChatRole.User,
+			// Use a loosely-typed image_url part so renderReplayMessageText
+			// can recognize it without requiring full OpenAI schema fields.
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'describe this image' },
+				{ type: 'image_url' } as any,
+			]
+		};
+		const init = createServiceInit({
+			renderResult: createRenderResultWithMessages(['system'], [imageMessage])
+		});
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		// Edit the user section; this should update the text but keep the image part.
+		const userSection = request.sections.find(s => s.kind === 'user')!;
+		service.updateSectionContent(key, userSection.id, 'updated description');
+
+		const replay = service.buildReplayForRequest(key)!;
+		const userPayload = replay.payload[1];
+		expect(userPayload.role).toBe(Raw.ChatRole.User);
+		expect(Array.isArray(userPayload.content)).toBe(true);
+		// First part is the updated text.
+		expect(getText(userPayload.content![0])).toBe('updated description');
+		// Non-text parts (e.g. image_url) are preserved.
+		const hasImagePart = (userPayload.content ?? []).some(
+			part => (part as any).type === 'image_url' || (part as any).image_url
+		);
+		expect(hasImagePart).toBe(true);
 	});
 
 	test('replay replace keeps restore buffer and increments version', async () => {
