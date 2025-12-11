@@ -25,3 +25,9 @@
   - [ ] 5.2 Add a `chat/chatSessions` context menu entry for `chatSessionType == 'copilotcli'` that invokes the rename command.  
   - [ ] 5.3 Implement the handler in `registerCLIChatCommands(...)` to prompt for a new label and call `CopilotCLIChatSessionItemProvider.swap(original, { ...original, label: newLabel })`.  
   - [ ] 5.4 Add unit coverage to ensure the history builder ignores non-string content and that the rename plumbing is exercised.  
+
+- [ ] 6. Simple sample CLI session command  
+  - [ ] 6.1 Add a `github.copilot.cli.sessions.createSampleNative` command in `package.json` under `contributes.commands` (category: "Copilot CLI").  
+  - [ ] 6.2 Implement the handler in `registerCLIChatCommands(...)` to create a brand new `CopilotCLISession` (no source session) via `ICopilotCLISessionService.createSession(...)`.  
+  - [ ] 6.3 Seed the new session with a small, hard-coded history using `addUserMessage(...)` / `addUserAssistantMessage(...)` to demonstrate native-parity history (no replay dependency).  
+  - [ ] 6.4 Refresh the CLI sessions view and open the new session so it is immediately visible in the standard Copilot CLI chat editor.  

@@ -134,6 +134,7 @@
 	"github.copilot.command.triggerPermissiveSignIn": "Login to GitHub with Full Permissions",
 		"github.copilot.command.resetCloudAgentWorkspaceConfirmations": "Reset Cloud Agent Workspace Confirmations",
 		"github.copilot.cli.sessions.replaySampleNative": "Replay Session in New CLI Session (Sample)",
+		"github.copilot.cli.sessions.createSampleNative": "Create Sample Copilot CLI Session",
 		"github.copilot.cli.sessions.rename": "Rename CLI Session…",
 	"github.copilot.git.generateCommitMessage": "Generate Commit Message",
 	"github.copilot.git.resolveMergeConflicts": "Resolve Conflicts with AI",

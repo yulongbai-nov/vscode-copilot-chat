@@ -1026,12 +1026,32 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 				} else if (turn instanceof vscode.ChatResponseTurn2) {
 					const parts = turn.response ?? [];
 					const markdownParts = parts.filter(p => p instanceof vscode.ChatResponseMarkdownPart) as vscode.ChatResponseMarkdownPart[];
-					const text = markdownParts.map(p => p.value).join('\n\n');
+					const text = markdownParts
+						.map(p => {
+							const raw: unknown = (p as vscode.ChatResponseMarkdownPart).value as unknown;
+							if (typeof raw === 'string') {
+								return raw;
+							}
+							const candidate = (raw as { value?: unknown })?.value;
+							return typeof candidate === 'string' ? candidate : '';
+						})
+						.filter(segment => segment.trim().length > 0)
+						.join('\n\n');
 					if (text.trim().length) {
 						newSession.addUserAssistantMessage(text);
 					}
 				}
 			}
+
+			// Append a short demo explanation so the new session is self-describing.
+			newSession.addUserMessage('Explain what this Copilot CLI replay sample session is doing.');
+			newSession.addUserAssistantMessage(
+				[
+					'This Copilot CLI session was created from an existing session using the **Replay Session in New CLI Session (Sample)** command.',
+					'It replays the original user and assistant turns into a fresh CLI-native session without modifying the source session.',
+					'Any structured or non-text responses from the original run are rendered as `[non-text content]` so they do not appear as `[object Object]`.'
+				].join(' ')
+			);
 
 			// Refresh sessions so the new one appears, then open it.
 			copilotcliSessionItemProvider.notifySessionsChange();
@@ -1039,6 +1059,38 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 			await vscode.commands.executeCommand('vscode.open', newResource);
 		} finally {
 			sourceRef.dispose();
+		}
+	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.createSampleNative', async () => {
+		// Create a brand new Copilot CLI session with a small, hard-coded history.
+		const newRef = await copilotCLISessionService.createSession(
+			{ model: undefined, workingDirectory: undefined, isolationEnabled: false, agent: undefined },
+			new vscode.CancellationTokenSource().token
+		);
+
+		const newSession = newRef.object;
+
+		try {
+			// Seed the session with a tiny, pre-made conversation so it can be used
+			// as a native CLI history demo without relying on any prior session.
+			newSession.addUserMessage('hi');
+			newSession.addUserAssistantMessage('Hello! This is a sample Copilot CLI session created by the VS Code extension.');
+
+			newSession.addUserMessage('What is this session showing?');
+			newSession.addUserAssistantMessage(
+				[
+					'This session was opened using the **Create Sample Copilot CLI Session** command.',
+					'The history you see here is generated entirely by the extension, using the same Copilot CLI session/event pipeline as a normal interactive run.',
+					'You can use it to verify how native CLI sessions render in the chat view and how history replay behaves.'
+				].join(' ')
+			);
+
+			// Refresh sessions so the new one appears, then open it.
+			copilotcliSessionItemProvider.notifySessionsChange();
+			const newResource = SessionIdForCLI.getResource(newSession.sessionId);
+			await vscode.commands.executeCommand('vscode.open', newResource);
+		} finally {
+			newRef.dispose();
 		}
 	}));
 	disposableStore.add(vscode.commands.registerCommand('agentSession.copilotcli.openChanges', async (sessionItemResource?: vscode.Uri) => {

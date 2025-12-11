@@ -51,8 +51,16 @@ We add a **small, opt-in sample command** that:
 4. Replays that history into the new session using **synthetic events**:
    - `ICopilotCLISession.addUserMessage(...)`
    - `ICopilotCLISession.addUserAssistantMessage(...)`
-5. Refreshes the CLI sessions list and opens the new session in the standard CLI chat editor.
-6. Optionally lets the user **rename** the session tab/title to reflect the task it is running.
+5. Appends a short, synthetic “explain this replay session” exchange so the new session is self‑describing (MVP convenience).
+6. Refreshes the CLI sessions list and opens the new session in the standard CLI chat editor.
+7. Optionally lets the user **rename** the session tab/title to reflect the task it is running.
+
+In addition, we add a **simple sample command** that creates a brand new Copilot CLI session and seeds it with a tiny, hard-coded history for quick demos:
+
+- `github.copilot.cli.sessions.createSampleNative`:
+  - Uses `ICopilotCLISessionService.createSession(...)` to open a fresh session (no source/replay).
+  - Immediately calls `addUserMessage(...)` / `addUserAssistantMessage(...)` a few times with fixed strings (e.g. “hi”, “This is a sample Copilot CLI session created by the extension.”).
+  - Refreshes the sessions view and opens the new session so the pre-made history is visible in the native CLI chat editor.
 
 ### Components and flow
 

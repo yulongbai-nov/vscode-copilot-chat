@@ -70,3 +70,14 @@ The feature is intended as a sample / internal tool to explore “native-parity�
 1. THE implementation SHALL be small and self-contained (one command, minimal integration).
 2. THE command title and description SHALL clearly indicate that this is a **sample** or **experiment**.
 3. THE feature SHALL NOT introduce new configuration surface that affects default CLI behavior (e.g. no new settings that change how real CLI sessions are logged).
+
+### Requirement 6 – Simple sample CLI session command
+
+**User Story:** As a Copilot engineer, I want a one-click way to open a brand new Copilot CLI session pre-populated with a tiny, hard-coded history so that I can quickly demo native session behavior without depending on any existing session data.
+
+#### Acceptance Criteria
+
+1. THE system SHALL expose a command (e.g. `github.copilot.cli.sessions.createSampleNative`) that creates a new Copilot CLI session without requiring a selected source session.
+2. WHEN this command is executed, THE system SHALL call `ICopilotCLISessionService.createSession(...)` to obtain a fresh `CopilotCLISession` wrapper and SHALL NOT read or mutate any existing session state.
+3. AFTER the session is created, THE system SHALL seed it with at least one user message and one assistant message using `addUserMessage(...)` and `addUserAssistantMessage(...)`, using simple, hard-coded text that explains the demo.
+4. AFTER seeding, THE system SHALL refresh the Copilot CLI sessions view and open the new session in the standard CLI chat editor so the pre-made history is immediately visible.
