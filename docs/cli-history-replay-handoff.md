@@ -165,11 +165,11 @@ Note: this logic affects **CLI session history and live streaming** (including t
 
 ## 4. Live Request Editor → Copilot CLI Fork (Replay from Edited Prompt)
 
-This section documents the new path that lets you **fork** from a Live Request Editor replay into a **new Copilot CLI session**, seeded with the replay payload, and then continue natively as a CLI session.
+This section documents the new path that lets you **fork** from an edited prompt in the Live Request Editor into a **new Copilot CLI session**, seeded with the same replay payload that would be sent to the LLM, and then continue natively as a CLI session.
 
 ### 4.1 Specs and requirements
 
-- Requirement 8 – Replay edited prompt into new CLI session from Live Replay:  
+- Requirement 8 – Replay edited prompt into new CLI session from Live Request Editor:  
   `.kiro/specs/cli-history-replay/requirements.md#L93`
 - Tasks for the implementation (command, wiring, tests):  
   `.kiro/specs/cli-history-replay/tasks.md#L38`
@@ -179,8 +179,8 @@ This section documents the new path that lets you **fork** from a Live Request E
 Key design decisions:
 
 - **Do not** replay raw OpenAI / agent JSON into the CLI SDK.
-- Treat the **Live Replay payload** (`Raw.ChatMessage[]`) as the source of truth for the edited prompt + answer you see in the replay UI.
-- Render each `Raw.ChatMessage` to plain text using the same rules as the Live Replay view.
+- Treat the **Live Request Editor replay payload** (`Raw.ChatMessage[]`, built via `buildReplayForRequest(...)`) as the source of truth for the edited prompt + answer you see in the inspector.
+- Render each `Raw.ChatMessage` to plain text using the same rules as the replay payload view.
 - Seed a **new** Copilot CLI session’s history with synthetic messages:
   - User roles → `addUserMessage(...)`
   - Assistant / system / other visible roles → `addUserAssistantMessage(...)`
@@ -236,24 +236,6 @@ Key design decisions:
     ```
   - `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts#L908`  
     `registerCLIChatCommands` now accepts `liveRequestEditorService: ILiveRequestEditorService`.
-
-- Live Replay summary button:
-  - `src/extension/prompt/vscode-node/liveReplayChatProvider.ts#L22`  
-    ```ts
-    const OPEN_IN_CLI_COMMAND = 'github.copilot.liveRequestEditor.openInCopilotCLI';
-    ```
-  - `src/extension/prompt/vscode-node/liveReplayChatProvider.ts#L265`  
-    In `_buildDisplayHistory`, the replay summary includes:
-    ```ts
-    summaryParts.push(
-      new vscode.ChatResponseCommandButtonPart({
-        title: 'Open in Copilot CLI',
-        command: OPEN_IN_CLI_COMMAND,
-        arguments: [snapshot.key]
-      })
-    );
-    ```
-    so the button passes the `LiveRequestReplayKey` for that replay.
 
 ### 4.3 CLI fork handler and message rendering
 
@@ -430,7 +412,58 @@ This completes the “fork from edited prompt into a native Copilot CLI session�
 
 ---
 
-## 5. CLI Session Rename (Titles / Labels)
+## 5. Live Request Editor Leaf Editing (Overview)
+
+While this handoff focuses on CLI history replay and CLI forks, the Live Request Editor’s editing semantics directly affect what gets replayed into CLI sessions. This section summarises the **per-leaf editing** design so future work on replay and persistence can assume a stable Raw payload model.
+
+- Requirements:
+  - `.kiro/specs/request-logger-prompt-editor/requirements.md#L246` (Requirement 15 – Surgical Payload Editing Fidelity)
+- Detailed viewmodel:
+  - `.kiro/specs/request-logger-prompt-editor/design.md#L639` (Editing Model and Undo/Redo)
+- Raw schema + behaviour:
+  - `.kiro/specs/cli-history-replay/Live-Request-Editor-Raw-Payload-Schema.md#L1`
+
+### 5.1 Leaf edits vs Raw payload
+
+- **Current implementation (UI semantics)**:
+  - Unedited messages: `Raw.ChatMessage` is a deep clone of the original prompt renderer output.
+  - Edited fields:
+    - The webview exposes **leaf editors** for individual fields, for example:
+      - `messages[i].content[j].text`
+      - `messages[i].toolCalls[k].function.arguments`
+      - `messages[i].name`
+      - `requestOptions.temperature`
+    - Each edit maps 1:1 to that field in `EditableChatRequest.messages` or `EditableChatRequest.metadata.requestOptions`.
+  - Hierarchical view:
+    - Each `Raw.ChatMessage` renders as a “big card” with nested child boxes for message fields (`role`, `name`, `toolCallId`), `content[i]`, `toolCalls[i]`, and other structured metadata.
+    - Keys are used as headers and leaf values (strings/numbers/booleans/null) are directly editable; non-leaf values (objects/arrays) appear as foldable groups whose children expose additional leaf editors.
+  - Guarantees:
+    - Raw schema correctness (`role` and `content` always valid).
+    - All non-edited fields (including non-text parts and message metadata) are preserved.
+    - This is what `buildReplayForRequest(...)` and the CLI fork command see.
+
+### 5.2 Sequence overview
+
+The following diagram shows how a leaf edit flows from the LRE webview down to the Raw payload used by replay and CLI forks:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Webview as LRE Webview
+    participant Service as LiveRequestEditorService
+    participant Raw as Raw.Messages
+
+    User->>Webview: Edit leaf field (e.g. content[1].text)
+    Webview->>Service: updateLeaf({ targetPath, newValue })
+    Service->>Service: record EditOp in EditHistory (oldValue/newValue)
+    Service->>Raw: apply leaf update to messages[] / requestOptions
+    Service-->>Webview: onDidChange(request)
+    Note over Raw: buildReplayForRequest(...)<br/>and CLI fork use<br/>request.messages
+```
+
+This is intentionally a **viewmodel-only** concern; `ChatMLFetcher`, CLI replay, and future persistence layers consume only the recomposed `Raw.ChatMessage[]` and do not need to know about the edit log.
+
+## 6. CLI Session Rename (Titles / Labels)
 
 We added a CLI‑specific rename flow that:
 
@@ -438,7 +471,7 @@ We added a CLI‑specific rename flow that:
 - Persists titles per session id.
 - Updates both the sessions list label and (as far as current APIs allow) the chat editor tab.
 
-### 4.1 Command + Menu
+### 6.1 Command + Menu
 
 - Command:
   - `github.copilot.cli.sessions.rename`  
@@ -454,7 +487,7 @@ We added a CLI‑specific rename flow that:
     ```
     `package.json#L4797`
 
-### 4.2 Provider: custom labels + persistence
+### 6.2 Provider: custom labels + persistence
 
 - `CopilotCLIChatSessionItemProvider`:
   - File:  
@@ -509,7 +542,7 @@ Key pieces:
   const label = this._customLabels.get(session.id) ?? session.label;
   ```
 
-### 4.3 Rename handler
+### 6.3 Rename handler
 
 - In `registerCLIChatCommands`:
   - `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts#L931`
@@ -556,7 +589,7 @@ So renaming:
 
 ---
 
-## 5. Replay View vs CLI History
+## 7. Replay View vs CLI History
 
 There are two separate places where `[object Object]` can appear; only one is under our control:
 
@@ -576,7 +609,7 @@ If you still see `[object Object]` in **replay sessions**, check whether it is c
 
 ---
 
-## 6. Open Questions / Follow‑ups
+## 8. Open Questions / Follow‑ups
 
 1. **Generic session rename**:
    - Current rename is CLI‑specific. Extending it to cloud or replay sessions would require:

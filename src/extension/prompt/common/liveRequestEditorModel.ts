@@ -125,6 +125,30 @@ export interface LiveRequestReplaySnapshot {
 	readonly restoreOfVersion?: number;
 }
 
+export interface EditHistory {
+	undoStack: EditOp[];
+	redoStack: EditOp[];
+}
+
+export type EditTargetKind =
+	| 'messageField'
+	| 'contentText'
+	| 'toolArguments'
+	| 'requestOption';
+
+export interface EditOpId {
+	requestId: string;
+	version: number;
+}
+
+export interface EditOp {
+	id: EditOpId;
+	targetKind: EditTargetKind;
+	targetPath: string;
+	oldValue: unknown;
+	newValue: unknown;
+}
+
 export interface EditableChatRequest {
 	readonly id: string;
 	readonly sessionId: string;
@@ -137,6 +161,7 @@ export interface EditableChatRequest {
 	readonly originalMessages: Raw.ChatMessage[];
 	metadata: EditableChatRequestMetadata;
 	isDirty: boolean;
+	editHistory?: EditHistory;
 }
 
 export interface EditableChatRequestInit {

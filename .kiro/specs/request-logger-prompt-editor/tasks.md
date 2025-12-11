@@ -20,6 +20,8 @@
   - [x] 2.3 Use message roles, references, and metadata to classify sections as `system`, `user`, `context`, `tool`, `history`, etc. _Requirements: 2.2, 3.7_  
   - [x] 2.4 Integrate optional `HTMLTracer` data (when available) to refine section boundaries and token counts, falling back gracefully when tracing is disabled. _Requirements: 2.5, 5.3_  
   - [x] 2.5 Track original messages and content to support reset and diffing. _Requirements: 3.4, 4.4_  
+  - [ ] 2.6 Refine `LiveRequestSection` to support hierarchical projections (message nodes grouping child content/toolCall/metadata nodes) keyed by Raw indices and `rawPath`, without introducing a separate payload structure. _Requirements: 16.1–16.3_  
+  - [ ] 2.7 Add a per-request `EditHistory` model that records leaf-level edits (per-field `oldValue`/`newValue`) against Raw paths, suitable for undo/redo without aggregate text redistribution. _Requirements: 15.2–15.7_  
 
 - [ ] 3. Wiring into the chat request pipeline  
   - [x] 3.1 Update the intents/prompt-building layer (e.g., `defaultIntentRequestHandler`) to request an `EditableChatRequest` instead of raw `messages` when the feature flag is enabled. _Requirements: 1.2, 4.1, 5.1_  
@@ -39,6 +41,8 @@
   - [x] 4.9 Ensure keyboard accessibility and ARIA labelling for sections, menus, and actions within the webview DOM. _Requirements: 6.1, 6.2_  
   - [x] 4.10 Add a conversation selector (drop-down) inside the webview that lists other open conversations in the current window and allows switching the inspector’s target session. _Requirements: 7.3, 7.4, 7.5_  
   - [x] 4.11 Surface tool invocation metadata (tool name + JSON arguments) inside tool sections so auditors can inspect the exact call inputs. _Requirements: 2.7_  
+  - [ ] 4.12 Update the webview layout so each message card contains a structured, foldable “Raw structure” panel: keys (`content[i].text`, `toolCalls[i].function.arguments`, `name`, `requestOptions.temperature`) as headers and values as editable leaf editors or nested groups, respecting the Raw JSON hierarchy. _Requirements: 15.2, 16.1–16.5_  
+  - [ ] 4.13 Wire new leaf-level edit actions from the webview to the extension host (e.g., `editLeaf` messages) so that each edit targets a single Raw field; update section projections to reflect the modified message while preserving all other fields. _Requirements: 15.2–15.7_  
 
 - [x] 5. Apply, reset, and send integration  
   - [x] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _Requirements: 4.1, 4.4_  

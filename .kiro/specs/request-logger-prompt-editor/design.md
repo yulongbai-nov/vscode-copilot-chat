@@ -304,6 +304,12 @@ interface LiveRequestSection {
   editable: boolean;
   deletable: boolean;
   sourceMessageIndex: number;   // index in Raw.ChatMessage[]
+  // Hierarchical projection metadata (see below)
+  parentId?: string;            // undefined for top-level message nodes
+  nodeType?: 'message' | 'contentPart' | 'toolCall' | 'metadata';
+  contentIndex?: number;        // index into Raw.ChatMessage.content[] for contentPart nodes
+  toolCallIndex?: number;       // index into Raw.ChatMessage.toolCalls[] for toolCall nodes
+  rawPath?: string;             // human-readable path, e.g. "messages[3].content[1]" or "messages[4].toolCalls[0]"
 }
 
 interface EditableChatRequest {
@@ -326,7 +332,9 @@ interface EditableChatRequest {
 Key properties:
 
 - `messages` is the **authoritative** structure used by `ChatMLFetcher`.
-- `sections` is a **projection** used for visualization and editing.
+- `sections` is a **projection** used for visualization and editing:
+  - Each top-level `section` with `nodeType === 'message'` corresponds 1:1 to a `Raw.ChatMessage` entry.
+  - Child sections (`nodeType === 'contentPart' | 'toolCall' | 'metadata'`) represent nested structure within that message and carry direct indices (`contentIndex`, `toolCallIndex`) back into the Raw payload.
 - `originalMessages` allows reset and debugging (and matches what `requestLogger` would see).
 
 #### 2. Live Request Builder / Adapter
@@ -340,6 +348,80 @@ We add a builder on the prompt side that:
   - Maps context snippets and tool-related parts into distinct sections where useful.
 
 This builder lives close to `renderPromptElement` / `PromptRenderer` so it sees the same data as the Request Logger.
+
+#### 3. Hierarchical Message / Content / ToolCall View
+
+To better reflect the structure of the underlying payload and make it easier to reason about complex prompts, the Live Request Editor presents a **hierarchical view** of each request:
+
+- Root level:
+  - One `LiveRequestSection` per `Raw.ChatMessage` (`nodeType === 'message'`).
+  - `kind` reflects the semantic role (`system`, `user`, `assistant`, `tool`, `context`, etc.).
+  - These render as **big “message cards”** in the UI.
+- Nested level – content parts:
+  - For each message, the builder synthesizes child sections for individual `content` entries:
+
+    ```ts
+    {
+      id: `${parent.id}/content/${index}`,
+      nodeType: 'contentPart',
+      parentId: parent.id,
+      sourceMessageIndex: messageIndex,
+      contentIndex: index,
+      kind: inferKindFromContentPart(part), // 'text' | 'image' | 'opaque' | 'cacheBreakpoint' | 'other'
+      label: `Content #${index + 1}`,
+      content: renderSingleContentPart(part),
+      editable: isTextPart(part),
+      deletable: false,
+      metadata: {
+        contentKind: describePartType(part.type)
+      },
+      rawPath: `messages[${messageIndex}].content[${index}]`
+    }
+    ```
+
+  - These appear as **nested smaller boxes** inside the parent message card, visually grouping text, image, and opaque payloads.
+- Nested level – tool calls:
+  - Assistant messages with `toolCalls` get one child section per call:
+
+    ```ts
+    {
+      id: `${parent.id}/toolCall/${toolIndex}`,
+      nodeType: 'toolCall',
+      parentId: parent.id,
+      sourceMessageIndex: messageIndex,
+      toolCallIndex: toolIndex,
+      kind: 'tool',
+      label: `Tool call · ${call.function?.name ?? call.id}`,
+      editable: false, // first iteration: display-only
+      deletable: false,
+      metadata: {
+        toolInvocation: {
+          id: call.id,
+          name: call.function?.name,
+          arguments: extractToolArguments(call.function?.arguments)
+        }
+      },
+      rawPath: `messages[${messageIndex}].toolCalls[${toolIndex}]`
+    }
+    ```
+
+  - In the UI, these render as nested boxes labelled with tool name + id, with arguments shown in a monospace block.
+
+Editing behaviour in the hierarchical view (current design):
+
+- Edits are **leaf-level**:
+  - Primary edit affordances live on individual fields (for example, `messages[i].content[j].text`, `messages[i].toolCalls[k].function.arguments`, `messages[i].name`, `requestOptions.temperature`).
+  - The inline editor for a leaf operates on exactly one Raw field; saving creates a single `EditOp` targeting that field.
+  - Changes are applied via the per‑leaf `EditOp` model described in “Editing Model and Undo/Redo (Per‑Leaf, 1:1 with Raw Payload),” preserving all other content parts and message‑level metadata.
+- Message nodes act as **structural group headers**:
+  - The big assistant/system/user/tool cards group their child nodes (content parts, tool calls, metadata, request options).
+  - Child nodes render as nested, foldable boxes labelled with their Raw keys (for example, `role`, `name`, `content[1].text`, `toolCalls[0].function.arguments`), making the mapping to the underlying JSON explicit.
+
+This design ensures:
+
+- The Live Request Editor respects the natural hierarchy of the Raw payload (messages → fields → content[] / toolCalls[] → nested objects).
+- The viewmodel reuses Raw indices and stable keys (`sourceMessageIndex`, `contentIndex`, `toolCallIndex`, `rawPath`) rather than inventing a parallel structure.
+- Every edit is 1:1 with a concrete Raw field; there is no aggregate “message text” editor in the primary UX.
 
 #### 3. Chat Panel Prompt Inspector UI
 
@@ -417,6 +499,20 @@ Interceptions must also unwind automatically when the underlying session becomes
 - Surfaces a human-readable banner message (“Context changed – request discarded”) when this happens, matching the new telemetry reason so diagnostics can distinguish user-initiated cancelations from automatic cleanup.
 - Treats “model changed” as a session reset because the VS Code chat host spins up a fresh session when the picker value changes; if future host changes deliver an explicit “model changed” event we can map it to the same cleanup helper.
 - Requests flagged as `isSubagent` (Plan/TODO sub-agents, runSubagent tool invocations) bypass interception entirely so automation does not stall waiting for user approval. The default intent handler short-circuits `interceptMessages`, and the service's `waitForInterceptionApproval` immediately returns for these requests so future entry points cannot accidentally pause automation. These requests still render in the editor for observability but proceed immediately through the fetcher.
+
+## Surgical Payload Editing Viewmodel (Legacy Aggregate‑Text Model)
+
+> **Status:** Historical only. The aggregate‑text (`SectionTextMap`/`SectionEditOp`) model described in earlier drafts has been superseded by the per‑leaf `EditOp` model in “Editing Model and Undo/Redo (Per‑Leaf, 1:1 with Raw Payload)” below and is no longer used by the Live Request Editor UI.
+
+Earlier iterations treated each section’s text as a single “aggregate” string and redistributed edits back into multiple `Text` parts via a `SectionTextMap`. This preserved non‑text parts but made it hard to reason about where edits landed in the Raw payload and conflicted with the requirement for **1:1, leaf‑level fidelity**.
+
+The current design instead:
+
+- Treats each editable field (for example, `messages[i].content[j].text`, `messages[i].toolCalls[k].function.arguments`, `messages[i].name`, `requestOptions.temperature`) as a **single leaf** in the Raw JSON tree.
+- Records edits as explicit `EditOp` entries keyed by a human‑readable `targetPath`.
+- Rebuilds only the affected `LiveRequestSection` from the updated Raw payload, without any aggregate text redistribution.
+
+Any remaining references to `SectionTextMap` in the codebase should be considered legacy compatibility helpers (primarily for auto‑apply overrides) and candidates for future removal once all flows are migrated to the leaf‑level editing APIs.
 
 ### Subagent Prompt Monitor
 
@@ -537,8 +633,111 @@ Automated subagent flows (Plan’s TODO tool, `runSubagent`, background task run
   - Mitigation: treat `EditableChatRequest.messages` as single source of truth for both UI and fetcher.
 
 - **Risk: Complexity for non-expert users**
-  - Exposing low-level prompt structure could confuse non-advanced users.
+- Exposing low-level prompt structure could confuse non-advanced users.
   - Mitigation: keep behind an advanced flag, and clearly label as a debug/pro prompt inspector.
+
+## Editing Model and Undo/Redo (Per‑Leaf, 1:1 with Raw Payload)
+
+Requirement 15 still requires **surgical fidelity**, but we now express this directly in terms of **per‑field edits** on the Raw payload instead of aggregate message text. The Live Request Editor is a structured, foldable view over the actual request; every edit corresponds to exactly one concrete field in the request JSON.
+
+### Per‑leaf edit operations
+
+We treat each editable leaf as a single field update:
+
+```ts
+type EditTargetKind =
+  | 'messageField'        // e.g. messages[3].name
+  | 'contentText'         // messages[3].content[1].text
+  | 'toolArguments'       // messages[4].toolCalls[0].function.arguments
+  | 'requestOption';      // requestOptions.temperature, etc.
+
+interface EditOp {
+  id: {
+    requestId: string;    // EditableChatRequest.id
+    version: number;      // monotonic per-request op version
+  };
+  targetKind: EditTargetKind;
+  targetPath: string;     // human-readable JSON path, e.g. "messages[3].content[1].text"
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+interface EditHistory {
+  undoStack: EditOp[];
+  redoStack: EditOp[];
+}
+
+interface EditableChatRequest {
+  // existing fields…
+  originalMessages: Raw.ChatMessage[];
+  messages: Raw.ChatMessage[];
+  sections: LiveRequestSection[];
+
+  // per-request edit history (leaf-level)
+  editHistory?: EditHistory;
+}
+```
+
+Examples:
+
+- Editing a single text content part:
+  - `targetKind = 'contentText'`
+  - `targetPath = "messages[3].content[1].text"`
+  - `oldValue = "<previous text>"`, `newValue = "<edited text>"`.
+- Editing tool arguments:
+  - `targetKind = 'toolArguments'`
+  - `targetPath = "messages[4].toolCalls[0].function.arguments"`.
+- Editing a scalar field:
+  - `targetKind = 'messageField'`
+  - `targetPath = "messages[2].name"` or `"messages[5].toolCallId"`.
+- Editing a request option:
+  - `targetKind = 'requestOption'`
+  - `targetPath = "requestOptions.temperature"`.
+
+Undo/redo are expressed by swapping `oldValue` and `newValue` for the targeted field:
+
+```ts
+function invertEditOp(op: EditOp): EditOp {
+  return {
+    ...op,
+    oldValue: op.newValue,
+    newValue: op.oldValue
+  };
+}
+```
+
+Applying an op:
+
+1. Resolve `targetPath` against the current `EditableChatRequest` (using `messages`, `metadata.requestOptions`, etc.).
+2. Assign `newValue` to that field.
+3. Rebuild only the affected `LiveRequestSection`’s `content`/`message` projection so the UI stays in sync.
+
+Undo pops from `undoStack`, applies the inverted op, and pushes the original op to `redoStack`; redo does the reverse.
+
+### How the tree-like UI maps to Raw
+
+- Every **big message card** still corresponds 1:1 to a `Raw.ChatMessage` (`sections[i]` with `sourceMessageIndex`).
+- Within that card, the editor renders a **tree of keys and values**:
+  - Keys: `role`, `name`, `toolCallId`, `content[0].text`, `content[1].imageUrl.url`, `toolCalls[0].function.arguments`, etc.
+  - Values:
+    - If the value is a **leaf** (string/number/boolean/null), it is editable (text field/textarea).
+    - If the value is **object/array**, it becomes a foldable/expandable child group whose children are further key/value nodes.
+- All edits in the UI are leaf-level:
+  - Editing `content[0].text` → one `EditOp` targeting `"messages[i].content[0].text"`.
+  - Editing `toolCalls[0].function.arguments` → one `EditOp` targeting `"messages[i].toolCalls[0].function.arguments"`.
+  - There is no aggregate “message text” editor in the primary UX; assistant and system messages show grouped child `text` boxes instead.
+
+### Relation to previous aggregate-text model
+
+An earlier iteration of this design proposed a `SectionTextMap`/`SectionEditOp` model that treated a whole message’s text as a single aggregate string and redistributed edits across multiple `Text` parts. That model is now considered **legacy** and is **not** used by the Live Request Editor UI:
+
+- The current UX operates purely on **per-leaf fields** that map 1:1 to the Raw payload.
+- Any internal use of aggregate-text helpers is limited to non-UX features such as Auto-Apply overrides and may be removed in the future.
+
+Downstream consumers (ChatML fetcher, Request Logger, replay, CLI fork) still see only recomposed `Raw.ChatMessage[]`. The leaf-level edit model guarantees that:
+
+- Only the explicitly edited field changes.
+- All non-edited fields, including non-text `ChatCompletionContentPart` entries and message-level metadata, are preserved.
 
 ## Chat Timeline Replay (Future Scope)
 

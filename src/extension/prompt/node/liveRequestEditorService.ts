@@ -291,6 +291,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			request.messages = deepClone(request.originalMessages);
 			request.sections = createSectionsFromMessages(request.messages);
 			request.isDirty = false;
+			request.editHistory = undefined;
 			return true;
 		}, false);
 	}
@@ -906,8 +907,10 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			}
 
 			if (section.editedContent !== undefined) {
-				// Preserve any non-text content parts (e.g. image_url, opaque tool
-				// payloads) while updating the textual portion of the message.
+				// For legacy section-level edits (e.g., Auto-apply overrides),
+				// treat the edited content as a single text payload while
+				// preserving any non-text parts. Leaf-level edits use direct
+				// field updates instead of this path.
 				const existingParts = Array.isArray(message.content) ? message.content : [];
 				const nonTextParts = existingParts.filter(part => {
 					const candidate = part as { type?: unknown; text?: unknown };

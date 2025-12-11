@@ -246,7 +246,7 @@ As an advanced user, I want to optionally mirror chat history into Graphiti so I
 ### Requirement 15 – Surgical Payload Editing Fidelity
 
 **User Story:**  
-As a Copilot engineer debugging complex prompts (with images and other non-text parts), I want section edits in the Live Request Editor to change only the textual portions of the underlying `Raw.ChatMessage[]` while preserving the original non-text content parts and message-level metadata, so that the payload sent to the LLM remains structurally faithful to what was originally rendered.
+As a Copilot engineer debugging complex prompts (with images and other non-text parts), I want edits in the Live Request Editor to change only the specific leaf fields I touch in the underlying `Raw.ChatMessage[]` (for example, a single `text` string or `toolCalls[].function.arguments`) while preserving all other content parts and message-level metadata, so that the payload sent to the LLM remains structurally faithful to what was originally rendered.
 
 #### Acceptance Criteria
 
@@ -255,27 +255,23 @@ As a Copilot engineer debugging complex prompts (with images and other non-text 
 - All `ChatCompletionContentPart` entries (Text, Image, Opaque, CacheBreakpoint).
 - Any `toolCalls`, `toolCallId`, `name`, and other metadata fields.
 
-15.2 WHEN a section is **edited**, THEN the Live Request Editor SHALL:
-- Treat the section’s `content` value as an edit to the concatenation of that message’s textual content (all `ChatCompletionContentPartKind.Text` parts), and  
-- Limit mutations to those textual parts while preserving:
+15.2 WHEN the user edits a **leaf field** (for example, a single `text` value on a `ChatCompletionContentPartText`, or `toolCalls[i].function.arguments`, or `messages[i].name`), THEN the Live Request Editor SHALL:
+- Mutate only that specific field in `Raw.ChatMessage[]`, and  
+- Preserve:
   - Message `role`, `toolCalls`, `toolCallId`, `name`, and
-  - All non-text `ChatCompletionContentPart` entries (Image/Opaque/CacheBreakpoint), including their ordering relative to each other.
+  - All `content` entries (Text/Image/Opaque/CacheBreakpoint) other than the targeted `Text` entry, including their ordering relative to each other.
 
-15.3 FOR messages that originally contained **exactly one** `Text` content part, editing a section SHALL:
-- Replace the `text` field of that part with the edited string, and  
-- Leave all other content parts (if any) untouched and in their original positions.
+15.3 FOR messages that originally contained **multiple** `Text` content parts interleaved with non-text parts, editing one `Text` part via the UI SHALL:
+- Update only that part’s `text` field, and  
+- Leave all other `content` entries (including other `Text` parts and all non-text parts) untouched and in their original positions.
 
-15.4 FOR messages that originally contained **multiple** `Text` content parts interleaved with non-text parts, editing a section SHOULD:
-- Compute the original aggregate text (concatenation of all `Text` parts in order),  
-- Apply the user’s edit to that aggregate (e.g., via a line-aware diff or full replace), and  
-- Reconstruct the message’s `Text` parts by:
-  - Updating existing `Text` parts’ `text` fields where possible, and
-  - Splitting or merging `Text` parts only as needed to reflect insertions/deletions,  
-  - Without removing or reordering any non-text parts.
+15.4 WHEN the Live Request Editor exposes editing for tool arguments (for example, `toolCalls[i].function.arguments`), THEN edits SHALL:
+- Be confined to that arguments field, and  
+- Preserve the rest of the tool call record (`id`, `type`, `function.name`) and the surrounding chat message content.
 
-15.5 IF the editor cannot derive a stable mapping between the edited aggregate text and the original set of `Text` parts (for example, due to extreme structural changes), THEN it MAY fall back to a simpler representation for that message, but it MUST:
-- Preserve all non-text parts from the original message as valid `ChatCompletionContentPart` entries, and  
-- Ensure the resulting `Raw.ChatMessage` still conforms to the `@vscode/prompt-tsx` Raw schema.
+15.5 WHEN the Live Request Editor exposes editing for request-level options (for example, `requestOptions.temperature`), THEN edits SHALL:
+- Mutate only the specified option, and  
+- Preserve the rest of the requestOptions object and the `messages` array.
 
 15.6 WHEN the Live Request Editor builds replay payloads (e.g., via `buildReplayForRequest(...)`) or sends requests to the LLM, the resulting `Raw.ChatMessage[]` payload SHALL:
 - Honor the surgical editing semantics above, and  
@@ -283,5 +279,32 @@ As a Copilot engineer debugging complex prompts (with images and other non-text 
 
 15.7 TESTS SHALL cover:
 - Editing a single-text-part message (text changed, non-text unchanged).  
-- Editing a multi-text-part message with interleaved non-text parts, asserting that non-text parts remain in place and that text changes are confined to `Text` parts.  
-- Fallback behavior when diffs are too complex, verifying schema correctness and non-text preservation.
+- Editing one of several `Text` parts with interleaved non-text parts, asserting that only the targeted `Text` part changes and all other parts remain in place.  
+- Editing tool arguments and request options, asserting that only the targeted fields change and the rest of the payload is preserved.
+
+### Requirement 16 – Hierarchical Message / Content / ToolCall View
+
+**User Story:**  
+As a Copilot engineer inspecting complex prompts (with multiple content parts and tool calls), I want the Live Request Editor to expose the **hierarchical structure** of each request (`messages[]`, `content[]`, `toolCalls[]`) so I can see where each piece of text or JSON lives in the Raw payload and reason about edits with structural context.
+
+#### Acceptance Criteria
+
+16.1 THE Live Request Editor SHALL treat each `Raw.ChatMessage` as a top-level **message node**, with one primary section per message (`nodeType === 'message'`, `sourceMessageIndex` matching the message index).  
+16.2 FOR each message, the editor SHALL surface child nodes for:
+- Top-level scalar fields (for example, `role`, `name`, `toolCallId`) as individual **field nodes**, and  
+- Structured fields/arrays (for example, `content[]`, `toolCalls[]`) as **group nodes** whose children represent individual items (for example, `content[i]`, `toolCalls[i]`),  
+in a way that preserves the original ordering of arrays and the original shape of the Raw message.  
+16.3 EACH section node (message or child) SHALL carry enough metadata to locate its backing Raw payload, including:
+- `sourceMessageIndex`, and  
+- When applicable, `contentIndex` or `toolCallIndex`, and  
+- A human-readable `rawPath` string (e.g., `messages[3].content[1]`, `messages[4].toolCalls[0]`) for debugging.  
+16.4 THE Live Request Editor UI SHALL render:
+- Each **message node** as a “big card” representing the full message (header with role/kind, tokens, etc.), and  
+- Its field and group children (for example, `role`, `name`, `content`, `toolCalls`) as **nested boxes** inside that card, visually grouped by type (scalar fields vs content vs tool calls vs other metadata).  
+16.5 IN the current implementation, the primary **Edit** affordances SHALL be attached to **leaf nodes** (for example, `content[i].text`, `toolCalls[i].function.arguments`, `messages[i].name`, `requestOptions.temperature`), while message nodes act as visual group headers (assistant/system/user “big boxes”) that group their children.  
+16.6 THE hierarchical projection SHALL remain a pure viewmodel concern:
+- `EditableChatRequest.messages` remains the single source of truth,  
+- Downstream consumers (ChatML fetcher, Request Logger, replay, CLI fork) SHALL continue to consume only recomposed `Raw.ChatMessage[]`, not the hierarchical tree directly.  
+16.7 TESTS SHALL cover:
+- Messages with combinations of scalar fields, multiple `content` entries (text + non-text), and `toolCalls`, asserting that the hierarchy (`nodeType`, `parentId`, indices, `rawPath`) matches the Raw payload.  
+- Edits applied at leaf nodes (including message fields and request options) still respect Requirement 15 while the nested child nodes reflect the updated field values and unchanged surrounding structure.  

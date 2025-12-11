@@ -190,43 +190,80 @@
 
   ## 3. Does the editing respect the Raw schema?
 
-  ### 3.1 Schema correctness
+  This section distinguishes between the **implemented MVP behaviour** and the **target surgical behaviour** described in Requirement 15 and the Live Request Editor design doc.
 
-  Under the current implementation:
+  ### 3.1 Legacy MVP behaviour (section‑level aggregate text)
+
+  Earlier versions of the Live Request Editor used `LiveRequestEditorService.recomputeMessages` to apply **section-level** edits, where each section exposed a single aggregate text editor and any change collapsed multiple `Text` parts into one.
+
+  Under that implementation:
 
   - For all messages:
-      - role is always one of ChatRole.System | User | Assistant | Tool.
-      - content is always an array of ChatCompletionContentPart:
-          - For unedited messages: deep clone of original parts (already well‑typed).
-          - For edited messages:
-              - Text parts are updated **surgically** while preserving non-text parts:
-                  - For messages with a single `Text` part, only its `text` field is replaced.
-                  - For messages with multiple `Text` parts, the editor treats the concatenation of all `Text` parts as the editable string, applies the user’s edits, and then redistributes the updated text back across the existing `Text` parts (splitting/merging as needed) without removing or reordering any non-text parts.
-              - All non-text parts (Image, Opaque, CacheBreakpoint) are carried through unchanged and remain valid `ChatCompletionContentPart` entries.
+      - `role` is always one of `ChatRole.System | User | Assistant | Tool`.
+      - `content` is always an array of `ChatCompletionContentPart`.
+  - For unedited sections:
+      - The message is a deep clone of the original `Raw.ChatMessage` produced by the prompt renderer (already well‑typed).
+  - For edited sections:
+      - We:
+          - Clone the original message.
+          - Extract all existing non‑text parts (Image, Opaque, CacheBreakpoint).
+          - Replace `message.content` with:
 
-  Therefore, the recomposed Raw.ChatMessage[] structurally respects the Raw schema:
+            ```ts
+            [
+              {
+                type: Raw.ChatCompletionContentPartKind.Text,
+                text: section.editedContent
+              },
+              ...nonTextParts
+            ];
+            ```
 
-  - No invalid type values are introduced.
-  - text is only set on Text parts.
-  - imageUrl/value/cacheType fields on non‑text parts are left untouched.
+      - This means:
+          - All non‑text parts are preserved and remain valid `ChatCompletionContentPart` entries.
+          - Textual content is normalised into a **single** `Text` part per edited message.
 
-  ### 3.2 Semantic fidelity vs original payload
+  Therefore, the recomposed `Raw.ChatMessage[]` structurally respects the Raw schema:
 
-  There are still some semantic differences from the initial provider payload:
+  - No invalid `type` values are introduced.
+  - `text` is only set on `Text` parts.
+  - `imageUrl` / `value` / `cacheType` fields on non‑text parts are left untouched.
 
-  - Text parts:
-      - The editor treats all `Text` parts in a message as a single editable string, then pushes the edited content back into those parts. This may change the exact segmentation (e.g. how text is split across multiple parts), but keeps the same relative ordering of text vs non-text content.
-  - Non‑text parts (images, opaque JSON, cache breakpoints):
-      - Are preserved as-is and are not mutated by the Live Request Editor, other than being omitted if the entire section is deleted.
-  - Message‑level fields:
-      - `role`, `toolCalls`, `name`, `toolCallId` are taken from `originalMessages` and are not mutated by the editor (other than messages being dropped when sections are deleted).
+  Semantic differences vs the original payload:
 
-  ### 3.3 TL;DR reflection
+  - The exact segmentation of text across multiple `Text` parts is lost once a section is edited (all text collapses into one part), but:
+      - The **ordering and identity** of non‑text parts is preserved.
+      - Message‑level fields (`role`, `toolCalls`, `name`, `toolCallId`) are taken from `originalMessages` and are not mutated (except when a section is deleted).
 
-  - Yes, the editing logic respects the Raw schema:
-      - Every recomposed message is a valid `Raw.ChatMessage`.
-      - Every content entry is a valid `ChatCompletionContentPart` variant.
-  - It now aims for **surgical fidelity**:
-      - Text changes are confined to `Text` parts.
-      - Non-text parts and message-level metadata are preserved, and non-text parts are not reordered relative to each other.
-  - Some minor differences (such as how edited text is split across multiple `Text` parts) are considered acceptable, as the Raw representation is intentionally permissive and converting back to provider-specific JSON is allowed to be slightly lossy in terms of segmentation.
+  This MVP behaviour already satisfies the “schema correctness” portion of Requirement 15 and guarantees non‑text preservation. However, it does **not** preserve the original segmentation of text across multiple `Text` parts and makes it harder to reason about which exact field was edited.
+
+  The **current design and UI flows** now operate directly on **per‑leaf fields** (for example, `messages[i].content[j].text`, `messages[i].toolCalls[k].function.arguments`, `messages[i].name`, `requestOptions.temperature`) rather than redistributing aggregate text. Section‑level aggregate editing is retained only as a legacy, compatibility path (primarily for older auto‑override flows) and is a candidate for removal once all callers use the leaf‑level APIs; see Requirement 15 and the Live Request Editor design doc for details.
+
+  ### 3.2 Hierarchical projection and Raw path bindings
+
+  Although downstream consumers only see `Raw.ChatMessage[]`, the Live Request Editor maintains a **hierarchical projection** on top of this payload so users can understand how edits map back to the underlying JSON:
+
+  - Top-level nodes:
+      - One “message section” per `Raw.ChatMessage`, keyed by its array index (`sourceMessageIndex`).
+  - Child nodes:
+      - Scalar **field nodes** for message-level fields such as `role`, `name`, `toolCallId`.
+      - Group nodes for structured fields such as `content` and `toolCalls`.
+      - Synthetic “contentPart” nodes for each `message.content[contentIndex]`.
+      - Synthetic “toolCall” nodes for each `message.toolCalls[toolCallIndex]` (assistant messages).
+  - Each node carries:
+      - `sourceMessageIndex` (message index),
+      - optional `contentIndex` / `toolCallIndex`, and
+      - a human-readable `rawPath` string such as:
+          - `messages[3].content[1]`
+          - `messages[4].toolCalls[0]`.
+
+  This projection does **not** introduce a new storage format; it is an in-memory viewmodel layered directly on top of the Raw arrays. All edits applied through the Live Request Editor ultimately mutate only:
+
+  - Individual leaf fields (for example, `messages[messageIndex].content[contentIndex].text`, `messages[messageIndex].toolCalls[toolCallIndex].function.arguments`, `messages[messageIndex].name`, `requestOptions.temperature`), and  
+  - Never change the shape or ordering of `content` / `toolCalls` arrays except when an entire message is deleted (section deletion).
+
+  The hierarchical view therefore:
+
+  - Reuses Raw keys and indices “as-is” (no synthetic IDs beyond section/node IDs).
+  - Makes it possible for UI affordances (like an Edit button on a message card) to point back to the correct Raw location without a second mapping layer beyond indices.
+  - Remains an internal concern of the Live Request Editor; replay/CLI code paths continue to work only with recomposed `Raw.ChatMessage[]` payloads.  

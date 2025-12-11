@@ -641,6 +641,48 @@ describe('LiveRequestEditorService interception', () => {
 		expect(hasImagePart).toBe(true);
 	});
 
+	test('edited multi-text-part messages collapse text and preserve interleaved non-text parts (legacy section editing)', async () => {
+		const { service } = await createService();
+		const imageMessage: Raw.ChatMessage = {
+			role: Raw.ChatRole.User,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'aaa' },
+				{
+					type: Raw.ChatCompletionContentPartKind.Image,
+					imageUrl: { url: 'https://example.com/image.png' }
+				},
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'bbb' },
+			]
+		};
+		const init = createServiceInit({
+			renderResult: createRenderResultWithMessages(['system'], [imageMessage])
+		});
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		const userSection = request.sections.find(s => s.kind === 'user')!;
+
+		// Legacy section-level editing collapses all text into a single Text part
+		// while preserving non-text parts (e.g. images).
+		const updatedText = 'updated aggregate text';
+		service.updateSectionContent(key, userSection.id, updatedText);
+
+		const replay = service.buildReplayForRequest(key)!;
+		const userPayload = replay.payload[1];
+		expect(userPayload.role).toBe(Raw.ChatRole.User);
+		expect(Array.isArray(userPayload.content)).toBe(true);
+		// One Text part (aggregate) + one Image part.
+		expect(userPayload.content).toHaveLength(2);
+
+		const firstText = getText(userPayload.content![0])!;
+		const imagePart = userPayload.content![1] as Raw.ChatCompletionContentPart;
+
+		expect(firstText).toBe(updatedText);
+		expect(imagePart.type).toBe(Raw.ChatCompletionContentPartKind.Image);
+		expect((imagePart as Raw.ChatCompletionContentPartImage).imageUrl.url).toBe('https://example.com/image.png');
+	});
+
 	test('replay replace keeps restore buffer and increments version', async () => {
 		const { service } = await createService();
 		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'first']) });
