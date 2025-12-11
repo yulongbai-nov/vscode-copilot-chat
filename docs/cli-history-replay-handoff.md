@@ -163,7 +163,253 @@ Note: this logic affects **CLI session history and live streaming** (including t
 
 ---
 
-## 4. CLI Session Rename (Titles / Labels)
+## 4. Live Request Editor → Copilot CLI Fork (Replay from Edited Prompt)
+
+This section documents the new path that lets you **fork** from a Live Request Editor replay into a **new Copilot CLI session**, seeded with the replay payload, and then continue natively as a CLI session.
+
+### 4.1 Specs and requirements
+
+- Requirement 8 – Replay edited prompt into new CLI session from Live Replay:  
+  `.kiro/specs/cli-history-replay/requirements.md#L93`
+- Tasks for the implementation (command, wiring, tests):  
+  `.kiro/specs/cli-history-replay/tasks.md#L38`
+- High-level design note under “Future Enhancements”:  
+  `.kiro/specs/cli-history-replay/design.md#L152`
+
+Key design decisions:
+
+- **Do not** replay raw OpenAI / agent JSON into the CLI SDK.
+- Treat the **Live Replay payload** (`Raw.ChatMessage[]`) as the source of truth for the edited prompt + answer you see in the replay UI.
+- Render each `Raw.ChatMessage` to plain text using the same rules as the Live Replay view.
+- Seed a **new** Copilot CLI session’s history with synthetic messages:
+  - User roles → `addUserMessage(...)`
+  - Assistant / system / other visible roles → `addUserAssistantMessage(...)`
+- After seeding, open that session in the normal Copilot CLI chat editor and let the user continue via `handleRequest(...)` as usual.
+
+### 4.2 Command surface and wiring
+
+- Command contribution:
+  - `package.json#L1876`  
+    Command id: `github.copilot.liveRequestEditor.openInCopilotCLI`
+  - Localized title:  
+    `package.nls.json#L136`  
+    `"github.copilot.liveRequestEditor.openInCopilotCLI": "Open Replay in Copilot CLI Session"`
+
+- CLI side wiring:
+  - `src/extension/chatSessions/vscode-node/chatSessions.ts#L63`  
+    Injects `ILiveRequestEditorService` into the Copilot CLI instantiation service:
+    ```ts
+    const copilotCLISessionService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(ICopilotCLISessionService));
+    const liveRequestEditorService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(ILiveRequestEditorService));
+    …
+    this._register(registerCLIChatCommands(
+      copilotcliSessionItemProvider,
+      copilotCLISessionService,
+      gitService,
+      liveRequestEditorService
+    ));
+    ```
+  - `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts#L908`  
+    `registerCLIChatCommands` now accepts `liveRequestEditorService: ILiveRequestEditorService`.
+
+- Live Replay summary button:
+  - `src/extension/prompt/vscode-node/liveReplayChatProvider.ts#L22`  
+    ```ts
+    const OPEN_IN_CLI_COMMAND = 'github.copilot.liveRequestEditor.openInCopilotCLI';
+    ```
+  - `src/extension/prompt/vscode-node/liveReplayChatProvider.ts#L265`  
+    In `_buildDisplayHistory`, the replay summary includes:
+    ```ts
+    summaryParts.push(
+      new vscode.ChatResponseCommandButtonPart({
+        title: 'Open in Copilot CLI',
+        command: OPEN_IN_CLI_COMMAND,
+        arguments: [snapshot.key]
+      })
+    );
+    ```
+    so the button passes the `LiveRequestReplayKey` for that replay.
+
+### 4.3 CLI fork handler and message rendering
+
+- Handler registration:
+  - `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts#L1048`
+
+```ts
+disposableStore.add(vscode.commands.registerCommand(
+  'github.copilot.liveRequestEditor.openInCopilotCLI',
+  async (key?: LiveRequestReplayKey) => {
+    if (!key) {
+      return;
+    }
+
+    const snapshot = liveRequestEditorService.getReplaySnapshot(key);
+    if (!snapshot || !snapshot.payload || snapshot.payload.length === 0) {
+      vscode.window.showInformationMessage(
+        vscode.l10n.t('Nothing to replay for this request.')
+      );
+      return;
+    }
+
+    const cancellationSource = new vscode.CancellationTokenSource();
+    const newRef = await copilotCLISessionService.createSession(
+      {
+        model: snapshot.model,
+        workingDirectory: undefined,
+        isolationEnabled: false,
+        agent: undefined
+      },
+      cancellationSource.token
+    );
+
+    const newSession = newRef.object;
+
+    try {
+      for (const message of snapshot.payload ?? []) {
+        const text = renderReplayMessageText(message).trim();
+        if (!text) {
+          continue;
+        }
+        if (message.role === Raw.ChatRole.User) {
+          newSession.addUserMessage(text);
+        } else {
+          newSession.addUserAssistantMessage(text);
+        }
+      }
+
+      const shortId = newSession.sessionId.slice(-6);
+      const label = vscode.l10n.t(
+        'Replay from Live Request Editor · {0}',
+        shortId
+      );
+      await copilotcliSessionItemProvider.setCustomLabel(
+        newSession.sessionId,
+        label
+      );
+
+      copilotcliSessionItemProvider.notifySessionsChange();
+      const newResource = SessionIdForCLI.getResource(newSession.sessionId);
+      await vscode.commands.executeCommand('vscode.open', newResource);
+    } finally {
+      newRef.dispose();
+    }
+  }
+));
+```
+
+- Message rendering helper (aligned with Live Replay view rules):
+  - `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts#L1226`
+
+```ts
+function renderReplayMessageText(message: Raw.ChatMessage): string {
+  const pieces: string[] = [];
+  for (const part of message.content ?? []) {
+    const unknownPart = part as {
+      text?: unknown;
+      content?: unknown;
+      type?: unknown;
+      toolCallId?: unknown;
+    };
+    if (part.type === Raw.ChatCompletionContentPartKind.Text) {
+      pieces.push(part.text ?? '');
+    } else if ('text' in part && typeof part.text === 'string') {
+      pieces.push(part.text);
+    } else if (typeof unknownPart.content === 'string') {
+      pieces.push(unknownPart.content);
+    } else if (unknownPart.type === 'image_url') {
+      pieces.push('[image]');
+    } else if (unknownPart.toolCallId) {
+      pieces.push(`Tool call: ${unknownPart.toolCallId}`);
+    }
+  }
+  return pieces.join('\n');
+}
+```
+
+This mirrors `LiveReplayChatProvider._renderMessageText(...)` so that the forked CLI session shows the same visible content that the user saw in the Live Replay payload view.
+
+### 4.4 End‑to‑end flow diagram
+
+The following Mermaid sequence diagram shows the full path from an intercepted chat request, through Live Replay, into a forked Copilot CLI session:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VSCodeChat as VS Code Chat View
+    participant LiveReqEditor as Live Request Editor<br/>(ILiveRequestEditorService)
+    participant LiveReplay as Live Replay Chat Provider
+    participant CLIExt as Copilot CLI Extension<br/>(registerCLIChatCommands)
+    participant CLISessionSvc as ICopilotCLISessionService
+    participant CLISession as CopilotCLISession
+    participant CLISDK as Copilot CLI SDK<br/>(LocalSessionManager / JSONL)
+
+    User->>VSCodeChat: Send chat request (intercepted)
+    VSCodeChat->>LiveReqEditor: Build editable request + messages
+    LiveReqEditor->>LiveReqEditor: Compute replay snapshot<br/>(LiveRequestReplaySnapshot.payload)
+    LiveReqEditor-->>LiveReplay: showReplay(snapshot)
+
+    User->>LiveReplay: Click "Open in Copilot CLI"
+    LiveReplay->>CLIExt: vscode.commands.executeCommand<br/>('github.copilot.liveRequestEditor.openInCopilotCLI', snapshot.key)
+
+    CLIExt->>LiveReqEditor: getReplaySnapshot(key)
+    LiveReqEditor-->>CLIExt: LiveRequestReplaySnapshot<br/>(Raw.ChatMessage[])
+
+    CLIExt->>CLISessionSvc: createSession({ model: snapshot.model, ... })
+    CLISessionSvc->>CLISDK: createSession(options)
+    CLISDK-->>CLISessionSvc: sdkSession
+    CLISessionSvc-->>CLIExt: CopilotCLISession wrapper
+
+    loop For each Raw.ChatMessage in snapshot.payload
+        CLIExt->>CLISession: addUserMessage(text)<br/>or addUserAssistantMessage(text)
+        CLISession->>CLISDK: append synthetic event<br/>(user.message / assistant.message)
+        CLISDK-->>CLISDK: write to ~/.copilot/session-state/*.jsonl
+    end
+
+    CLIExt->>CLIExt: setCustomLabel("Replay from Live Request Editor · <shortId>")
+    CLIExt->>VSCodeChat: copilotcliSessionItemProvider.notifySessionsChange()
+    CLIExt->>VSCodeChat: vscode.open(copilotcli://<sessionId>)
+
+    User->>VSCodeChat: Continue conversation in CLI session
+    VSCodeChat->>CLISession: handleRequest(prompt, attachments, modelId, token)
+    CLISession->>CLISDK: stream events (tool calls, messages, etc.)
+    CLISDK-->>VSCodeChat: events → rendered in Copilot CLI chat view
+```
+
+### 4.5 Tests
+
+Targeted unit coverage for this path:
+
+- **Live Replay summary button wiring**
+  - `src/extension/prompt/vscode-node/test/liveReplayChatProvider.spec.ts#L146`
+    - Verifies that the summary bubble includes a `ChatResponseCommandButtonPart` whose `value.command` is `github.copilot.liveRequestEditor.openInCopilotCLI` and whose `value.arguments` is `[snapshot.key]`.
+
+- **Manifest declares the command**
+  - `src/extension/prompt/vscode-node/test/liveReplayRegistration.spec.ts#L40`
+    - Asserts that `package.json` contributes `github.copilot.liveRequestEditor.openInCopilotCLI` alongside the other Live Replay commands.
+
+- **CLI fork command behavior**
+  - `src/extension/chatSessions/vscode-node/test/copilotCLIReplayFromLiveReplay.spec.ts#L1`
+    - Mocks:
+      - `ICopilotCLISessionService.createSession`
+      - `ILiveRequestEditorService.getReplaySnapshot`
+      - `CopilotCLIChatSessionItemProvider.setCustomLabel` and `notifySessionsChange`
+      - `vscode.commands.executeCommand`
+    - Positive path:
+      - Confirms `createSession` is called with the snapshot’s model and default CLI options.
+      - Asserts:
+        - `addUserMessage('hi')` is called for the user payload.
+        - Two `addUserAssistantMessage(...)` calls are made for system + assistant payloads, with rendered text that includes `'sys'`, `'hello'`, and `[image]`.
+      - Verifies:
+        - `setCustomLabel(newSession.sessionId, 'Replay from Live Request Editor · …')` is invoked.
+        - A `vscode.open` call targets a `copilotcli://<sessionId>` resource.
+    - Negative path:
+      - When `getReplaySnapshot(key)` returns `undefined`, no session is created and `vscode.window.showInformationMessage('Nothing to replay for this request.')` is called.
+
+This completes the “fork from edited prompt into a native Copilot CLI session” story: the forked session’s history matches what the user saw in the Live Replay payload view, and subsequent turns run through the standard Copilot CLI session / JSONL pipeline.
+
+---
+
+## 5. CLI Session Rename (Titles / Labels)
 
 We added a CLI‑specific rename flow that:
 
