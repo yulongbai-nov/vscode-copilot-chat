@@ -251,6 +251,9 @@ suite('defaultIntentRequestHandler', () => {
 		getRequest(): EditableChatRequest | undefined { return undefined; }
 		getOriginalRequestMessages(): Raw.ChatMessage[] | undefined { return undefined; }
 		updateSectionContent(): EditableChatRequest | undefined { return undefined; }
+		updateLeafByPath(): EditableChatRequest | undefined { return undefined; }
+		undoLastEdit(): EditableChatRequest | undefined { return undefined; }
+		redoLastEdit(): EditableChatRequest | undefined { return undefined; }
 		deleteSection(): EditableChatRequest | undefined { return undefined; }
 		restoreSection(): EditableChatRequest | undefined { return undefined; }
 		resetRequest(): EditableChatRequest | undefined { return undefined; }

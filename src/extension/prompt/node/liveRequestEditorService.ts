@@ -16,7 +16,7 @@ import { ILogService } from '../../../platform/log/common/logService';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, EditHistory, EditOp, EditTargetKind, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
 import { AutoOverrideDiffEntry, AutoOverrideSummary, ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, LiveRequestReplayEvent, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
 import { DEFAULT_REPLAY_SECTION_CAP, buildEditableChatRequest, buildReplayProjection, computeChatMessagesHash, computeReplayProjectionHash, createSectionsFromMessages } from './liveRequestBuilder';
 
@@ -254,6 +254,36 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			section.content = newContent;
 			section.editedContent = newContent;
 			section.deleted = false;
+			return true;
+		}, true);
+	}
+
+	updateLeafByPath(key: LiveRequestSessionKey, targetPath: string, newValue: unknown): EditableChatRequest | undefined {
+		return this.withRequest(key, request => this.applyLeafEdit(request, targetPath, newValue), true);
+	}
+
+	undoLastEdit(key: LiveRequestSessionKey): EditableChatRequest | undefined {
+		return this.withRequest(key, request => {
+			const history = request.editHistory;
+			if (!history || !history.undoStack.length) {
+				return false;
+			}
+			const op = history.undoStack.pop()!;
+			this.applyLeafValue(request, op.targetPath, op.oldValue);
+			history.redoStack.push(op);
+			return true;
+		}, true);
+	}
+
+	redoLastEdit(key: LiveRequestSessionKey): EditableChatRequest | undefined {
+		return this.withRequest(key, request => {
+			const history = request.editHistory;
+			if (!history || !history.redoStack.length) {
+				return false;
+			}
+			const op = history.redoStack.pop()!;
+			this.applyLeafValue(request, op.targetPath, op.newValue);
+			history.undoStack.push(op);
 			return true;
 		}, true);
 	}
@@ -884,6 +914,186 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		return request;
 	}
 
+	private applyLeafEdit(request: EditableChatRequest, targetPath: string, newValue: unknown): boolean {
+		const normalizedPath = targetPath.trim();
+		if (!normalizedPath.length) {
+			return false;
+		}
+
+		// Resolve and apply the value first; capture the old value from the
+		// container so we can record a reversible EditOp.
+		const resolution = this.resolveLeafContainer(request, normalizedPath);
+		if (!resolution) {
+			return false;
+		}
+
+		const { container, key, currentValue } = resolution;
+		const nextValue = this.coerceLeafValue(currentValue, newValue);
+		if (equals(currentValue, nextValue)) {
+			return false;
+		}
+
+		(container as Record<string | number, unknown>)[key] = nextValue;
+
+		// Initialize edit history if needed.
+		let history: EditHistory | undefined = request.editHistory;
+		if (!history) {
+			history = { undoStack: [], redoStack: [] };
+			request.editHistory = history;
+		}
+		const previousVersion = history.undoStack.at(-1)?.id.version ?? 0;
+		const targetKind = this.classifyTargetKind(normalizedPath);
+		const op: EditOp = {
+			id: {
+				requestId: request.metadata.requestId ?? request.id,
+				version: previousVersion + 1
+			},
+			targetKind,
+			targetPath: normalizedPath,
+			oldValue: deepClone(currentValue),
+			newValue: deepClone(nextValue)
+		};
+
+		history.undoStack.push(op);
+		history.redoStack.length = 0;
+		return true;
+	}
+
+	private applyLeafValue(request: EditableChatRequest, targetPath: string, value: unknown): void {
+		const resolution = this.resolveLeafContainer(request, targetPath);
+		if (!resolution) {
+			return;
+		}
+		const nextValue = this.coerceLeafValue(resolution.currentValue, value);
+		(resolution.container as Record<string | number, unknown>)[resolution.key] = nextValue;
+	}
+
+	private classifyTargetKind(targetPath: string): EditTargetKind {
+		if (targetPath.startsWith('requestOptions.')) {
+			return 'requestOption';
+		}
+		if (targetPath.includes('.toolCalls[') && targetPath.endsWith('.function.arguments')) {
+			return 'toolArguments';
+		}
+		if (targetPath.includes('.content[') && targetPath.endsWith('.text')) {
+			return 'contentText';
+		}
+		return 'messageField';
+	}
+
+	private resolveLeafContainer(
+		request: EditableChatRequest,
+		targetPath: string
+	): { container: unknown; key: string | number; currentValue: unknown } | undefined {
+		const rootMatch = /^([a-zA-Z0-9_]+)(?:\[(\d+)\])?(?:\.|$)/.exec(targetPath);
+		if (!rootMatch) {
+			return undefined;
+		}
+		const rootName = rootMatch[1];
+		const rootIndex = rootMatch[2] !== undefined ? Number(rootMatch[2]) : undefined;
+		const rest = targetPath.slice(rootMatch[0].length);
+
+		let container: unknown;
+
+		if (rootName === 'messages') {
+			if (rootIndex === undefined || Number.isNaN(rootIndex)) {
+				return undefined;
+			}
+			const section = request.sections.find(candidate => candidate.sourceMessageIndex === rootIndex && !candidate.deleted);
+			if (!section) {
+				return undefined;
+			}
+			if (!section.message) {
+				this.recomputeMessages(request);
+			}
+			const refreshed = request.sections.find(candidate => candidate.sourceMessageIndex === rootIndex && !candidate.deleted);
+			if (!refreshed?.message) {
+				return undefined;
+			}
+			container = refreshed.message;
+		} else if (rootName === 'requestOptions') {
+			if (!request.metadata.requestOptions) {
+				request.metadata.requestOptions = {};
+			}
+			container = request.metadata.requestOptions;
+		} else {
+			// Unsupported root; no-op.
+			return undefined;
+		}
+
+		if (!rest.length) {
+			// Root-level leaf (e.g. "requestOptions"); editing entire object is out of scope.
+			return undefined;
+		}
+
+		const segments = rest.split('.').filter(segment => segment.length);
+		let current: unknown = container;
+		for (let i = 0; i < segments.length; i++) {
+			const segment = segments[i];
+			const match = /^([a-zA-Z0-9_]+)(?:\[(\d+)\])?$/.exec(segment);
+			if (!match) {
+				return undefined;
+			}
+			const prop = match[1];
+			const index = match[2] !== undefined ? Number(match[2]) : undefined;
+
+			if (i === segments.length - 1) {
+				// Leaf segment: return container + key.
+				if (index !== undefined) {
+					const arrayContainer = (current as Record<string, unknown>)[prop];
+					if (!Array.isArray(arrayContainer) || index < 0 || index >= arrayContainer.length) {
+						return undefined;
+					}
+					return {
+						container: arrayContainer,
+						key: index,
+						currentValue: arrayContainer[index]
+					};
+				}
+				const objectContainer = current as Record<string, unknown>;
+				return {
+					container: objectContainer,
+					key: prop,
+					currentValue: objectContainer[prop]
+				};
+			}
+
+			// Intermediate segment: descend into object / array.
+			if (index !== undefined) {
+				const arrayContainer = (current as Record<string, unknown>)[prop];
+				if (!Array.isArray(arrayContainer) || index < 0 || index >= arrayContainer.length) {
+					return undefined;
+				}
+				current = arrayContainer[index];
+			} else {
+				const objectContainer = current as Record<string, unknown>;
+				const next = objectContainer[prop];
+				if (next === undefined || next === null) {
+					return undefined;
+				}
+				current = next;
+			}
+		}
+
+		return undefined;
+	}
+
+	private coerceLeafValue(currentValue: unknown, newValue: unknown): unknown {
+		if (typeof currentValue === 'number' && typeof newValue === 'string') {
+			const parsed = Number(newValue);
+			return Number.isNaN(parsed) ? newValue : parsed;
+		}
+		if (typeof currentValue === 'boolean' && typeof newValue === 'string') {
+			if (newValue === 'true') {
+				return true;
+			}
+			if (newValue === 'false') {
+				return false;
+			}
+		}
+		return newValue;
+	}
+
 	private recomputeMessages(request: EditableChatRequest): void {
 		const updatedMessages: Raw.ChatMessage[] = [];
 		let isDirty = false;
@@ -897,13 +1107,19 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				continue;
 			}
 
-			const originalMessage = request.originalMessages[section.sourceMessageIndex];
 			let message: Raw.ChatMessage;
-			if (originalMessage) {
-				message = deepClone(originalMessage);
+			if (section.message) {
+				// Start from the last known message for this section so that
+				// leaf-level edits (e.g. content parts, tool args) are preserved.
+				message = deepClone(section.message);
 			} else {
-				message = this.createMessageShell(section.kind);
-				isDirty = true;
+				const originalMessage = request.originalMessages[section.sourceMessageIndex];
+				if (originalMessage) {
+					message = deepClone(originalMessage);
+				} else {
+					message = this.createMessageShell(section.kind);
+					isDirty = true;
+				}
 			}
 
 			if (section.editedContent !== undefined) {

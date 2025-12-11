@@ -97,7 +97,24 @@ export interface ILiveRequestEditorService {
 
 	getRequest(key: LiveRequestSessionKey): EditableChatRequest | undefined;
 
+	/**
+	 * Legacy section-level editor used by the main section textarea UI and
+	 * Auto-apply overrides. New leaf-level edits should prefer updateLeafByPath.
+	 */
 	updateSectionContent(key: LiveRequestSessionKey, sectionId: string, newContent: string): EditableChatRequest | undefined;
+
+	/**
+	 * Update a single leaf field in the underlying Raw payload (for example,
+	 * messages[3].content[1].text or requestOptions.temperature) and record
+	 * the change in the per-request EditHistory.
+	 */
+	updateLeafByPath(key: LiveRequestSessionKey, targetPath: string, newValue: unknown): EditableChatRequest | undefined;
+
+	/**
+	 * Undo / redo the most recent leaf-level EditOp, if any.
+	 */
+	undoLastEdit(key: LiveRequestSessionKey): EditableChatRequest | undefined;
+	redoLastEdit(key: LiveRequestSessionKey): EditableChatRequest | undefined;
 
 	deleteSection(key: LiveRequestSessionKey, sectionId: string): EditableChatRequest | undefined;
 

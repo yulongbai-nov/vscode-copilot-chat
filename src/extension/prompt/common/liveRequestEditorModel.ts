@@ -125,11 +125,6 @@ export interface LiveRequestReplaySnapshot {
 	readonly restoreOfVersion?: number;
 }
 
-export interface EditHistory {
-	undoStack: EditOp[];
-	redoStack: EditOp[];
-}
-
 export type EditTargetKind =
 	| 'messageField'
 	| 'contentText'
@@ -147,6 +142,11 @@ export interface EditOp {
 	targetPath: string;
 	oldValue: unknown;
 	newValue: unknown;
+}
+
+export interface EditHistory {
+	undoStack: EditOp[];
+	redoStack: EditOp[];
 }
 
 export interface EditableChatRequest {
