@@ -68,6 +68,16 @@ Key points in `registerCLIChatCommands`:
 
 This sample is **read‑only** with respect to the source session and uses the same SDK pipeline that normal CLI sessions use.
 
+Replay markdown extraction bug:
+
+- Root cause for seeing `[non-text content]` when replaying a replayed sample:
+  - `ChatResponseMarkdownPart.value` is a `MarkdownString` object, not a plain string.
+  - The original replay implementation concatenated these values directly and passed them into `addUserAssistantMessage(...)`, which implicitly coerced them to the string `"[object Object]"`.
+  - Our placeholder logic then treated that literal `"[object Object]"` as non‑text on the *next* replay, so the assistant bubbles showed `[non-text content]`.
+- Fix:
+  - In `src/extension/chatSessions/vscode-node/copilotCLIChatSessionsContribution.ts#L1026`, we now unwrap the underlying string from `ChatResponseMarkdownPart.value` (handling both `string` and `{ value: string }` shapes) before calling `addUserAssistantMessage(...)`.
+  - This preserves the original markdown text across multiple replays and avoids introducing new `"[object Object]"` artifacts.
+
 ---
 
 ## 3. `[object Object]` Handling in CLI History
