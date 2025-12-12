@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           lfs: false
           fetch-depth: 0  # Need full history for merge-base with upstream
@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22.14.x'
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
