@@ -7,7 +7,7 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
-import { provideVSCodeDesignSystem, vsCodeButton, vsCodeDropdown, vsCodeOption } from '@vscode/webview-ui-toolkit';
+import { provideVSCodeDesignSystem, vsCodeButton, vsCodeCheckbox, vsCodeDropdown, vsCodeOption } from '@vscode/webview-ui-toolkit';
 
 interface VSCodeAPI<TState = unknown> {
 	postMessage(message: unknown): void;
@@ -31,9 +31,10 @@ declare global {
 			'vscode-option': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				value?: string;
 			};
-			'vscode-switch': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+			'vscode-checkbox': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				checked?: boolean;
 				disabled?: boolean;
+				ariaLabel?: string;
 			};
 		}
 	}
@@ -174,7 +175,7 @@ interface InterceptionState {
 
 const vscode = acquireVsCodeApi<PersistedState>();
 
-provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeDropdown(), vsCodeOption());
+provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeDropdown(), vsCodeOption(), vsCodeCheckbox());
 const markdown = new MarkdownIt({
 	linkify: true,
 	breaks: true,
@@ -1256,9 +1257,10 @@ const App: React.FC = () => {
 									))}
 								</vscode-dropdown>
 								<div className="follow-toggle">
-									<label htmlFor="follow-latest-switch">Auto-follow latest</label>
-									<vscode-switch
-										id="follow-latest-switch"
+									<label htmlFor="follow-latest-checkbox">Auto-follow latest</label>
+									<vscode-checkbox
+										id="follow-latest-checkbox"
+										ariaLabel="Auto-follow latest"
 										checked={followLatest}
 										onChange={handleToggleFollowLatest}
 										title="When on, automatically switch to the newest intercepted request"
