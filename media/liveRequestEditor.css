@@ -178,6 +178,10 @@ body {
 	min-width: 220px;
 }
 
+.session-selector .follow-toggle {
+	align-self: flex-start;
+}
+
 .session-selector-label {
 	font-size: 11px;
 	color: var(--vscode-descriptionForeground);

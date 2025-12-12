@@ -26,6 +26,7 @@ type WebviewMessage =
 	| { type: 'cancelIntercept' }
 	| { type: 'command'; command: string; args?: unknown[] }
 	| { type: 'selectSession'; sessionKey: string }
+	| { type: 'setFollowMode'; followLatest: boolean }
 	| { type: 'showOverrideDiff'; slotIndex: number; scope: LiveRequestOverrideScope; sessionKey?: string };
 
 interface SessionSummaryPayload {
@@ -66,6 +67,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private _activeSessionKey?: string;
 	private _focusCommandAvailable?: boolean;
 	private _extraSections: InspectorExtraSection[];
+	private _followLatest = true;
 	private _autoOverrideScopePrompted = false;
 
 	constructor(
@@ -327,6 +329,16 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						this._activateSessionByKey(payload.sessionKey);
 					}
 					break;
+				case 'setFollowMode':
+					if (typeof payload.followLatest === 'boolean') {
+						this._followLatest = payload.followLatest;
+						if (this._followLatest) {
+							this._activateLatestRequest();
+						} else {
+							this._postStateToWebview();
+						}
+					}
+					break;
 
 				default: {
 					const exhaustive: never = payload;
@@ -349,10 +361,12 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		const currentTimestamp = this._currentRequest
 			? this._currentRequest.metadata?.lastUpdated ?? this._currentRequest.metadata?.createdAt ?? 0
 			: 0;
-		const shouldActivate = !this._activeSessionKey
-			|| this._activeSessionKey === key
-			|| (pendingCompositeKey !== undefined && pendingCompositeKey === key)
-			|| incomingTimestamp >= currentTimestamp;
+		const shouldActivate = this._followLatest
+			? (!this._activeSessionKey
+				|| this._activeSessionKey === key
+				|| (pendingCompositeKey !== undefined && pendingCompositeKey === key)
+				|| incomingTimestamp >= currentTimestamp)
+			: (!this._activeSessionKey || this._activeSessionKey === key);
 		if (shouldActivate) {
 			this._activeSessionKey = key;
 			this._currentRequest = request;
@@ -366,6 +380,10 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._requests.delete(compositeKey);
 		this._replays.delete(compositeKey);
 		if (wasActive) {
+			if (this._followLatest) {
+				this._activateLatestRequest();
+				return;
+			}
 			const nextKey = this._requests.keys().next().value as string | undefined;
 			this._activeSessionKey = nextKey;
 			this._currentRequest = nextKey ? this._requests.get(nextKey) : undefined;
@@ -390,6 +408,26 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._activeSessionKey = compositeKey;
 		this._currentRequest = next;
 		this._currentReplay = this._replays.get(compositeKey);
+		this._postStateToWebview();
+	}
+
+	private _activateLatestRequest(): void {
+		let latest: EditableChatRequest | undefined;
+		let latestKey: string | undefined;
+		let latestTimestamp = -Infinity;
+		for (const [key, request] of this._requests) {
+			const ts = request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0;
+			if (ts >= latestTimestamp) {
+				latestTimestamp = ts;
+				latest = request;
+				latestKey = key;
+			}
+		}
+		if (latest && latestKey) {
+			this._activeSessionKey = latestKey;
+			this._currentRequest = latest;
+			this._currentReplay = this._replays.get(latestKey);
+		}
 		this._postStateToWebview();
 	}
 
@@ -442,7 +480,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			sessions: this._getSessionSummaries(),
 			activeSessionKey: this._activeSessionKey,
 			extraSections: this._extraSections,
-			replayEnabled: this._liveRequestEditorService.isReplayEnabled()
+			replayEnabled: this._liveRequestEditorService.isReplayEnabled(),
+			followLatest: this._followLatest
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
 	}
 

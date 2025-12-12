@@ -126,6 +126,7 @@ interface StateUpdateMessage {
 	activeSessionKey?: string;
 	extraSections?: InspectorExtraSection[];
 	replayEnabled?: boolean;
+	followLatest?: boolean;
 }
 
 interface SessionSummary {
@@ -798,6 +799,7 @@ const App: React.FC = () => {
 	const [replayView, setReplayView] = React.useState<'payload' | 'projection'>('payload');
 	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
 	const [lastReplayUri, setLastReplayUri] = React.useState<string | undefined>(undefined);
+	const [followLatest, setFollowLatest] = React.useState(true);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -898,6 +900,7 @@ const App: React.FC = () => {
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
 				setActiveSessionKey(event.data.activeSessionKey);
+				setFollowLatest(event.data.followLatest ?? true);
 				const extras = (event.data.extraSections ?? []).filter(isInspectorExtraSection);
 				setExtraSections(extras);
 				setReplayEnabled(!!event.data.replayEnabled);
@@ -917,13 +920,13 @@ const App: React.FC = () => {
 	}, [interception?.pending?.nonce]);
 
 	React.useEffect(() => {
-		if (!activeSessionKey) {
+		if (!activeSessionKey || !followLatest) {
 			return;
 		}
 		setSessionFlash(true);
 		const handle = window.setTimeout(() => setSessionFlash(false), 1200);
 		return () => window.clearTimeout(handle);
-	}, [activeSessionKey]);
+	}, [activeSessionKey, followLatest]);
 
 	React.useEffect(() => {
 		setEditingSectionId(null);
@@ -1165,6 +1168,12 @@ const App: React.FC = () => {
 		setReplayView(current => (current === 'payload' ? 'projection' : 'payload'));
 	}, [lastReplayUri, replayUri, sendMessage]);
 
+	const handleToggleFollowLatest = React.useCallback(() => {
+		const next = !followLatest;
+		setFollowLatest(next);
+		sendMessage('setFollowMode', { followLatest: next });
+	}, [followLatest, sendMessage]);
+
 	const handleResumeSend = React.useCallback(() => {
 		sendMessage('resumeSend');
 	}, [sendMessage]);
@@ -1236,6 +1245,15 @@ const App: React.FC = () => {
 										</vscode-option>
 									))}
 								</vscode-dropdown>
+								<vscode-button
+									appearance={followLatest ? 'secondary' : 'primary'}
+									onClick={handleToggleFollowLatest}
+									title={followLatest ? 'Auto-follow newest intercepted request' : 'Stick to selected conversation'}
+									className="follow-toggle"
+								>
+									<span className={`codicon ${followLatest ? 'codicon-sync' : 'codicon-pin'}`} aria-hidden="true" />
+									&nbsp;{followLatest ? 'Auto-follow' : 'Stick'}
+								</vscode-button>
 							</div>
 						)}
 					</div>
