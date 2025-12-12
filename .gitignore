@@ -37,11 +37,13 @@ test/simulation/cache/base.sqlite
 test/simulation/cache/layers/
 
 test/aml/out
-src/extension/completions-core
 
-.tmp/
-*.vsix
-.github/workflows/pr.yml
+# Ignore files in husky (else we always end up with files when creating worktrees)
+.husky/_/
+
 # Ignore git worktrees metadata
 .worktree
 .worktrees
+
+.tmp/
+*.vsix

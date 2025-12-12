@@ -15,6 +15,7 @@ import { ServiceCollection } from '../../../util/vs/platform/instantiation/commo
 import { ClaudeAgentManager } from '../../agents/claude/node/claudeCodeAgent';
 import { ClaudeCodeSdkService, IClaudeCodeSdkService } from '../../agents/claude/node/claudeCodeSdkService';
 import { ClaudeCodeSessionService, IClaudeCodeSessionService } from '../../agents/claude/node/claudeCodeSessionService';
+import { ChatDelegationSummaryService, IChatDelegationSummaryService } from '../../agents/copilotcli/common/delegationSummaryService';
 import { CopilotCLIAgents, CopilotCLIModels, CopilotCLISDK, ICopilotCLIAgents, ICopilotCLIModels, ICopilotCLISDK } from '../../agents/copilotcli/node/copilotCli';
 import { CopilotCLIImageSupport } from '../../agents/copilotcli/node/copilotCLIImageSupport';
 import { CopilotCLIPromptResolver } from '../../agents/copilotcli/node/copilotcliPromptResolver';
@@ -73,9 +74,6 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 
 		const sessionItemProvider = this._register(claudeAgentInstaService.createInstance(ClaudeChatSessionItemProvider));
 		this._register(vscode.chat.registerChatSessionItemProvider(ClaudeChatSessionItemProvider.claudeSessionType, sessionItemProvider));
-		this._register(vscode.commands.registerCommand('github.copilot.claude.sessions.refresh', () => {
-			sessionItemProvider.refresh();
-		}));
 
 		const claudeAgentManager = this._register(claudeAgentInstaService.createInstance(ClaudeAgentManager));
 		const chatSessionContentProvider = claudeAgentInstaService.createInstance(ClaudeChatSessionContentProvider);
@@ -86,14 +84,21 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 		// #endregion
 
 		// Copilot Cloud Agent - conditionally register based on configuration
+		const summarizer = instantiationService.createInstance(ChatSummarizerProvider);
+		const delegationSummary = instantiationService.createInstance(ChatDelegationSummaryService, summarizer);
+		this._register(vscode.workspace.registerTextDocumentContentProvider(delegationSummary.scheme, {
+			provideTextDocumentContent: (uri: vscode.Uri): string | undefined => delegationSummary.provideTextDocumentContent(uri)
+		}));
 		this.copilotAgentInstaService = instantiationService.createChild(new ServiceCollection(
 			[IOctoKitService, new SyncDescriptor(OctoKitService)],
+			[IChatDelegationSummaryService, delegationSummary],
 			[IPullRequestFileChangesService, new SyncDescriptor(PullRequestFileChangesService)],
 		));
 		const cloudSessionProvider = this.registerCopilotCloudAgent();
 		const copilotcliAgentInstaService = instantiationService.createChild(
 			new ServiceCollection(
 				[ICopilotCLISessionService, new SyncDescriptor(CopilotCLISessionService)],
+				[IChatDelegationSummaryService, delegationSummary],
 				[ICopilotCLIModels, new SyncDescriptor(CopilotCLIModels)],
 				[ICopilotCLISDK, new SyncDescriptor(CopilotCLISDK)],
 				[ICopilotCLIAgents, new SyncDescriptor(CopilotCLIAgents)],
@@ -108,15 +113,14 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 		const imageSupport = copilotcliAgentInstaService.createInstance(CopilotCLIImageSupport);
 		const promptResolver = copilotcliAgentInstaService.createInstance(CopilotCLIPromptResolver, imageSupport);
 		const copilotcliChatSessionContentProvider = copilotcliAgentInstaService.createInstance(CopilotCLIChatSessionContentProvider, copilotCLIWorktreeManager);
-		const summarizer = copilotcliAgentInstaService.createInstance(ChatSummarizerProvider);
 		const gitService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(IGitService));
 
 		const copilotcliChatSessionParticipant = this._register(copilotcliAgentInstaService.createInstance(
 			CopilotCLIChatSessionParticipant,
+			copilotcliChatSessionContentProvider,
 			promptResolver,
 			copilotcliSessionItemProvider,
 			cloudSessionProvider,
-			summarizer,
 			copilotCLIWorktreeManager
 		));
 		const copilotCLISessionService = copilotcliAgentInstaService.invokeFunction(accessor => accessor.get(ICopilotCLISessionService));
@@ -151,11 +155,6 @@ export class ChatSessionsContrib extends Disposable implements IExtensionContrib
 				cloudSessionsProvider.chatParticipant,
 				{ supportsInterruptions: true }
 			)
-		);
-		this.copilotCloudRegistrations.add(
-			vscode.commands.registerCommand('github.copilot.cloud.sessions.refresh', () => {
-				cloudSessionsProvider.refresh();
-			})
 		);
 		this.copilotCloudRegistrations.add(
 			vscode.commands.registerCommand('github.copilot.cloud.resetWorkspaceConfirmations', () => {
