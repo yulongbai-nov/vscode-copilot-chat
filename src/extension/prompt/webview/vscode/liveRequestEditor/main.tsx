@@ -1383,6 +1383,7 @@ const App: React.FC = () => {
 							actions={(
 								<vscode-button appearance="secondary" onClick={handleCopyRawPayload} title="Copy payload JSON" aria-label="Copy payload JSON">
 									<span className="codicon codicon-copy" aria-hidden="true" />
+									&nbsp;Copy
 								</vscode-button>
 							)}
 						>
