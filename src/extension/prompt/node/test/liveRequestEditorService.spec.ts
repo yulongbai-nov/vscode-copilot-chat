@@ -260,8 +260,12 @@ describe('LiveRequestEditorService interception', () => {
 		expect(events.length).toBeGreaterThan(0);
 		expect(events[events.length - 1]?.metadata?.sessionId).toBe(init.sessionId);
 
+		const eventCountBeforeDispose = events.length;
 		chatSessions.fireDidDispose(init.sessionId);
-		expect(events[events.length - 1]?.metadata).toBeUndefined();
+		// Requests are retained across session disposal for debugging/persistence, so
+		// disposing a chat session should not clear the metadata snapshot.
+		expect(events.length).toBe(eventCountBeforeDispose);
+		expect(events[events.length - 1]?.metadata?.sessionId).toBe(init.sessionId);
 	});
 
 	test('updateRequestOptions stores cloned payloads and emits change notifications', async () => {
@@ -365,8 +369,8 @@ describe('LiveRequestEditorService interception', () => {
 
 		const decision = await decisionPromise;
 		expect(decision).toEqual({ action: 'cancel', reason: 'sessionDisposed' });
-		expect(service.getRequest(key)).toBeUndefined();
-		expect(removedKeys).toEqual([key]);
+		expect(service.getRequest(key)).toBeDefined();
+		expect(removedKeys).toEqual([]);
 
 		const events = telemetry.getEvents().telemetryServiceEvents;
 		const hasReason = events.some(evt => {
@@ -539,6 +543,24 @@ describe('LiveRequestEditorService interception', () => {
 		const rehydratedRequest = second.service.getRequest(rehydratedKey)!;
 		expect(rehydratedRequest.sections[0].content).toBe('workspace override');
 		expect(rehydratedRequest.sections[0].overrideState?.scope).toBe('workspace');
+	});
+
+	test('request cache persists across service instances', async () => {
+		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
+		const first = await createService(extensionContext);
+		const init = createServiceInit({ sessionId: 'persist-session', requestId: 'req-1', renderResult: createRenderResult('original text') });
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+
+		first.service.prepareRequest(init);
+		const request = first.service.getRequest(key)!;
+		first.service.updateSectionContent(key, request.sections[0].id, 'edited text');
+
+		await (first.service as any).persistRequestCache();
+
+		const second = await createService(extensionContext);
+		const restored = second.service.getRequest(key)!;
+		expect(getText(restored.messages[0].content[0])).toBe('edited text');
+		expect(restored.isDirty).toBe(true);
 	});
 
 	test('applyTraceData updates tokens and trace path metadata', async () => {

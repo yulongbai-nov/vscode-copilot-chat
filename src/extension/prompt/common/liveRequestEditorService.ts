@@ -98,6 +98,12 @@ export interface ILiveRequestEditorService {
 	getRequest(key: LiveRequestSessionKey): EditableChatRequest | undefined;
 
 	/**
+	 * Returns all currently known intercepted requests.
+	 * Callers MUST treat returned requests as read-only.
+	 */
+	getAllRequests(): readonly EditableChatRequest[];
+
+	/**
 	 * Legacy section-level editor used by the main section textarea UI and
 	 * Auto-apply overrides. New leaf-level edits should prefer updateLeafByPath.
 	 */

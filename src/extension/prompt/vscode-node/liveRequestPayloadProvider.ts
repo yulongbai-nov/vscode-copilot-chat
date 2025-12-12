@@ -33,6 +33,10 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 		this._register(this._liveRequestEditorService.onDidChange(request => this._handleRequestUpdated(request)));
 		this._register(this._liveRequestEditorService.onDidRemoveRequest(key => this._handleRequestRemoved(key)));
 		this._register(this._liveRequestEditorService.onDidChangeMetadata(event => this._handleMetadataChanged(event)));
+
+		for (const request of this._liveRequestEditorService.getAllRequests()) {
+			this._handleRequestUpdated(request);
+		}
 	}
 
 	public resolveWebviewView(webviewView: vscode.WebviewView): void {

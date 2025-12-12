@@ -162,6 +162,7 @@ describe('LiveRequestEditorProvider', () => {
 			isReplayEnabled: () => true,
 			prepareRequest: () => undefined,
 			getRequest: () => undefined,
+			getAllRequests: () => [],
 			updateSectionContent: () => undefined,
 			updateLeafByPath: () => undefined,
 			undoLastEdit: () => undefined,

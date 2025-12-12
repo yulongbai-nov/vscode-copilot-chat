@@ -99,7 +99,9 @@ describe('LiveRequestMetadataProvider', () => {
 			_serviceBrand: undefined,
 			onDidChangeMetadata: metadataEmitter.event,
 			onDidChange: requestEmitter.event,
-			onDidRemoveRequest: new Emitter().event
+			onDidRemoveRequest: new Emitter().event,
+			getAllRequests: () => [],
+			getMetadataSnapshot: () => undefined
 		} as unknown as ILiveRequestEditorService;
 
 		(configurationStub.get as Mock).mockImplementation((section: string) => {

@@ -91,6 +91,19 @@ export class LiveRequestMetadataProvider extends Disposable implements vscode.Tr
 				this.refresh();
 			}
 		}));
+
+		const requests = this._liveRequestEditorService.getAllRequests();
+		if (requests.length) {
+			for (const request of requests) {
+				this._requests.set(this._toKey(request.sessionId, request.location), request);
+			}
+			const latest = requests
+				.slice()
+				.sort((a, b) => (b.metadata.lastUpdated ?? b.metadata.createdAt) - (a.metadata.lastUpdated ?? a.metadata.createdAt))[0];
+			this._metadata = latest
+				? this._liveRequestEditorService.getMetadataSnapshot({ sessionId: latest.sessionId, location: latest.location })
+				: undefined;
+		}
 	}
 
 	getTreeItem(element: LiveRequestTreeItem): vscode.TreeItem {

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Raw } from '@vscode/prompt-tsx';
-import { DeferredPromise } from '../../../util/vs/base/common/async';
+import { DeferredPromise, RunOnceScheduler } from '../../../util/vs/base/common/async';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
@@ -23,6 +23,14 @@ import { DEFAULT_REPLAY_SECTION_CAP, buildEditableChatRequest, buildReplayProjec
 const SUBAGENT_HISTORY_LIMIT = 10;
 const WORKSPACE_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.workspace';
 const GLOBAL_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.global';
+const WORKSPACE_REQUEST_CACHE_KEY = 'github.copilot.liveRequestEditor.requestCache.v1';
+const MAX_PERSISTED_REQUESTS = 50;
+
+interface PersistedRequestCacheV1 {
+	readonly version: 1;
+	readonly updatedAt: number;
+	readonly requests: EditableChatRequest[];
+}
 
 interface StoredAutoOverrideEntry {
 	slotIndex: number;
@@ -117,6 +125,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	private _interceptNonce = 0;
 	private _interceptionState: PromptInterceptionState;
 	private _timelineReplayEnabled: boolean;
+	private readonly _persistRequestsScheduler: RunOnceScheduler;
 
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
@@ -141,6 +150,10 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			paused: false,
 			autoOverride: this.buildAutoOverrideSummary()
 		};
+		this._persistRequestsScheduler = this._register(new RunOnceScheduler(() => {
+			void this.persistRequestCache();
+		}, 750));
+		this.restoreRequestCache();
 		this._register(this._configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration(ConfigKey.Advanced.LivePromptEditorEnabled.fullyQualifiedId)) {
 				this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
@@ -225,6 +238,8 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			this.applyAutoOverridesForRequest(request);
 		}
 		this._requests.set(this.toKey(init.sessionId, init.location), request);
+		this.pruneRequestCacheIfNeeded();
+		this.schedulePersistRequestCache();
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
 		if (request.isSubagent) {
@@ -235,6 +250,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 	getRequest(key: LiveRequestSessionKey): EditableChatRequest | undefined {
 		return this._requests.get(this.toKey(key.sessionId, key.location));
+	}
+
+	getAllRequests(): readonly EditableChatRequest[] {
+		if (!this._enabled) {
+			return [];
+		}
+		return Array.from(this._requests.values());
 	}
 
 	getOriginalRequestMessages(key: LiveRequestSessionKey): Raw.ChatMessage[] | undefined {
@@ -682,6 +704,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				debugName: request.debugName,
 			});
 		}
+		this.schedulePersistRequestCache();
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
 		this.updateReplayMetadataFromRequest(request);
@@ -909,6 +932,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		const validationError = this.validateRequestForSend(request);
 		this.updateValidationMetadata(request, validationError);
+		this.schedulePersistRequestCache();
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
 		return request;
@@ -1242,6 +1266,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		this.markReplayStale({ sessionId: existing.sessionId, location: existing.location }, existing.metadata.requestId, 'requestRemoved');
 		this._requests.delete(compositeKey);
+		this.schedulePersistRequestCache();
 		this._onDidRemoveRequest.fire({ sessionId: existing.sessionId, location: existing.location });
 		this.emitMetadataCleared({ sessionId: existing.sessionId, location: existing.location });
 		if (existing.isSubagent) {
@@ -1259,11 +1284,9 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	}
 
 	private _handleSessionDisposed(sessionId: string): void {
-		for (const [key, request] of Array.from(this._requests.entries())) {
-			if (request.sessionId === sessionId) {
-				this.removeRequestByCompositeKey(key);
-			}
-		}
+		// Keep intercepted requests around for debugging (and persistence across restart).
+		// A disposed chat session means we cannot continue sending/streaming for that session,
+		// but the captured prompt state remains valuable to inspect.
 		const didTrim = this.removeSubagentEntriesBySession(sessionId);
 		if (didTrim) {
 			this._onDidUpdateSubagentHistory.fire();
@@ -1561,6 +1584,101 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			this._replays.set(compositeKey, updated);
 			this._onDidChangeReplay.fire({ key: updated.key, replay: this.toReplaySnapshot(updated) });
 		}
+	}
+
+	private schedulePersistRequestCache(): void {
+		if (!this._enabled) {
+			return;
+		}
+		this._persistRequestsScheduler.schedule();
+	}
+
+	private pruneRequestCacheIfNeeded(): void {
+		if (this._requests.size <= MAX_PERSISTED_REQUESTS) {
+			return;
+		}
+		const entries = Array.from(this._requests.entries())
+			.map(([key, request]) => ({ key, ts: this.getRequestTimestamp(request) }))
+			.sort((a, b) => b.ts - a.ts);
+		const keep = new Set(entries.slice(0, MAX_PERSISTED_REQUESTS).map(entry => entry.key));
+		for (const key of Array.from(this._requests.keys())) {
+			if (!keep.has(key)) {
+				this.removeRequestByCompositeKey(key);
+			}
+		}
+	}
+
+	private restoreRequestCache(): void {
+		if (!this._enabled) {
+			return;
+		}
+		const payload = this._extensionContext.workspaceState.get<PersistedRequestCacheV1 | undefined>(WORKSPACE_REQUEST_CACHE_KEY);
+		if (!payload || payload.version !== 1 || !Array.isArray(payload.requests) || !payload.requests.length) {
+			return;
+		}
+
+		const candidates: EditableChatRequest[] = [];
+		for (const entry of payload.requests) {
+			if (!this.isValidPersistedRequest(entry)) {
+				continue;
+			}
+			candidates.push(deepClone(entry));
+		}
+
+		if (!candidates.length) {
+			return;
+		}
+
+		candidates.sort((a, b) => this.getRequestTimestamp(b) - this.getRequestTimestamp(a));
+		for (const request of candidates.slice(0, MAX_PERSISTED_REQUESTS)) {
+			this._requests.set(this.toKey(request.sessionId, request.location), request);
+		}
+	}
+
+	private async persistRequestCache(): Promise<void> {
+		if (!this._enabled) {
+			return;
+		}
+		try {
+			const requests = Array.from(this._requests.values());
+			if (!requests.length) {
+				await this._extensionContext.workspaceState.update(WORKSPACE_REQUEST_CACHE_KEY, undefined);
+				return;
+			}
+			const pruned = requests
+				.slice()
+				.sort((a, b) => this.getRequestTimestamp(b) - this.getRequestTimestamp(a))
+				.slice(0, MAX_PERSISTED_REQUESTS)
+				.map(request => deepClone(request));
+			const payload: PersistedRequestCacheV1 = {
+				version: 1,
+				updatedAt: Date.now(),
+				requests: pruned
+			};
+			await this._extensionContext.workspaceState.update(WORKSPACE_REQUEST_CACHE_KEY, payload);
+		} catch (error) {
+			this._logService.error('LiveRequestEditorService: failed to persist request cache', error);
+		}
+	}
+
+	private isValidPersistedRequest(value: unknown): value is EditableChatRequest {
+		if (!value || typeof value !== 'object') {
+			return false;
+		}
+		const candidate = value as Partial<EditableChatRequest>;
+		return typeof candidate.sessionId === 'string'
+			&& candidate.sessionId.length > 0
+			&& typeof candidate.location === 'number'
+			&& Array.isArray(candidate.messages)
+			&& Array.isArray(candidate.sections)
+			&& Array.isArray(candidate.originalMessages)
+			&& !!candidate.metadata
+			&& typeof (candidate.metadata as { requestId?: unknown }).requestId === 'string'
+			&& typeof (candidate.metadata as { createdAt?: unknown }).createdAt === 'number';
+	}
+
+	private getRequestTimestamp(request: EditableChatRequest): number {
+		return request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0;
 	}
 
 	private loadPersistedOverride(scope: LiveRequestOverrideScope): AutoOverrideSet | undefined {

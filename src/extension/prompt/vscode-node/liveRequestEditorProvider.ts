@@ -106,6 +106,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				this._postStateToWebview();
 			}
 		}));
+
+		this._seedRequestsFromService();
 	}
 
 	public resolveWebviewView(
@@ -130,6 +132,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._updateVisibilityContext();
 
 		// Send initial state if available
+		this._notifyPayloadActiveSession();
 		this._postStateToWebview();
 	}
 
@@ -374,6 +377,43 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			this._notifyPayloadActiveSession();
 		}
 		this._postStateToWebview();
+	}
+
+	private _seedRequestsFromService(): void {
+		const requests = this._liveRequestEditorService.getAllRequests();
+		if (!requests.length) {
+			return;
+		}
+		for (const request of requests) {
+			const key = this._toCompositeKey(request.sessionId, request.location);
+			this._requests.set(key, request);
+		}
+		if (this._followLatest) {
+			let latest: EditableChatRequest | undefined;
+			let latestKey: string | undefined;
+			let latestTimestamp = -Infinity;
+			for (const [key, request] of this._requests) {
+				const ts = request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0;
+				if (ts >= latestTimestamp) {
+					latestTimestamp = ts;
+					latest = request;
+					latestKey = key;
+				}
+			}
+			this._activeSessionKey = latestKey;
+			this._currentRequest = latest;
+			this._currentReplay = latestKey ? this._replays.get(latestKey) : undefined;
+			return;
+		}
+		if (this._activeSessionKey && this._requests.has(this._activeSessionKey)) {
+			this._currentRequest = this._requests.get(this._activeSessionKey);
+			this._currentReplay = this._replays.get(this._activeSessionKey);
+			return;
+		}
+		const firstKey = this._requests.keys().next().value as string | undefined;
+		this._activeSessionKey = firstKey;
+		this._currentRequest = firstKey ? this._requests.get(firstKey) : undefined;
+		this._currentReplay = firstKey ? this._replays.get(firstKey) : undefined;
 	}
 
 	private _handleRequestRemoved(key: LiveRequestSessionKey): void {
