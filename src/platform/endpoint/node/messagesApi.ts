@@ -87,6 +87,7 @@ export function createMessagesRequestBody(accessor: ServicesAccessor, options: I
 		stream: true,
 		tools: anthropicTools,
 		top_p: options.postOptions.top_p,
+		temperature: options.postOptions.temperature,
 		max_tokens: options.postOptions.max_tokens,
 		thinking: thinkingBudget ? {
 			type: 'enabled',
@@ -463,5 +464,4 @@ export class AnthropicMessagesProcessor {
 		}
 	}
 }
-
 

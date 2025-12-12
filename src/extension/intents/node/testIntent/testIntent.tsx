@@ -17,6 +17,7 @@ import { IRequestLogger } from '../../../../platform/requestLogger/node/requestL
 import { ISurveyService } from '../../../../platform/survey/common/surveyService';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry';
 import { ISetupTestsDetector, isStartSetupTestConfirmation, SetupTestActionType } from '../../../../platform/testing/node/setupTestDetector';
+import { ILiveRequestEditorService } from '../../../prompt/common/liveRequestEditorService';
 import { IWorkspaceService } from '../../../../platform/workspace/common/workspaceService';
 import { getLanguage } from '../../../../util/common/languages';
 import { isUri } from '../../../../util/common/types';
@@ -240,8 +241,9 @@ class RequestHandler extends DefaultIntentRequestHandler {
 		@IEditSurvivalTrackerService editSurvivalTrackerService: IEditSurvivalTrackerService,
 		@IAuthenticationService authenticationService: IAuthenticationService,
 		@IEndpointProvider endpointProvider: IEndpointProvider,
+		@ILiveRequestEditorService liveRequestEditorService: ILiveRequestEditorService,
 	) {
-		super(intent, conversation, request, stream, token, documentContext, location, chatTelemetry, undefined, onPaused, instantiationService, conversationOptions, telemetryService, logService, surveyService, requestLogger, editSurvivalTrackerService, authenticationService, endpointProvider);
+		super(intent, conversation, request, stream, token, documentContext, location, chatTelemetry, undefined, onPaused, instantiationService, conversationOptions, telemetryService, logService, surveyService, requestLogger, editSurvivalTrackerService, authenticationService, liveRequestEditorService);
 	}
 
 	/**

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BasePromptElementProps, PromptRenderer as BasePromptRenderer, HTMLTracer, ITokenizer, JSONTree, MetadataMap, OutputMode, QueueItem, Raw, RenderPromptResult } from '@vscode/prompt-tsx';
+import { BasePromptElementProps, PromptRenderer as BasePromptRenderer, HTMLTracer, ITokenizer, JSONTree, MetadataMap, OutputMode, QueueItem, Raw, RenderPromptResult, ITraceData } from '@vscode/prompt-tsx';
 import type { ChatResponsePart, ChatResponseProgressPart, LanguageModelToolTokenizationOptions, Progress } from 'vscode';
 import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
@@ -45,9 +45,13 @@ export abstract class RendererIntentInvocation {
 		readonly endpoint: IChatEndpoint,
 	) { }
 
-	async buildPrompt(promptParams: IBuildPromptContext, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): Promise<RenderPromptResult<OutputMode.Raw> & { references: PromptReference[] }> {
+	async buildPrompt(promptParams: IBuildPromptContext, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): Promise<RenderPromptResult<OutputMode.Raw> & { references: PromptReference[]; traceData?: ITraceData }> {
 		const renderer = await this.createRenderer(promptParams, this.endpoint, progress, token);
-		return await renderer.render(progress, token);
+		const result = await renderer.render(progress, token);
+		const traceData = renderer.tracer instanceof HTMLTracer
+			? (renderer.tracer as unknown as { traceData?: ITraceData }).traceData
+			: undefined;
+		return traceData ? { ...result, traceData } : result;
 	}
 
 	abstract createRenderer(promptParams: IBuildPromptContext, endpoint: IChatEndpoint, progress: Progress<ChatResponseReferencePart | ChatResponseProgressPart>, token: CancellationToken): BasePromptRenderer<any, OutputMode.Raw> | Promise<BasePromptRenderer<any, OutputMode.Raw>>;

@@ -25,7 +25,7 @@ import { t } from './l10n';
 import { NewSymbolName, NewSymbolNameTag, NewSymbolNameTriggerKind } from './newSymbolName';
 import { TerminalShellExecutionCommandLineConfidence } from './terminal';
 
-const shim: typeof vscodeTypes = {
+const shim = {
 	Position,
 	Range,
 	Selection,
@@ -124,6 +124,10 @@ const shim: typeof vscodeTypes = {
 	authentication: {
 		getSession: async () => { throw new Error('authentication.getSession not mocked in test'); }
 	}
-};
+} as typeof vscodeTypes;
+
+(shim as any).ChatRequest = class { };
+(shim as any).LanguageModelToolInformation = class { };
+(shim as any).Extension = class { };
 
 export = shim;

@@ -7417,6 +7417,20 @@
     "score": 1
   },
   {
+    "name": "Live Request Editor [context] - delete all blocks send with validation",
+    "contentFilterCount": 0,
+    "passCount": 10,
+    "failCount": 0,
+    "score": 1
+  },
+  {
+    "name": "Live Request Editor [context] - edits apply to send result",
+    "contentFilterCount": 0,
+    "passCount": 10,
+    "failCount": 0,
+    "score": 1
+  },
+  {
     "name": "multifile-edit [panel] - create a README from two other files",
     "contentFilterCount": 0,
     "passCount": 10,

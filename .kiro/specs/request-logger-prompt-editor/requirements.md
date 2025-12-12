@@ -26,6 +26,8 @@ The feature exposes the fully composed ChatML request that Copilot is about to s
 - **Live Chat Request Editor** – The new editor surface in the chat panel that shows and edits the pending Chat Request.
 - **Prompt Section** – A logical segment of the prompt (e.g., system instructions, user message, context snippet, tool hint, prediction) mapped from `RenderPromptResult` and/or `Raw.ChatMessage[]`.
 - **Section Action Menu** – The hover-only toolbar shown on each Prompt Section containing `Edit`, `Delete`, and related actions.
+- **Chat Timeline Replay** – A replayed chat session/timeline created from an edited prompt to visualize the final request history (including deletions/edits) as chat bubbles.
+- **Graphiti** – An optional external graph memory service that ingests conversations/turns/sections as nodes/edges for RAG/auditing.
 
 ## Requirements
 
@@ -55,6 +57,8 @@ As a developer inspecting a pending request, I want the full prompt broken into 
 2.4 THE Live Chat Request Editor SHALL support collapsing and expanding each section individually, with collapsed state clearly indicated and the body content hidden when collapsed.  
 2.5 WHEN a section contains markdown with code blocks or inline code, THEN the Live Chat Request Editor SHALL render it using the same or equivalent markdown and code block renderer as the chat panel.  
 2.6 THE Live Chat Request Editor SHOULD surface key request metadata (e.g., model, max tokens, location) adjacent to the sections, derived from the Chat Request.  
+2.7 WHEN a Prompt Section represents a tool invocation or tool result, THEN the Live Chat Request Editor SHALL display the invoked tool’s name and the exact arguments that were sent so power users can audit the call.  
+2.8 WHEN optional “extra detail” panels (request options, telemetry, raw request) are enabled via settings, THEN those panels SHALL share the same collapse/expand controls and accessibility affordances as the core prompt sections.  
 
 ### Requirement 3 – Section Hover Action Menu (Edit / Delete)
 
@@ -124,6 +128,7 @@ As a user with multiple Copilot chat threads (panel, side panel, editor, other w
 7.3 WHEN multiple conversations exist in the current VS Code window, THEN the Live Chat Request Editor SHOULD provide a drop-down or equivalent control to switch its target conversation among those sessions.  
 7.4 THE Live Chat Request Editor SHALL scope its conversation list to the current VS Code window only and SHALL NOT attempt to span multiple windows or remote hosts.  
 7.5 WHEN the user switches the target conversation via the selector, THEN the Live Chat Request Editor SHALL refresh its view to show the pending request (or a message if none) for the newly selected conversation.  
+7.6 THE conversation selector SHALL remain enabled in all modes and label each session with its location, debug/intent name, and a short session-id suffix (e.g., last 6 characters) to disambiguate concurrent sessions.  
 
 ### Requirement 8 – Prompt Interception Mode
 
@@ -144,3 +149,96 @@ As a power user who wants to audit every prompt, I want to pause each send, revi
 8.8 THE status bar item SHALL reflect the current mode (“Prompt Interception: On/Off”) and, when a request is paused, indicate that action is required (e.g., warning icon, tooltip).  
 8.9 INTERCEPTION mode SHALL be conversation-aware; only the active conversation’s request is paused, and other conversations in the same window continue to work normally unless they also intercept.  
 8.10 ALL interception flows SHALL log telemetry (mode toggles, resume vs. cancel) for future analysis.  
+8.11 WHEN the active chat session ends, the user switches to a different conversation, or the selected model/context changes while a request is intercepted, THEN the Live Chat Request Editor SHALL automatically cancel the pending turn, dismiss the interception UI, and surface a reason such as “Context changed – request discarded.”  
+8.12 WHEN a request originates from an automated sub-agent/tool flow (e.g., `runSubagent`, background TODO tool execution), THEN the Live Chat Request Editor SHALL bypass interception so automation continues without manual approval.  
+
+### Requirement 9 – Subagent Prompt Monitor
+
+**User Story:**  
+As a developer running automated TODO/Plan subagents, I want a compact widget that shows the prompts those subagents send so I can audit or troubleshoot their work without blocking the main chat flow.
+
+#### Acceptance Criteria
+
+9.1 THE extension SHALL expose a read-only “Subagent Prompt Monitor” view (e.g., a tree pinned to the right side of the chat panel) whenever the live editor feature flag is enabled.  
+9.2 WHEN a subagent (`request.isSubagent === true`) issues a request, THEN the monitor SHALL add an entry containing its session label, tool invocation, and timestamp without pausing or intercepting the send.  
+9.3 EACH monitor entry SHALL expand into a tree that mirrors the prompt sections (system/user/context/tool) so users can inspect what was sent; markdown/code should use the same renderer as the main editor.  
+9.4 THE monitor SHALL keep only a bounded history (at least the most recent 10 subagent runs) and provide affordances to collapse/expand or clear entries.  
+9.5 THE monitor SHALL be keyboard accessible (focusable tree items, expand/collapse via keyboard) and respect VS Code theming.  
+9.6 THE monitor SHALL stay synchronized with session lifecycle events (removed when the chat session is disposed) so stale subagent prompts are not shown.  
+
+### Requirement 10 – Session Alignment Metadata View
+
+**User Story:**  
+As a power user validating intercepted prompts, I want a dedicated metadata view that mirrors the current session/request information (and, when I opt in, the raw request payload) so that I can immediately verify the Live Request Editor is targeting the correct conversation without relying on transient chat status entries.
+
+#### Acceptance Criteria
+
+10.1 WHEN `github.copilot.chat.advanced.livePromptEditorEnabled` is `true`, THEN the `github.copilot.liveRequestMetadata` tree view SHALL be registered in the Copilot Chat container and default to showing metadata for the most recent pending request.  
+10.2 THE metadata view SHALL subscribe to `ILiveRequestEditorService.onDidChangeMetadata`, refreshing its tree items within 500 ms of metadata or configuration changes.  
+10.3 Root metadata nodes SHALL mirror the fields specified by `github.copilot.chat.promptInspector.sessionMetadata.fields`, truncating long identifiers, exposing tooltips, and wiring the `github.copilot.liveRequestMetadata.copyValue` command so every entry can be copied to the clipboard.  
+10.4 A “Token Budget” node SHALL display the current usage percentage plus `used/max` token counts when `tokenCount` and `maxPromptTokens` are present; otherwise it SHALL render “Token Budget: awaiting data…”.  
+10.5 WHEN no metadata exists (no pending request, feature disabled, or interception idle), THEN the tree view SHALL render a placeholder node (“Live Request Editor idle — send a chat request to populate metadata.”).  
+10.6 WHEN `sessionMetadata.fields` is empty, THEN the metadata section SHALL hide while still exposing the token budget node/placeholder so the tree does not collapse unexpectedly.  
+10.7 THE tree SHALL expose a toolbar command (`github.copilot.liveRequestMetadata.configureFields`) that opens a Quick Pick for selecting metadata fields and persists the result via `github.copilot.chat.promptInspector.sessionMetadata.fields`.  
+10.8 EVERY metadata or outline leaf SHALL bind the copy command so users receive consistent clipboard behavior (and transient status feedback) when copying session IDs, request IDs, or JSON snippets.  
+10.9 WHEN `github.copilot.chat.promptInspector.extraSections` contains `requestOptions`, the metadata view SHALL add a “Request Options” outline node that renders the JSON payload hierarchically (object properties, array indices) with copy affordances on every node and truncation after a safety budget.  
+10.10 WHEN the extra sections contain `rawRequest`, the metadata view SHALL add a “Raw Request Payload” outline node that nests model, location, messages, and metadata exactly as they will be logged, again using the outline renderer + copy affordances.  
+10.11 Outline nodes SHALL respect the main feature flag, inherit VS Code theming/high-contrast styles, and avoid freezing the UI by truncating after a bounded number of entries with an explicit “…entries truncated…” indicator.
+
+### Requirement 11 – Auto-apply Prefix Edits (simplified Auto Override)
+
+**User Story:**  
+As an advanced Copilot user, I want to intercept the first turn of a chat session, tweak the system/prefix messages, and have those changes automatically applied to every later request without pausing the conversation, so that I can enforce custom instructions with minimal friction.
+
+#### Acceptance Criteria
+
+11.1 THE mode selector SHALL present three user-facing options with consistent labels across header, status bar, and Quick Pick: `Send normally` (`off`), `Pause & review every turn` (`interceptAlways`), and `Auto-apply saved edits` (`autoOverride`). A separate one-shot action `Pause next turn` SHALL be exposed without adding a fourth mode.  
+11.2 WHEN `Auto-apply saved edits` is selected AND no overrides are saved, THEN the next pending request SHALL pause before send, show only the first `N` prefix sections (default 3, configurable via `github.copilot.chat.liveRequestEditor.autoOverride.previewLimit` and a Quick Pick), and allow the user to edit/save overrides.  
+11.3 WHEN overrides are already saved AND Auto-apply is active, THEN requests SHALL send immediately with the saved prefix edits applied unless the user triggers `Pause next turn` or `Capture new edits`.  
+11.4 THE banner SHALL expose a primary action `Capture new edits` that arms a capture for the next turn; a secondary menu SHALL provide `Pause next turn`, `Remove saved edits`, `Where to save edits` (Session/Workspace/Global), and `Sections to capture` (preview limit). Redundant buttons SHALL be hidden while a capture is armed.  
+11.5 THE banner SHALL summarize state using simplified copy: `Auto-apply edits · <scope> · Applying (saved <timestamp>)` OR `Capturing next turn · showing first N sections`, updating immediately on state changes from any entry point.  
+11.6 EACH overridden section SHALL display a “Show diff” affordance in its hover toolbar that opens `vscode.diff` between the original intercepted content and the persisted override, with tooltips indicating last-updated timestamp and scope.  
+11.7 Auto-apply persistence SHALL be stored in extension global/workspace storage (depending on scope) using encrypted storage APIs when available; clearing overrides MUST remove the stored payload and re-arm capturing for the next turn while in Auto-apply.  
+11.8 TELEMETRY SHALL record mode transitions, captures, saved/cleared overrides, scope changes, preview-limit changes, and diff button usage with anonymized scope (session/workspace/global) but without storing user content.  
+
+### Requirement 12 – Chat Timeline Replay (Edited History/System Prompt)
+
+**User Story:**  
+As a Copilot user who edited a prompt, I want to replay the edited request into a new chat timeline so I can see the exact history/system/tool calls that will be used for follow-up.
+
+#### Acceptance Criteria
+
+12.1 WHEN the user confirms edits, THEN the system SHALL offer a “Replay edited prompt” action (gated by the advanced flag) that creates a new chat session/timeline without modifying the original session.  
+12.2 THE replayed timeline SHALL render bubbles for system/user/history/tool sections using the edited/deleted state (deleted sections omitted, edited text shown).  
+12.3 TOOL calls/results in the replay SHALL be marked as “replayed” and SHALL NOT re-execute tools; existing arguments/results are displayed verbatim.  
+12.4 IF replay construction fails, THEN the system SHALL fall back to a single replay bubble containing the entire edited prompt, leaving the original session untouched and surfacing a non-blocking error.  
+12.5 THE replay SHALL record lineage between the original turn and replayed turn (e.g., `replay_parent_turn_id`) for downstream telemetry/persistence.  
+12.6 TELEMETRY SHALL record replay start/finish/cancel outcomes and the replay session id (not user content).  
+
+### Requirement 13 – Chat History Persistence (SQLite)
+
+**User Story:**  
+As a Copilot user, I want my chat history (original + edited prompts, tool calls/results) persisted locally so I can reload, audit, and replay across VS Code restarts.
+
+#### Acceptance Criteria
+
+13.1 THE system SHALL store conversations, turns, sections, tool calls/results, responses, and references in a local SQLite DB (global storage), with append-only writes per turn.  
+13.2 A configuration/command SHALL gate persistence (default off) and SHALL be disabled in untrusted workspaces unless the user explicitly opts in.  
+13.3 THE SQLite layer SHALL run migrations with schema_version tracking, WAL mode, integrity_check after migration, and fail open (disable persistence) on corruption.  
+13.4 THE schema SHALL include replay linkage (`replay_parent_turn_id`), token counts/trace paths, and support optional FTS for sections/responses; export/purge commands SHALL be provided.  
+13.5 THE persistence layer SHALL enforce size/TTL caps (pruning oldest turns) and retry with backoff on SQLITE_BUSY; writes SHALL NOT block chat sends.  
+13.6 TESTS SHALL cover migrations, append-only writes, pruning, and corruption fallback; a reset command SHALL drop/recreate the DB only after user consent.  
+
+### Requirement 14 – Graphiti Memory Integration (Optional)
+
+**User Story:**  
+As an advanced user, I want to optionally mirror chat history into Graphiti so I can query prompts/responses via a graph/RAG layer without affecting local behaviour.
+
+#### Acceptance Criteria
+
+14.1 THE Graphiti sync SHALL be gated by a setting (default off) requiring trusted workspace and endpoint/apiKey/workspace configuration; no network traffic SHALL occur unless enabled.  
+14.2 THE extension SHALL provide a TypeScript REST adapter for Graphiti and ingest turn/section/response/tool data as nodes/edges with stable IDs (conversation/turn/section ids).  
+14.3 WHEN enabled, ingestion SHALL run on turn finalization, batching requests with timeout/backoff, and SHALL never block chat sends on failure.  
+14.4 THE sync SHALL be idempotent (stable IDs + content hashes) and maintain a local cursor to resume after failures; retries SHALL be bounded.  
+14.5 ATTACHMENTS SHALL be redacted (URIs + hashes only) unless an explicit opt-in is set; embeddings SHALL only be requested when the Graphiti instance advertises an embedder.  
+14.6 TELEMETRY/diagnostics SHALL record sync successes/failures and queue depth (no user content).  

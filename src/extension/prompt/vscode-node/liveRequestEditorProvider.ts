@@ -7,19 +7,40 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
+
+type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
+
+type WebviewMessage =
+	| { type: 'setMode'; mode: LiveRequestEditorMode }
+	| { type: 'beginAutoOverrideCapture' }
+	| { type: 'clearAutoOverrides'; scope?: LiveRequestOverrideScope }
+	| { type: 'editSection'; sectionId: string; content: string }
+	| { type: 'deleteSection'; sectionId: string }
+	| { type: 'restoreSection'; sectionId: string }
+	| { type: 'resetRequest' }
+	| { type: 'resumeSend' }
+	| { type: 'cancelIntercept' }
+	| { type: 'command'; command: string; args?: unknown[] }
+	| { type: 'selectSession'; sessionKey: string }
+	| { type: 'showOverrideDiff'; slotIndex: number; scope: LiveRequestOverrideScope; sessionKey?: string };
 
 interface SessionSummaryPayload {
 	key: string;
 	sessionId: string;
 	location: ChatLocation;
 	label: string;
+	locationLabel: string;
+	sessionTail: string;
+	isActive: boolean;
+	isLatest: boolean;
 	model: string;
 	isDirty: boolean;
 	lastUpdated?: number;
 	debugName: string;
+	createdAt?: number;
 }
 
 /**
@@ -41,6 +62,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private _activeSessionKey?: string;
 	private _focusCommandAvailable?: boolean;
+	private _extraSections: InspectorExtraSection[];
+	private _autoOverrideScopePrompted = false;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -50,14 +73,27 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		super();
 		this._interceptionState = this._liveRequestEditorService.getInterceptionState();
 		this._setVisibilityContext(false);
+		this._extraSections = this._readExtraSectionsSetting();
 
 		// Listen for changes to the live request
 		this._register(this._liveRequestEditorService.onDidChange(request => {
 			this._handleRequestUpdated(request);
 		}));
+		this._register(this._liveRequestEditorService.onDidRemoveRequest(key => {
+			this._handleRequestRemoved(key);
+		}));
 		this._register(this._liveRequestEditorService.onDidChangeInterception(state => {
 			this._handleInterceptionStateChanged(state);
 			this._updateWebview();
+		}));
+		this._register(this._liveRequestEditorService.onDidChangeMetadata(event => {
+			this._handleMetadataChanged(event);
+		}));
+		this._register(vscode.workspace.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('github.copilot.chat.promptInspector.extraSections')) {
+				this._extraSections = this._readExtraSectionsSetting();
+				this._postStateToWebview();
+			}
 		}));
 	}
 
@@ -132,6 +168,16 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		} else {
 			this._lastInterceptNonce = undefined;
 		}
+		if (state.mode === 'autoOverride') {
+			if (!state.autoOverride?.scope && !this._autoOverrideScopePrompted) {
+				this._autoOverrideScopePrompted = true;
+				void vscode.commands.executeCommand('github.copilot.liveRequestEditor.configureAutoOverrideScope');
+			} else if (state.autoOverride?.scope) {
+				this._autoOverrideScopePrompted = false;
+			}
+		} else {
+			this._autoOverrideScopePrompted = false;
+		}
 	}
 
 	private async _ensureViewVisible(): Promise<void> {
@@ -167,14 +213,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	}
 
 	private async _handleWebviewMessage(message: unknown): Promise<void> {
-		const payload = message as {
-			type?: string;
-			command?: string;
-			sectionId?: string;
-			content?: string;
-			args?: unknown[];
-			sessionKey?: string;
-		};
+		const payload = message as WebviewMessage;
 
 		if (!payload?.type) {
 			return;
@@ -182,6 +221,23 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 		try {
 			switch (payload.type) {
+				case 'setMode': {
+					const message = payload as { mode?: string };
+					if (typeof message.mode === 'string') {
+						await this._liveRequestEditorService.setMode(message.mode as LiveRequestEditorMode);
+					}
+					break;
+				}
+				case 'beginAutoOverrideCapture':
+					if (this._currentRequest) {
+						this._liveRequestEditorService.beginAutoOverrideCapture({ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location });
+					}
+					break;
+				case 'clearAutoOverrides': {
+					const message = payload as { scope?: LiveRequestOverrideScope };
+					await this._liveRequestEditorService.clearAutoOverrides(message.scope);
+					break;
+				}
 				case 'editSection':
 					if (payload.sectionId && payload.content !== undefined && this._currentRequest) {
 						this._liveRequestEditorService.updateSectionContent(
@@ -231,14 +287,28 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						await vscode.commands.executeCommand(payload.command, ...(payload.args ?? []));
 					}
 					break;
+				case 'showOverrideDiff': {
+					const message = payload;
+					if (typeof message.slotIndex === 'number') {
+						const sessionKey = typeof message.sessionKey === 'string'
+							? this._fromCompositeKey(message.sessionKey)
+							: this._currentRequest ? { sessionId: this._currentRequest.sessionId, location: this._currentRequest.location } : undefined;
+						await this._showOverrideDiff(message.scope, message.slotIndex, sessionKey);
+					}
+					break;
+				}
 				case 'selectSession':
 					if (typeof payload.sessionKey === 'string') {
 						this._activateSessionByKey(payload.sessionKey);
 					}
 					break;
 
-				default:
-					this._logService.trace(`Live Request Editor: unhandled message type: ${payload.type}`);
+				default: {
+					const exhaustive: never = payload;
+					void exhaustive;
+					this._logService.trace('Live Request Editor: unhandled message type.');
+					break;
+				}
 			}
 		} catch (error) {
 			this._logService.error('Live Request Editor: failed to handle webview message', error);
@@ -249,9 +319,28 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	private _handleRequestUpdated(request: EditableChatRequest): void {
 		const key = this._toCompositeKey(request.sessionId, request.location);
 		this._requests.set(key, request);
-		if (!this._activeSessionKey || this._activeSessionKey === key) {
+		const pendingCompositeKey = this._getPendingCompositeKey();
+		const shouldActivate = !this._activeSessionKey
+			|| this._activeSessionKey === key
+			|| (pendingCompositeKey !== undefined && pendingCompositeKey === key);
+		if (shouldActivate) {
 			this._activeSessionKey = key;
 			this._currentRequest = request;
+		}
+		this._postStateToWebview();
+	}
+
+	private _handleRequestRemoved(key: LiveRequestSessionKey): void {
+		const compositeKey = this._toCompositeKey(key.sessionId, key.location);
+		const wasActive = this._activeSessionKey === compositeKey;
+		this._requests.delete(compositeKey);
+		if (wasActive) {
+			const nextKey = this._requests.keys().next().value as string | undefined;
+			this._activeSessionKey = nextKey;
+			this._currentRequest = nextKey ? this._requests.get(nextKey) : undefined;
+		} else if (!this._requests.size) {
+			this._activeSessionKey = undefined;
+			this._currentRequest = undefined;
 		}
 		this._postStateToWebview();
 	}
@@ -313,29 +402,88 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			request: this._currentRequest,
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
-			activeSessionKey: this._activeSessionKey
+			activeSessionKey: this._activeSessionKey,
+			extraSections: this._extraSections
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
+	}
+
+	private _handleMetadataChanged(event: LiveRequestMetadataEvent): void {
+		const metadata = event.metadata;
+		if (!metadata) {
+			return;
+		}
+		const compositeKey = this._toCompositeKey(metadata.sessionId, metadata.location);
+		let request = this._requests.get(compositeKey);
+		if (!request) {
+			const fetched = this._liveRequestEditorService.getRequest({ sessionId: metadata.sessionId, location: metadata.location });
+			if (fetched) {
+				request = fetched;
+				this._requests.set(compositeKey, fetched);
+			}
+		}
+		if (!request) {
+			return;
+		}
+		request.metadata.requestId = metadata.requestId ?? request.metadata.requestId;
+		if (metadata.debugName) {
+			(request as EditableChatRequest & { debugName?: string }).debugName = metadata.debugName;
+		}
+		(request as EditableChatRequest & { model: string }).model = metadata.model;
+		request.isDirty = metadata.isDirty;
+		request.metadata.createdAt = metadata.createdAt;
+		request.metadata.lastUpdated = metadata.lastUpdated;
+		request.metadata.tokenCount = metadata.tokenCount;
+		request.metadata.maxPromptTokens = metadata.maxPromptTokens;
+		if (!this._activeSessionKey) {
+			this._activeSessionKey = compositeKey;
+		}
+		if (this._activeSessionKey === compositeKey) {
+			this._currentRequest = request;
+		}
+		this._postStateToWebview();
+	}
+
+	private _readExtraSectionsSetting(): InspectorExtraSection[] {
+		const config = vscode.workspace.getConfiguration('github.copilot.chat.promptInspector');
+		const value = config.get<string[]>('extraSections', []);
+		const allowed: InspectorExtraSection[] = ['telemetry'];
+		const allowedSet = new Set(allowed);
+		return value.filter((entry): entry is InspectorExtraSection => allowedSet.has(entry as InspectorExtraSection));
 	}
 
 	private _getSessionSummaries(): SessionSummaryPayload[] {
 		const entries = Array.from(this._requests.values());
+		let latestUpdated = 0;
+		for (const entry of entries) {
+			const updated = entry.metadata?.lastUpdated ?? entry.metadata?.createdAt ?? 0;
+			if (updated > latestUpdated) {
+				latestUpdated = updated;
+			}
+		}
 		entries.sort((a, b) => {
-			const aTime = a.metadata?.createdAt ?? 0;
-			const bTime = b.metadata?.createdAt ?? 0;
+			const aTime = a.metadata?.lastUpdated ?? a.metadata?.createdAt ?? 0;
+			const bTime = b.metadata?.lastUpdated ?? b.metadata?.createdAt ?? 0;
 			return bTime - aTime;
 		});
 
 		return entries.map(request => {
 			const key = this._toCompositeKey(request.sessionId, request.location);
+			const locationLabel = this._describeLocation(request.location, request.debugName);
+			const sessionTail = request.sessionId.slice(-6);
 			return {
 				key,
 				sessionId: request.sessionId,
 				location: request.location,
+				locationLabel,
+				sessionTail,
+				isActive: key === this._activeSessionKey,
+				isLatest: !!latestUpdated && (request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0) === latestUpdated,
 				label: this._describeSession(request),
 				model: request.model,
 				isDirty: request.isDirty,
-				lastUpdated: request.metadata?.createdAt,
-				debugName: request.debugName
+				lastUpdated: request.metadata?.lastUpdated ?? request.metadata?.createdAt,
+				debugName: request.debugName,
+				createdAt: request.metadata?.createdAt
 			};
 		});
 	}
@@ -344,23 +492,50 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		return `${sessionId}::${location}`;
 	}
 
-	private _describeSession(request: EditableChatRequest): string {
-		const location = this._describeLocation(request.location);
-		const name = request.debugName || request.metadata?.intentId || request.sessionId;
-		return `${location} · ${name}`;
+	private _fromCompositeKey(value: string): LiveRequestSessionKey | undefined {
+		const [sessionId, locationPart] = value.split('::');
+		if (!sessionId || typeof locationPart !== 'string') {
+			return undefined;
+		}
+		const location = Number(locationPart);
+		if (Number.isNaN(location)) {
+			return undefined;
+		}
+		return { sessionId, location: location as ChatLocation };
 	}
 
-	private _describeLocation(location: ChatLocation): string {
+	private async _showOverrideDiff(scope: LiveRequestOverrideScope, slotIndex: number, sessionKey?: LiveRequestSessionKey): Promise<void> {
+		const entry = this._liveRequestEditorService.getAutoOverrideEntry(scope, slotIndex, sessionKey);
+		if (!entry) {
+			vscode.window.showWarningMessage('Override diff is unavailable for this section.');
+			return;
+		}
+		const originalDoc = await vscode.workspace.openTextDocument({ content: entry.originalContent ?? '', language: 'markdown' });
+		const overrideDoc = await vscode.workspace.openTextDocument({ content: entry.deleted ? '' : (entry.overrideContent ?? ''), language: 'markdown' });
+		const labelSuffix = entry.scope === 'session' ? 'session override' : `${entry.scope} override`;
+		const title = `${entry.label} (${labelSuffix})`;
+		await vscode.commands.executeCommand('vscode.diff', originalDoc.uri, overrideDoc.uri, title);
+	}
+
+	private _describeSession(request: EditableChatRequest): string {
+		const location = this._describeLocation(request.location, request.debugName);
+		const name = request.debugName || request.metadata?.intentId || request.sessionId;
+		const shortSession = request.sessionId.slice(-6);
+		return `${location} · ${name} · …${shortSession}`;
+	}
+
+	private _describeLocation(location: ChatLocation, debugName?: string): string {
+		const suffix = debugName ? ` (${debugName})` : '';
 		switch (location) {
 			case ChatLocation.Editor:
-				return 'Editor';
+				return `Editor${suffix}`;
 			case ChatLocation.Terminal:
-				return 'Terminal';
+				return `Terminal${suffix}`;
 			case ChatLocation.Notebook:
-				return 'Notebook';
+				return `Notebook${suffix}`;
 			case ChatLocation.Panel:
 			default:
-				return 'Panel';
+				return `Panel${suffix}`;
 		}
 	}
 
@@ -368,7 +543,11 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		const state = this._interceptionState;
 		return {
 			enabled: state.enabled,
+			mode: state.mode,
+			paused: state.paused,
+			autoOverride: state.autoOverride,
 			pending: state.pending ? {
+				sessionKey: this._toCompositeKey(state.pending.key.sessionId, state.pending.key.location),
 				debugName: state.pending.debugName,
 				nonce: state.pending.nonce,
 			} : undefined
@@ -376,14 +555,27 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 	}
 
 	private _resolvePendingIntercept(action: PromptInterceptionAction, reason?: string): void {
-		if (!this._currentRequest) {
+		const pendingKey = this._interceptionState.pending?.key;
+		const fallback = this._currentRequest
+			? { sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
+			: undefined;
+		const targetKey = pendingKey ?? fallback;
+		if (!targetKey) {
 			return;
 		}
 		this._liveRequestEditorService.resolvePendingIntercept(
-			{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location },
+			targetKey,
 			action,
 			reason ? { reason } : undefined
 		);
+	}
+
+	private _getPendingCompositeKey(): string | undefined {
+		const pending = this._interceptionState.pending;
+		if (!pending) {
+			return undefined;
+		}
+		return this._toCompositeKey(pending.key.sessionId, pending.key.location);
 	}
 }
 

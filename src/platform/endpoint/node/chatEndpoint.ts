@@ -34,6 +34,29 @@ import { createMessagesRequestBody, processResponseFromMessagesEndpoint } from '
 import { createResponsesRequestBody, processResponseFromChatEndpoint } from './responsesApi';
 
 /**
+ * Some reasoning-focused models (e.g., o1/o1-mini) reject sampling controls like
+ * `temperature` and `top_p`. Strip them to avoid invalid_request errors.
+ */
+export function stripSamplingParameters(body: IEndpointBody | undefined, family: string, modelId?: string) {
+	if (!body) {
+		return;
+	}
+
+	const normalizedFamily = family.toLowerCase();
+	const disallowSamplingControls = normalizedFamily.startsWith('o1')
+		|| normalizedFamily.startsWith('gpt-5.1')
+		|| modelId === CHAT_MODEL.O1
+		|| modelId === CHAT_MODEL.O1MINI;
+	if (!disallowSamplingControls) {
+		return;
+	}
+
+	delete body.temperature;
+	delete body.top_p;
+	delete body.n;
+}
+
+/**
  * The default processor for the stream format from CAPI
  */
 export async function defaultChatResponseProcessor(
@@ -234,6 +257,8 @@ export class ChatEndpoint implements IChatEndpoint {
 		if (body && !this._supportsStreaming) {
 			body.stream = false;
 		}
+
+		stripSamplingParameters(body, this.family, this.model);
 
 		// If it's o1 we must modify the body significantly as the request is very different
 		if (body?.messages && (this.family.startsWith('o1') || this.model === CHAT_MODEL.O1 || this.model === CHAT_MODEL.O1MINI)) {

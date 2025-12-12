@@ -7,21 +7,28 @@
 import { Raw, RenderPromptResult } from '@vscode/prompt-tsx';
 import { afterEach, beforeEach, expect, suite, test } from 'vitest';
 import type { ChatLanguageModelToolReference, ChatPromptReference, ChatRequest, ExtendedChatResponsePart, LanguageModelChat } from 'vscode';
-import { IChatMLFetcher } from '../../../../platform/chat/common/chatMLFetcher';
+import { IChatMLFetcher, IFetchMLOptions } from '../../../../platform/chat/common/chatMLFetcher';
+import { IChatSessionService } from '../../../../platform/chat/common/chatSessionService';
 import { toTextPart } from '../../../../platform/chat/common/globalStringUtils';
+import { ChatFetchResponseType, ChatResponse, ChatResponses } from '../../../../platform/chat/common/commonTypes';
 import { StaticChatMLFetcher } from '../../../../platform/chat/test/common/staticChatMLFetcher';
 import { MockEndpoint } from '../../../../platform/endpoint/test/node/mockEndpoint';
 import { IResponseDelta } from '../../../../platform/networking/common/fetch';
 import { IChatEndpoint } from '../../../../platform/networking/common/networking';
+import { ConfigKey } from '../../../../platform/configuration/common/configurationService';
+import { DefaultsOnlyConfigurationService } from '../../../../platform/configuration/common/defaultsOnlyConfigurationService';
+import { InMemoryConfigurationService } from '../../../../platform/configuration/test/common/inMemoryConfigurationService';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry';
 import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyingTelemetryService';
 import { ITestingServicesAccessor } from '../../../../platform/test/node/services';
 import { NullWorkspaceFileIndex } from '../../../../platform/workspaceChunkSearch/node/nullWorkspaceFileIndex';
 import { IWorkspaceFileIndex } from '../../../../platform/workspaceChunkSearch/node/workspaceFileIndex';
+import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
+import { MockExtensionContext } from '../../../../platform/test/node/extensionContext';
 import { ChatResponseStreamImpl } from '../../../../util/common/chatResponseStreamImpl';
 import { DeferredPromise } from '../../../../util/vs/base/common/async';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
-import { Event } from '../../../../util/vs/base/common/event';
+import { Emitter, Event } from '../../../../util/vs/base/common/event';
 import { isObject, isUndefinedOrNull } from '../../../../util/vs/base/common/types';
 import { generateUuid } from '../../../../util/vs/base/common/uuid';
 import { SyncDescriptor } from '../../../../util/vs/platform/instantiation/common/descriptors';
@@ -35,9 +42,10 @@ import { IBuildPromptContext } from '../../common/intents';
 import { ToolCallRound } from '../../common/toolCallRound';
 import { ChatTelemetryBuilder } from '../chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
+import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
-import { ILiveRequestEditorService, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
-import { EditableChatRequest, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
 	let accessor: ITestingServicesAccessor;
@@ -149,15 +157,22 @@ suite('defaultIntentRequestHandler', () => {
 		tools = new Map();
 		id = generateUuid();
 		sessionId = generateUuid();
+		isSubagent = false;
 	}
 
 	class TestLiveRequestEditorService implements ILiveRequestEditorService {
 		declare readonly _serviceBrand: undefined;
 		onDidChange = Event.None;
+		onDidRemoveRequest = Event.None;
+		onDidUpdateSubagentHistory = Event.None;
 		onDidChangeInterception = Event.None;
+		onDidChangeMetadata = Event.None;
 
 		public enabled = true;
 		public interceptionEnabled = true;
+		public mode: LiveRequestEditorMode = 'off';
+		public overrideScope: LiveRequestOverrideScope | undefined;
+		public previewLimit = 3;
 		public isInterceptionEnabledCalls = 0;
 		public waitCount = 0;
 		public resumeCalls = 0;
@@ -166,21 +181,76 @@ suite('defaultIntentRequestHandler', () => {
 		private _messages: Raw.ChatMessage[] = [];
 		private _deferred?: DeferredPromise<PromptInterceptionDecision>;
 		public validationError?: LiveRequestValidationError;
+		public prepareRequestCalls: EditableChatRequestInit[] = [];
 
 		isEnabled(): boolean { return this.enabled; }
 		isInterceptionEnabled(): boolean {
 			this.isInterceptionEnabledCalls++;
 			return this.enabled && this.interceptionEnabled;
 		}
-		getInterceptionState() { return { enabled: this.isInterceptionEnabled(), pending: undefined }; }
+		getInterceptionState() {
+			return {
+				enabled: this.isInterceptionEnabled(),
+				pending: undefined,
+				mode: this.mode,
+				paused: false,
+				autoOverride: {
+					enabled: true,
+					capturing: false,
+					hasOverrides: false,
+					scope: this.overrideScope,
+					previewLimit: this.previewLimit,
+				}
+			};
+		}
 
-		prepareRequest(): EditableChatRequest | undefined { return undefined; }
+		async setMode(mode: LiveRequestEditorMode): Promise<void> {
+			this.mode = mode;
+		}
+
+		getMode(): LiveRequestEditorMode {
+			return this.mode;
+		}
+
+		async setAutoOverrideScope(scope: LiveRequestOverrideScope): Promise<void> {
+			this.overrideScope = scope;
+		}
+
+		getAutoOverrideScope(): LiveRequestOverrideScope | undefined {
+			return this.overrideScope;
+		}
+
+		async configureAutoOverridePreviewLimit(limit: number): Promise<void> {
+			this.previewLimit = limit;
+		}
+
+		async clearAutoOverrides(): Promise<void> {
+			// no-op
+		}
+
+		beginAutoOverrideCapture(): void {
+			// no-op
+		}
+
+		getAutoOverrideEntry(): undefined {
+			return undefined;
+		}
+
+		updateRequestOptions(): EditableChatRequest | undefined {
+			return undefined;
+		}
+
+		prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
+			this.prepareRequestCalls.push(init);
+			return undefined;
+		}
 		getRequest(): EditableChatRequest | undefined { return undefined; }
 		updateSectionContent(): EditableChatRequest | undefined { return undefined; }
 		deleteSection(): EditableChatRequest | undefined { return undefined; }
 		restoreSection(): EditableChatRequest | undefined { return undefined; }
 		resetRequest(): EditableChatRequest | undefined { return undefined; }
 		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
+		applyTraceData(): EditableChatRequest | undefined { return undefined; }
 
 		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
 			const messages = this._messages.length ? this._messages : fallback;
@@ -194,6 +264,10 @@ suite('defaultIntentRequestHandler', () => {
 			this.waitCount++;
 			this._deferred = new DeferredPromise<PromptInterceptionDecision>();
 			return this._deferred.p;
+		}
+
+		handleContextChange(): void {
+			// no-op
 		}
 
 		setValidationError(error: LiveRequestValidationError | undefined): void {
@@ -235,6 +309,69 @@ suite('defaultIntentRequestHandler', () => {
 		recordLoggedRequest(): void {
 			// no-op for tests
 		}
+		getSubagentRequests(): readonly [] {
+			return [];
+		}
+		clearSubagentHistory(): void {
+			// no-op
+		}
+		getMetadataSnapshot(): LiveRequestMetadataSnapshot | undefined {
+			return undefined;
+		}
+	}
+
+	class RecordingChatMLFetcher implements IChatMLFetcher {
+		_serviceBrand: undefined;
+		onDidMakeChatMLRequest = Event.None;
+		public readonly requests: IFetchMLOptions[] = [];
+
+		constructor(private readonly value: string = 'ok') { }
+
+		async fetchOne(options: IFetchMLOptions): Promise<ChatResponse> {
+			this.requests.push(options);
+			options.finishedCb?.('', 0, { text: this.value });
+			return {
+				type: ChatFetchResponseType.Success,
+				requestId: '',
+				serverRequestId: '',
+				usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, prompt_tokens_details: { cached_tokens: 0 } },
+				value: this.value,
+				resolvedModel: ''
+			};
+		}
+
+		async fetchMany(options: IFetchMLOptions): Promise<ChatResponses> {
+			this.requests.push(options);
+			return {
+				type: ChatFetchResponseType.Success,
+				requestId: '',
+				serverRequestId: '',
+				usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, prompt_tokens_details: { cached_tokens: 0 } },
+				value: [this.value],
+				resolvedModel: ''
+			};
+		}
+	}
+
+	class IntegrationChatSessionService implements IChatSessionService {
+		declare readonly _serviceBrand: undefined;
+		private readonly _onDidDispose = new Emitter<string>();
+		readonly onDidDisposeChatSession = this._onDidDispose.event;
+		dispose(): void {
+			this._onDidDispose.dispose();
+		}
+	}
+
+	async function createLiveRequestEditorServiceForIntegration(): Promise<{ service: LiveRequestEditorService; chatSessions: IntegrationChatSessionService }> {
+		const defaults = new DefaultsOnlyConfigurationService();
+		const config = new InMemoryConfigurationService(defaults);
+		await config.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, true);
+		await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
+		const telemetry = new SpyingTelemetryService();
+		const chatSessions = new IntegrationChatSessionService();
+		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
+		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext);
+		return { service, chatSessions };
 	}
 
 	const responseStream = new ChatResponseStreamImpl(p => response.push(p), () => { });
@@ -386,9 +523,87 @@ suite('defaultIntentRequestHandler', () => {
 		interceptService.cancel('user');
 		const result = await resultPromise;
 		expect(result).to.deep.equal({});
-		expect(response).to.have.length(1);
-		expect(response[0]).toMatchSnapshot();
+		const userVisibleResponses = response.filter(part => {
+			if ((part as any).kind === 'markdown') {
+				const content = (part as any).content;
+				if (typeof content === 'string' && content.includes('<debug-note>')) {
+					return false;
+				}
+				if (content && typeof (content as any).value === 'string' && (content as any).value.includes('<debug-note>')) {
+					return false;
+				}
+			}
+			return true;
+		});
+		expect(userVisibleResponses.length).to.be.greaterThan(0);
+		expect(userVisibleResponses[0]).toMatchSnapshot();
 		expect(interceptService.cancelCalls).to.equal(1);
+	});
+
+	test('does not intercept subagent requests', async () => {
+		const interceptService = new TestLiveRequestEditorService();
+		interceptService.enabled = true;
+		interceptService.interceptionEnabled = true;
+		resetState(() => interceptService);
+
+		const subagentRequest = new TestChatRequest();
+		subagentRequest.isSubagent = true;
+		chatResponse[0] = 'subagent response';
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('auto flow')] }],
+		};
+
+		const handler = makeHandler({ request: subagentRequest });
+		const result = await handler.getResult();
+		expect(result).toMatchSnapshot();
+		expect(interceptService.waitCount).to.equal(0);
+		expect(interceptService.prepareRequestCalls).to.have.length(1);
+		expect(interceptService.prepareRequestCalls[0].isSubagent).to.equal(true);
+	});
+
+	test('subagent requests integrate with LiveRequestEditorService without interception', async () => {
+		const { service, chatSessions } = await createLiveRequestEditorServiceForIntegration();
+		resetState(() => service);
+
+		const subagentRequest = new TestChatRequest();
+		subagentRequest.isSubagent = true;
+		chatResponse[0] = 'integrated subagent response';
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('auto flow integration')] }],
+		};
+
+		try {
+			const handler = makeHandler({ request: subagentRequest });
+			const result = await handler.getResult();
+			expect(result).toMatchSnapshot();
+
+			const history = service.getSubagentRequests();
+			expect(history.length).to.equal(1);
+			expect(history[0].debugName).to.equal('tool/runSubagent');
+			expect(service.getInterceptionState().pending).to.be.undefined;
+		} finally {
+			service.dispose();
+			chatSessions.dispose();
+		}
+	});
+
+	test('live request editor request options include sampling defaults', async () => {
+		const interceptService = new TestLiveRequestEditorService();
+		interceptService.enabled = true;
+		interceptService.interceptionEnabled = false;
+		resetState(() => interceptService);
+
+		const handler = makeHandler();
+		await handler.getResult();
+
+		expect(interceptService.prepareRequestCalls).to.have.length(1);
+		const requestOptions = interceptService.prepareRequestCalls[0].requestOptions;
+		expect(requestOptions).to.be.ok;
+		expect(requestOptions?.n).to.equal(1);
+		expect(requestOptions?.top_p).to.equal(1);
+		expect(requestOptions?.temperature).to.equal(0.2);
 	});
 
 	test('surfaces validation errors when prompt edits remove all sections', async () => {
@@ -407,6 +622,33 @@ suite('defaultIntentRequestHandler', () => {
 		expect(result).to.deep.equal({});
 		const last = response.at(-1) as ChatResponseMarkdownPart;
 		expect(last.value.value).to.contain('Prompt cannot be sent because all sections were removed.');
+	});
+
+	test('uses edited messages for send when interception is off', async () => {
+		const recordingFetcher = new RecordingChatMLFetcher('edited-response');
+		const editorService = new TestLiveRequestEditorService();
+		editorService.enabled = true;
+		editorService.interceptionEnabled = false;
+		editorService.setMessages([{ role: Raw.ChatRole.User, content: [toTextPart('edited user')] }]);
+
+		resetState((services) => {
+			services.define(IChatMLFetcher, recordingFetcher);
+			return editorService;
+		});
+
+		promptResult = {
+			...nullRenderPromptResult(),
+			messages: [{ role: Raw.ChatRole.User, content: [toTextPart('original prompt')] }],
+		};
+
+		const handler = makeHandler();
+		await handler.getResult();
+
+		expect(recordingFetcher.requests).to.have.length(1);
+		const sent = recordingFetcher.requests[0].messages;
+		const sentContent = sent[0].content[0] as Raw.ChatCompletionContentPart;
+		expect(sentContent.type).to.equal(Raw.ChatCompletionContentPartKind.Text);
+		expect(sentContent.type === Raw.ChatCompletionContentPartKind.Text ? sentContent.text : undefined).to.equal('edited user');
 	});
 
 	function fillWithToolCalls(insertN = 20) {

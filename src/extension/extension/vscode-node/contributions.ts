@@ -37,9 +37,9 @@ import { CopilotDebugCommandContribution } from '../../onboardDebug/vscode-node/
 import { OnboardTerminalTestsContribution } from '../../onboardDebug/vscode-node/onboardTerminalTestsContribution';
 import { DebugCommandsContribution } from '../../prompt/vscode-node/debugCommands';
 import { LiveRequestEditorContribution } from '../../prompt/vscode-node/liveRequestEditorContribution';
+import { SubagentPromptMonitorContribution } from '../../prompt/vscode-node/subagentPromptMonitorProvider';
 import { RenameSuggestionsContrib } from '../../prompt/vscode-node/renameSuggestions';
 import { PromptFileContextContribution } from '../../promptFileContext/vscode-node/promptFileContextService';
-import { PromptSectionVisualizerContribution } from '../../promptSectionVisualizer/vscode-node/promptSectionVisualizerContribution';
 import { RelatedFilesProviderContribution } from '../../relatedFiles/vscode-node/relatedFiles.contribution';
 import { ChatReplayContribution } from '../../replay/vscode-node/chatReplayContrib';
 import { SearchPanelCommands } from '../../search/vscode-node/commands';
@@ -121,7 +121,7 @@ export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(McpSetupCommands),
 	asContributionFactory(LanguageModelProxyContrib),
 	asContributionFactory(OrganizationAndEnterpriseAgentContribution),
-	asContributionFactory(PromptSectionVisualizerContribution),
 	asContributionFactory(LiveRequestEditorContribution),
+	asContributionFactory(SubagentPromptMonitorContribution),
 	newWorkspaceContribution,
 ];

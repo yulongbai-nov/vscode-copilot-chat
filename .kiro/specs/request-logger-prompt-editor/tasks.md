@@ -4,7 +4,9 @@
 
 - ✅ Backend plumbing landed: the feature flag is in `package.json`, the `ILiveRequestEditorService` + builder produce editable sections, and `defaultIntentRequestHandler` now feeds edited messages to the fetcher.
 - ✅ Send/reset helpers exist server-side (`getMessagesForSend`, `resetRequest`, `isDirty`), ensuring the prompt pipeline can already consume edited sections once a UI drives the mutations.
-- 🚧 Next sprint focus flows directly from the open items: (1) build the Prompt Inspector drawer UI (Tasks 4.1–4.10), (2) enforce send blocking/reset UX (Task 5.4 plus associated messaging), (3) add telemetry + accessibility polish + tests (Tasks 6.x/7.x).
+- ✅ HTML tracer enrichment is applied end-to-end, aligning token counts/trace paths with sections even when tracing is optional.
+- ✅ Section edit/delete/reset logic is covered by unit + simulation tests; interception/subagent flows are validated.
+- 🚧 Remaining focus flows from the open items: (1) performance/accessibility hardening (Tasks 6.x), (2) deeper integration/simulation coverage (Tasks 7.3–7.6), and (3) new persistence + replay work (Tasks 11–13).
 
 ---
 
@@ -16,7 +18,7 @@
   - [x] 2.1 Define `EditableChatRequest` and `LiveRequestSection` types in a shared chat/prompt module. _Requirements: 2.1, 4.1, 5.1_  
   - [x] 2.2 Implement a builder that maps `RenderPromptResult` (`messages`, `tokenCount`, `metadata`, `references`) into an initial `EditableChatRequest`. _Requirements: 2.1, 2.3, 5.2_  
   - [x] 2.3 Use message roles, references, and metadata to classify sections as `system`, `user`, `context`, `tool`, `history`, etc. _Requirements: 2.2, 3.7_  
-  - [ ] 2.4 Integrate optional `HTMLTracer` data (when available) to refine section boundaries and token counts, falling back gracefully when tracing is disabled. _Requirements: 2.5, 5.3_  
+  - [x] 2.4 Integrate optional `HTMLTracer` data (when available) to refine section boundaries and token counts, falling back gracefully when tracing is disabled. _Requirements: 2.5, 5.3_  
   - [x] 2.5 Track original messages and content to support reset and diffing. _Requirements: 3.4, 4.4_  
 
 - [ ] 3. Wiring into the chat request pipeline  
@@ -36,12 +38,14 @@
   - [x] 4.8 Add a metadata area showing model, location, and token limits derived from the request. _Requirements: 2.6_  
   - [x] 4.9 Ensure keyboard accessibility and ARIA labelling for sections, menus, and actions within the webview DOM. _Requirements: 6.1, 6.2_  
   - [x] 4.10 Add a conversation selector (drop-down) inside the webview that lists other open conversations in the current window and allows switching the inspector’s target session. _Requirements: 7.3, 7.4, 7.5_  
+  - [x] 4.11 Surface tool invocation metadata (tool name + JSON arguments) inside tool sections so auditors can inspect the exact call inputs. _Requirements: 2.7_  
 
-- [ ] 5. Apply, reset, and send integration  
-  - [ ] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _(Backend plumbing via `isDirty` is ready; UI indicator still required.)_ _Requirements: 4.1, 4.4_  
+- [x] 5. Apply, reset, and send integration  
+  - [x] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _Requirements: 4.1, 4.4_  
   - [x] 5.2 Wire the Send action to use edited messages when the request is dirty, and original messages otherwise. _Requirements: 4.2, 4.3_  
-  - [ ] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _(Service-level `resetRequest` exists; hook up UI action.)_ _Requirements: 4.4_  
-  - [ ] 5.4 Guard against invalid/empty requests (e.g., all sections deleted) by blocking send with explanatory error UI and offering reset. _Requirements: 4.5_  
+  - [x] 5.3 Implement “Reset to default prompt” to restore `EditableChatRequest` from `originalMessages` and clear edits. _Requirements: 4.4_  
+  - [x] 5.4 Guard against invalid/empty requests (e.g., all sections deleted) by blocking send with explanatory error UI and offering reset. _Requirements: 4.5_  
+- [x] 5.5 Provide configuration-driven “extra detail” surfaces: keep telemetry as an optional panel inside the Live Request Editor and surface `requestOptions` / raw payload data through the Live Request Metadata view whenever the corresponding `extraSections` entries are enabled. _Requirements: 5.6, 10.9, 10.10_  
 
 - [ ] 6. Performance, reliability, and security hardening  
   - [ ] 6.1 Add lazy rendering or truncation for very large sections with “Show more” links to protect UI responsiveness. _Requirements: 6.3_  
@@ -50,20 +54,63 @@
   - [ ] 6.4 Verify that enabling the feature has minimal impact on baseline request latency when the Prompt Inspector is not opened or edits are not made. _Requirements: 6.3_  
 
 - [ ] 7. Tests and validation  
-  - [ ] 7.1 Add unit tests for the `EditableChatRequest` / section builder mapping from `RenderPromptResult`. _Requirements: 2.1, 2.3, 5.2_  
-  - [ ] 7.2 Add tests for section editing, deletion, restore, and reset logic (state reducer level). _Requirements: 3.3–3.6, 4.4_  
+  - [x] 7.1 Add unit tests for the `EditableChatRequest` / section builder mapping from `RenderPromptResult`. _Requirements: 2.1, 2.3, 5.2_  
+  - [x] 7.2 Add tests for section editing, deletion, restore, and reset logic (state reducer level). _Requirements: 3.3–3.6, 4.4_  
   - [ ] 7.3 Add integration tests that simulate a chat turn with the feature enabled, including viewing the prompt, editing sections, and confirming that `ChatMLFetcher` receives updated messages. _Requirements: 1.2, 4.3, 5.4_  
   - [ ] 7.4 Perform manual validation for representative prompts: simple prompts, prompts with multiple system messages, heavy context, and tool hints. _Requirements: 2.2, 2.5_  
   - [ ] 7.5 Manually test keyboard navigation and screen reader behaviour within the Prompt Inspector. _Requirements: 6.1, 6.2_  
 - [ ] 7.6 Manually validate behaviour with multiple concurrent chat sessions (panel, side panel, editor-embedded) and switching via the conversation selector. _Requirements: 7.1–7.5_  
+  - [x] 7.7 Evaluate adding a simulation/extension-harness scenario for edited-send flow (feature flag on, edit + replay through ChatMLFetcher) to raise stability signal. _Requirements: 1.2, 4.3, 5.4_  
 
 - [x] 8. Prompt interception mode  
   - [x] 8.1 Add a persisted configuration + command + status bar indicator for Prompt Interception Mode (default off). _Requirements: 8.1, 8.8_  
   - [x] 8.2 Extend `defaultIntentRequestHandler` (or equivalent) to pause sends when interception is enabled, storing pending requests/resolvers per conversation without triggering offline UI. _Requirements: 8.2, 8.3, 8.9_  
   - [x] 8.3 Update the Live Request Editor webview to react to interception events: auto-focus, display the interception banner, highlight the view, and show prominent “Resume Send” / “Cancel” buttons. _Requirements: 8.4, 8.5_  
   - [x] 8.4 Wire the “Resume Send” and “Cancel” actions back to the extension host so edits are applied before resuming or discarded on cancel, including cleanup when the user switches conversations or closes the view. _Requirements: 8.6, 8.7_  
-  - [x] 8.5 Emit telemetry for mode toggles and interception outcomes (resume/cancel/timeout) to aid adoption tracking. _Requirements: 8.10_  
-  - [x] 8.6 Add tests covering the interception flow (pending send, resume, cancel, multi-session interactions) and manual QA instructions for the new mode. _Requirements: 8.3–8.9_  
+- [x] 8.5 Emit telemetry for mode toggles and interception outcomes (resume/cancel/timeout) to aid adoption tracking. _Requirements: 8.10_  
+- [x] 8.6 Add tests covering the interception flow (pending send, resume, cancel, multi-session interactions) and manual QA instructions for the new mode. _Requirements: 8.3–8.9_  
+- [x] 8.7 Auto-cancel pending interceptions when the backing chat session or model context changes, removing stale requests from the editor and surfacing a “context changed” reason. _Requirements: 8.7, 8.11_  
+- [x] 8.8 Skip interception for subagent/tool (`isSubagent`) requests so automation never pauses; guard both the request handler and service layer to guarantee these turns proceed immediately. _Requirements: 9.2_  
+
+- [x] 9. Session-alignment metadata + collapsible extras
+  - [x] 9.1 Add `github.copilot.chat.promptInspector.sessionMetadata.fields` (string array) setting, documenting defaults and gating behind the main feature flag. _Requirements: 10.1_  
+- [x] 9.2 Extend `ILiveRequestEditorService` to publish per-session metadata snapshots (session id, request id, model, location, interception state) and expose an event the Live Request Metadata view can subscribe to. _Requirements: 10.2_  
+- [x] 9.3 Implement the `github.copilot.liveRequestMetadata` tree view that lists metadata rows, the token budget entry, and optional outline nodes for request options/raw payloads when enabled via `extraSections`. _Requirements: 10.1–10.11_  
+- [x] 9.4 Keep the metadata view reactive when fields are removed/flag is off, ensuring metadata nodes hide while token + idle messaging continue to work. _Requirements: 10.4–10.6_  
+- [x] 9.5 Surface the “Configure metadata” toolbar command and persist Quick Pick selections back into `sessionMetadata.fields`. _Requirements: 10.7_  
+- [x] 9.6 Wire the metadata/outline leaves to `github.copilot.liveRequestMetadata.copyValue`, ensuring clipboard operations provide status feedback. _Requirements: 10.8_  
+- [x] 9.7 Keep telemetry as the only optional “extra” panel inside the webview inspector and move `requestOptions` / `rawRequest` rendering to the metadata outline nodes. _Requirements: 2.8, 10.9, 10.10_  
+
+- [ ] 10. Auto intercept & prefix override
+  - [x] 10.1 Extend `ILiveRequestEditorService` with a `LiveRequestEditorMode` enum/state, persistence helpers for overrides (session/workspace/global scopes), and events for mode/scope changes. _Requirements: 11.1, 11.4, 11.7_  
+  - [x] 10.2 Add new settings + commands (`autoOverride.previewLimit`, `…scopePreference`, `liveRequestEditor.setMode`, etc.) and plumb them through the configuration service. _Requirements: 11.2, 11.4_  
+  - [x] 10.3 Update the Live Request Editor UI (header toggle, banner, status bar) to reflect the new mode, expose Pause/Edit/Clear actions, and prompt for scope via Quick Pick. _Requirements: 11.1, 11.6_  
+  - [x] 10.4 Implement auto-override preview limiting (first `N` sections) during the initial interception and resume automatic sends once overrides are saved. _Requirements: 11.2, 11.3_  
+- [x] 10.5 Add per-section “Show diff” buttons that invoke `vscode.diff` with temp documents plus tooltips showing scope + timestamps. _Requirements: 11.5_  
+- [x] 10.6 Persist overrides across reloads (global/workspace storage) and ensure clearing overrides removes the stored payload + returns to normal interception. _Requirements: 11.4, 11.7_  
+- [x] 10.7 Emit telemetry for mode/scope transitions, override saves/clears, and diff launches; document the new behavior in docs/handoff. _Requirements: 11.8_  
+- [x] 10.8 Simplify Auto-apply UX labels and controls: rename modes to “Send normally” / “Pause & review every turn” / “Auto-apply saved edits”, treat “Pause next turn” as a one-shot action, and expose a primary “Capture new edits” flow with a secondary menu for scope/preview/clear. _Requirements: 11.1, 11.4, 11.5_  
+- [x] 10.9 Rework Auto-apply state handling to two user-visible states (Capturing vs Applying), auto-arm capture when no overrides exist or after clearing, and hide redundant actions while capturing. _Requirements: 11.2, 11.3, 11.7_  
+- [x] 10.10 Update telemetry and status/banners to use simplified copy (“Auto-apply edits · <scope> · Applying/Capturing”), ensure one-shot “Pause next turn” does not alter persisted mode, and refresh docs accordingly. _Requirements: 11.5, 11.8_  
+
+- [ ] 11. Chat timeline prompt replay (edited history/system prompt)  
+  - [ ] 11.1 Build a replay builder that takes the edited `EditableChatRequest` and replays it into a new chat session timeline (chat bubbles, tool calls/results labelled as replayed). _Requirements: 12.1–12.4_  
+  - [ ] 11.2 Ensure deletions/edits are reflected in the replayed timeline and tag fork lineage (original turn id → replayed turn id). _Requirements: 12.2, 12.5_  
+  - [ ] 11.3 Gate replay behind the advanced flag and add telemetry for replay start/finish/cancel. _Requirements: 12.6_  
+  - [ ] 11.4 Add UI affordance to trigger replay after edits are confirmed, and surface errors/fallbacks when replay construction fails. _Requirements: 12.3, 12.4_  
+
+- [ ] 12. Chat history persistence (SQLite)  
+  - [ ] 12.1 Implement SQLite schema/migration v1 in the extension global storage (conversations, turns, sections, responses, tool_calls, references, embeddings/edges). _Requirements: 13.1–13.4_  
+  - [ ] 12.2 Add opt-in setting/command and workspace-trust guard; disable persistence on corruption with non-blocking warnings. _Requirements: 13.2, 13.6_  
+  - [ ] 12.3 Wire turn-finalization to append conversation/turn/section/response/tool data; enforce size/TTL/pruning and WAL/backoff on SQLITE_BUSY. _Requirements: 13.1, 13.5_  
+  - [ ] 12.4 Add export/purge commands and minimal FTS-backed query helpers for replay/search. _Requirements: 13.4_  
+  - [ ] 12.5 Add unit/integration tests for migrations, append-only writes, pruning, and integrity-check fallback. _Requirements: 13.3, 13.6_  
+
+- [ ] 13. Graphiti memory layer (optional)  
+  - [ ] 13.1 Add feature gate + configuration (endpoint/apiKey/workspace/timeout/batch) and a thin TypeScript REST adapter for Graphiti. _Requirements: 14.1–14.3_  
+  - [ ] 13.2 Map turn/section/response/tool data to Graphiti nodes/edges with stable IDs, batching, and retry/backoff; fail open. _Requirements: 14.2, 14.4, 14.5_  
+  - [ ] 13.3 Add ingestion cursor/storage for idempotent resume and bounded retry queue; redact attachments unless explicitly enabled. _Requirements: 14.4_  
+  - [ ] 13.4 Add telemetry/diagnostics around sync success/failure and optional embedding submissions. _Requirements: 14.6_  
 
 ## Implementation Notes
 
@@ -86,5 +133,5 @@
 
 ## Current Status Summary
 
-- Feature flag, editable request model, and prompt-pipeline wiring now exist behind the advanced flag; edits propagate through `ChatMLFetcher` even without a UI.  
-- Remaining tracked work is focused on the Prompt Inspector drawer UX, error/dirty/reset surfacing, telemetry/accessibility, and the associated automated/manual tests (Tasks 4.x–7.x).  
+- Feature flag, editable request model, prompt inspector UI, and interception mode are fully wired behind the advanced flag; HTML tracer enrichment is applied end-to-end and edits propagate through `ChatMLFetcher`, including subagent skips.  
+- Remaining tracked work: performance/reliability/accessibility hardening (Tasks 6.x), deeper integration + manual validation (Tasks 7.3–7.6), the new chat timeline replay and persistence/Graphiti layers (Tasks 11–13).  

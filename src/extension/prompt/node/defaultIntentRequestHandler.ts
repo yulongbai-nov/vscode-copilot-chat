@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import { Raw } from '@vscode/prompt-tsx';
+import { ITraceData, Raw } from '@vscode/prompt-tsx';
 import type { ChatRequest, ChatResponseReferencePart, ChatResponseStream, ChatResult, LanguageModelToolInformation, Progress } from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
@@ -53,6 +53,7 @@ import { ChatTelemetry, ChatTelemetryBuilder } from './chatParticipantTelemetry'
 import { IntentInvocationMetadata } from './conversation';
 import { IDocumentContext } from './documentContext';
 import { IBuildPromptResult, IIntent, IIntentInvocation, IResponseProcessor, TelemetryData } from './intents';
+import { buildTraceSnapshotFromHtmlTrace } from './liveRequestBuilder';
 import { ConversationalBaseTelemetryData, createTelemetryWithId, sendModelMessageTelemetry } from './telemetry';
 
 export interface IDefaultIntentRequestHandlerOptions {
@@ -76,6 +77,7 @@ export class DefaultIntentRequestHandler {
 
 	private _editSurvivalTracker: IEditSurvivalTrackingSession = new NullEditSurvivalTrackingSession();
 	private _loop!: DefaultToolCallingLoop;
+	private readonly _debugNoticeEmittedForRequestIds = new Set<string>();
 
 	constructor(
 		private readonly intent: IIntent,
@@ -97,6 +99,7 @@ export class DefaultIntentRequestHandler {
 		@IEditSurvivalTrackerService private readonly _editSurvivalTrackerService: IEditSurvivalTrackerService,
 		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
 		@IEndpointProvider private readonly _endpointProvider: IEndpointProvider,
+		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
 	) {
 		// Initialize properties
 		this.turn = conversation.getLatestTurn();
@@ -113,6 +116,8 @@ export class DefaultIntentRequestHandler {
 			if (this.token.isCancellationRequested) {
 				return CanceledResult;
 			}
+
+			this.maybePostPromptEditorDebugBubble();
 
 			this._logService.trace('Processing intent');
 			const intentInvocation = await this.intent.invoke({ location: this.location, documentContext: this.documentContext, request: this.request });
@@ -314,6 +319,7 @@ export class DefaultIntentRequestHandler {
 				documentContext: this.documentContext,
 				streamParticipants: this.makeResponseStreamParticipants(intentInvocation),
 				temperature: this.handlerOptions.temperature ?? this.options.temperature,
+				topP: this.options.topP,
 				location: this.location,
 				overrideRequestLocation: this.handlerOptions.overrideRequestLocation,
 				interactionContext: this.documentContext?.document.uri,
@@ -438,6 +444,8 @@ export class DefaultIntentRequestHandler {
 				return l10n.t('Prompt Interception Mode was disabled. Pending request discarded.');
 			case 'superseded':
 				return l10n.t('Previous pending request was discarded before sending.');
+			case 'sessionDisposed':
+				return l10n.t('Chat context changed (new session or model). Pending request was discarded.');
 			default:
 				return l10n.t('Pending request was discarded before sending.');
 		}
@@ -526,6 +534,35 @@ export class DefaultIntentRequestHandler {
 				throw new Error('unreachable'); // retried within the endpoint
 		}
 	}
+
+	private maybePostPromptEditorDebugBubble(): void {
+		if (!this._liveRequestEditorService.isEnabled() || this.request.isSubagent) {
+			return;
+		}
+		const state = this._liveRequestEditorService.getInterceptionState();
+		const autoActive = state.mode === 'autoOverride' && (!!state.autoOverride?.hasOverrides || !!state.autoOverride?.capturing);
+		if (!state.enabled && !autoActive) {
+			return;
+		}
+		const key: LiveRequestSessionKey = { sessionId: this.conversation.sessionId, location: this.location };
+		const metadata = this._liveRequestEditorService.getMetadataSnapshot(key);
+		const requestId = metadata?.requestId ?? this.turn.id;
+		if (this._debugNoticeEmittedForRequestIds.has(requestId)) {
+			return;
+		}
+		this._debugNoticeEmittedForRequestIds.add(requestId);
+		const scopeLabel = state.mode === 'autoOverride'
+			? (state.autoOverride?.capturing ? 'Auto-apply (capturing)' : 'Auto-apply (applying overrides)')
+			: 'Prompt interception';
+		const ts = new Date().toLocaleTimeString();
+		const sessionLabel = metadata?.debugName ?? `${ChatLocation.toStringShorter(this.location)}/${this.intent.id ?? 'unknown'}`;
+		const message = `<debug-note>Prompt editing active: ${scopeLabel} at ${ts}. Session ${metadata?.sessionId ?? key.sessionId} (${sessionLabel}), request ${requestId}. This is a debug-only bubble and not sent to the model.</debug-note>`;
+		try {
+			this.stream.markdown(message);
+		} catch {
+			// ignore stream failures
+		}
+	}
 }
 
 interface IInternalRequestResult {
@@ -543,6 +580,7 @@ interface IDefaultToolLoopOptions extends IToolCallingLoopOptions {
 	documentContext: IDocumentContext | undefined;
 	location: ChatLocation;
 	temperature: number;
+	topP: number;
 	overrideRequestLocation?: ChatLocation;
 }
 
@@ -725,6 +763,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	protected override async fetch(opts: ToolCallingLoopFetchOptions, token: CancellationToken): Promise<ChatResponse> {
 		const messageSourcePrefix = this.options.location === ChatLocation.Editor ? 'inline' : 'chat';
 		const debugName = this.computeDebugName();
+		this.applyDefaultRequestOptions(opts.requestOptions);
 		return this.options.invocation.endpoint.makeChatRequest2({
 			...opts,
 			debugName,
@@ -742,8 +781,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 					(tool, rule) => {
 						this._logService.warn(`Tool ${tool} failed validation: ${rule}`);
 					},
-				),
-				temperature: this.calculateTemperature(),
+				)
 			},
 			telemetryProperties: {
 				messageId: this.telemetry.telemetryMessageId,
@@ -755,6 +793,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	}
 
 	protected override prepareLiveRequest(buildPromptResult: IBuildPromptResult, context: IBuildPromptContext, requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+		this.applyDefaultRequestOptions(requestOptions);
 		if (!this._liveRequestEditorService.isEnabled()) {
 			return undefined;
 		}
@@ -765,7 +804,9 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			location: sessionKey.location,
 			debugName: this.computeDebugName(),
 			model: this.options.invocation.endpoint.model,
+			isSubagent: !!this.options.request.isSubagent,
 			renderResult: buildPromptResult,
+			traceData: buildPromptResult.traceData,
 			requestId,
 			intentId: this.options.intent?.id,
 			endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
@@ -774,7 +815,12 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			maxPromptTokens: this.options.invocation.endpoint.modelMaxPromptTokens,
 		};
 		this._liveRequestEditorService.prepareRequest(init);
-		void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
+		if (buildPromptResult.traceData) {
+			void this.populateTraceData(sessionKey, buildPromptResult.traceData, buildPromptResult.messages)
+				.then(applied => applied ? undefined : this.populateTokenCounts(sessionKey, buildPromptResult.messages));
+		} else {
+			void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
+		}
 		const result = this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
 		if (result.error) {
 			throw new LiveRequestEditorValidationError(result.error);
@@ -793,6 +839,20 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			this._liveRequestEditorService.updateTokenCounts(key, { total, perMessage });
 		} catch (error) {
 			this._logService.debug(`Live Request Editor: failed to compute token counts: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	private async populateTraceData(key: LiveRequestSessionKey, traceData: ITraceData, messages: Raw.ChatMessage[]): Promise<boolean> {
+		try {
+			const snapshot = await buildTraceSnapshotFromHtmlTrace(messages, traceData);
+			if (!snapshot) {
+				return false;
+			}
+			this._liveRequestEditorService.applyTraceData(key, snapshot);
+			return snapshot.perMessage.every(entry => typeof entry.tokenCount === 'number');
+		} catch (error) {
+			this._logService.debug(`Live Request Editor: failed to apply HTML tracer data: ${error instanceof Error ? error.message : String(error)}`);
+			return false;
 		}
 	}
 
@@ -822,7 +882,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 	}
 
 	protected override async interceptMessages(messages: Raw.ChatMessage[], token: CancellationToken | PauseController): Promise<Raw.ChatMessage[]> {
-		if (!this._liveRequestEditorService.isInterceptionEnabled()) {
+		if (!this._liveRequestEditorService.isInterceptionEnabled() || this.options.request.isSubagent) {
 			return messages;
 		}
 		const key: LiveRequestSessionKey = { sessionId: this.options.conversation.sessionId, location: this.options.location };
@@ -851,6 +911,19 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			return 'tool/runSubagent';
 		}
 		return `${ChatLocation.toStringShorter(this.options.location)}/${this.options.intent?.id ?? 'unknown'}`;
+	}
+
+	private applyDefaultRequestOptions(requestOptions: OptionalChatRequestParams): OptionalChatRequestParams {
+		if (typeof requestOptions.temperature !== 'number') {
+			requestOptions.temperature = this.calculateTemperature();
+		}
+		if (typeof requestOptions.top_p !== 'number') {
+			requestOptions.top_p = this.options.topP ?? 1;
+		}
+		if (typeof requestOptions.n !== 'number') {
+			requestOptions.n = 1;
+		}
+		return requestOptions;
 	}
 
 	private calculateTemperature(): number {
