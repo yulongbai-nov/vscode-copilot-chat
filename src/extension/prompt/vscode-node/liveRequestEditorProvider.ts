@@ -370,6 +370,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		if (shouldActivate) {
 			this._activeSessionKey = key;
 			this._currentRequest = request;
+			this._notifyPayloadActiveSession();
 		}
 		this._postStateToWebview();
 	}
@@ -408,6 +409,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._activeSessionKey = compositeKey;
 		this._currentRequest = next;
 		this._currentReplay = this._replays.get(compositeKey);
+		this._notifyPayloadActiveSession();
 		this._postStateToWebview();
 	}
 
@@ -428,7 +430,20 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			this._currentRequest = latest;
 			this._currentReplay = this._replays.get(latestKey);
 		}
+		this._notifyPayloadActiveSession();
 		this._postStateToWebview();
+	}
+
+	private _notifyPayloadActiveSession(): void {
+		if (!this._activeSessionKey) {
+			return;
+		}
+		try {
+			const key = this._fromCompositeKey(this._activeSessionKey);
+			void vscode.commands.executeCommand('github.copilot.liveRequestPayload.setActiveSession', key);
+		} catch {
+			// best-effort
+		}
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview): string {

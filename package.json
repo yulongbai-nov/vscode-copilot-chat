@@ -2181,6 +2181,13 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.liveRequestPayload.setActiveSession",
+				"title": "Live Request Payload: Set Active Session",
+				"category": "Chat",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"icon": "$(json)"
+			},
+			{
 				"command": "github.copilot.subagentPromptMonitor.copySection",
 				"title": "Copy Subagent Section",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",

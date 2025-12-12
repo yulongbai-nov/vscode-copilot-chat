@@ -253,6 +253,16 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const setPayloadSessionCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestPayload.setActiveSession',
+			async (sessionKey?: { sessionId?: string; location?: number } | string) => {
+				if (!this._payloadProvider) {
+					return;
+				}
+				this._payloadProvider.setActiveSession(sessionKey);
+			}
+		);
+
 		const showPayloadViewCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestPayload.show',
 			async () => {
@@ -286,6 +296,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(debugSampleReplayCommand);
 		this._disposables.add(openRawPayloadCommand);
 		this._disposables.add(showPayloadViewCommand);
+		this._disposables.add(setPayloadSessionCommand);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {

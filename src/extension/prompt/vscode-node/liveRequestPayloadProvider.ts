@@ -22,6 +22,7 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 	private readonly _requests = new Map<string, EditableChatRequest>();
 	private _activeSessionKey?: string;
 	private _metadata?: LiveRequestMetadataEvent['metadata'];
+	private _lockedToSelection = false;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -48,10 +49,13 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 	private _handleRequestUpdated(request: EditableChatRequest): void {
 		const key = this._toKey(request.sessionId, request.location);
 		this._requests.set(key, request);
+		if (this._lockedToSelection && this._activeSessionKey && this._activeSessionKey !== key) {
+			return;
+		}
 		const incomingTimestamp = this._getTimestamp(request);
 		const active = this._activeSessionKey ? this._requests.get(this._activeSessionKey) : undefined;
 		const activeTimestamp = active ? this._getTimestamp(active) : 0;
-		if (!this._activeSessionKey || incomingTimestamp >= activeTimestamp) {
+		if (!this._activeSessionKey || (!this._lockedToSelection && incomingTimestamp >= activeTimestamp)) {
 			this._activeSessionKey = key;
 		}
 		this._postState();
@@ -69,10 +73,33 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 		this._postState();
 	}
 
+	public setActiveSession(sessionKey?: { sessionId?: string; location?: number } | string): void {
+		if (!sessionKey) {
+			this._lockedToSelection = false;
+			this._activeSessionKey = undefined;
+			this._postState();
+			return;
+		}
+		let composite: string | undefined;
+		if (typeof sessionKey === 'string') {
+			composite = sessionKey;
+		} else if (sessionKey.sessionId && typeof sessionKey.location === 'number') {
+			composite = this._toKey(sessionKey.sessionId, sessionKey.location as ChatLocation);
+		}
+		if (!composite) {
+			return;
+		}
+		this._lockedToSelection = true;
+		this._activeSessionKey = composite;
+		this._postState();
+	}
+
 	private _handleMetadataChanged(event: LiveRequestMetadataEvent): void {
 		if (event.metadata) {
 			this._metadata = event.metadata;
-			this._activeSessionKey = this._toKey(event.metadata.sessionId, event.metadata.location as ChatLocation);
+			if (!this._lockedToSelection) {
+				this._activeSessionKey = this._toKey(event.metadata.sessionId, event.metadata.location as ChatLocation);
+			}
 		} else if (
 			this._metadata &&
 			this._metadata.sessionId === event.key.sessionId &&
