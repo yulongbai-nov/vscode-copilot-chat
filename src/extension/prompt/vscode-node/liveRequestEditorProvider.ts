@@ -326,6 +326,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				}
 				case 'selectSession':
 					if (typeof payload.sessionKey === 'string') {
+						this._followLatest = false;
 						this._activateSessionByKey(payload.sessionKey);
 					}
 					break;

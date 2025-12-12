@@ -31,6 +31,10 @@ declare global {
 			'vscode-option': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				value?: string;
 			};
+			'vscode-switch': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+				checked?: boolean;
+				disabled?: boolean;
+			};
 		}
 	}
 }
@@ -1188,6 +1192,8 @@ const App: React.FC = () => {
 		if (typeof value !== 'string' || value.length === 0 || value === activeSessionKey) {
 			return;
 		}
+		setFollowLatest(false);
+		sendMessage('setFollowMode', { followLatest: false });
 		setActiveSessionKey(value);
 		sendMessage('selectSession', { sessionKey: value });
 		sendMessage('command', {
@@ -1249,15 +1255,15 @@ const App: React.FC = () => {
 										</vscode-option>
 									))}
 								</vscode-dropdown>
-								<vscode-button
-									appearance={followLatest ? 'secondary' : 'primary'}
-									onClick={handleToggleFollowLatest}
-									title={followLatest ? 'Auto-follow newest intercepted request' : 'Stick to selected conversation'}
-									className="follow-toggle"
-								>
-									<span className={`codicon ${followLatest ? 'codicon-sync' : 'codicon-pin'}`} aria-hidden="true" />
-									&nbsp;{followLatest ? 'Auto-follow' : 'Stick'}
-								</vscode-button>
+								<div className="follow-toggle">
+									<label htmlFor="follow-latest-switch">Auto-follow latest</label>
+									<vscode-switch
+										id="follow-latest-switch"
+										checked={followLatest}
+										onChange={handleToggleFollowLatest}
+										title="When on, automatically switch to the newest intercepted request"
+									/>
+								</div>
 							</div>
 						)}
 					</div>

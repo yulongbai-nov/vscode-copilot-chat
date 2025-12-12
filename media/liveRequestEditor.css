@@ -178,8 +178,17 @@ body {
 	min-width: 220px;
 }
 
-.session-selector .follow-toggle {
+.follow-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 2px;
 	align-self: flex-start;
+}
+
+.follow-toggle label {
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
 }
 
 .session-selector-label {
