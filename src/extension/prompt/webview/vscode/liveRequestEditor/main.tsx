@@ -347,6 +347,7 @@ interface SectionCardProps {
 	isPinned: boolean;
 	isEditing: boolean;
 	isCollapsed: boolean;
+	isFlashing: boolean;
 	onToggleCollapse: (sectionId: string) => void;
 	onTogglePinned: (sectionId: string) => void;
 	onEditToggle: (sectionId: string) => void;
@@ -365,6 +366,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	isPinned,
 	isEditing,
 	isCollapsed,
+	isFlashing,
 	onToggleCollapse,
 	onTogglePinned,
 	onEditToggle,
@@ -426,6 +428,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		collapsed ? 'collapsed' : '',
 		deleted ? 'deleted' : '',
 		isPinned ? 'pinned' : '',
+		isFlashing ? 'recently-added' : '',
 		dragPosition === 'above' ? 'drag-over-above' : '',
 		dragPosition === 'below' ? 'drag-over-below' : ''
 	].filter(Boolean).join(' ');
@@ -807,8 +810,10 @@ const App: React.FC = () => {
 	const draggingSectionRef = React.useRef<string | null>(null);
 	const sectionsEndRef = React.useRef<HTMLDivElement | null>(null);
 	const prevSectionsLengthRef = React.useRef<number>(0);
+	const prevSectionIdsRef = React.useRef<string[]>([]);
 	const [bannerPulse, setBannerPulse] = React.useState(false);
 	const [sessionFlash, setSessionFlash] = React.useState(false);
+	const [flashSections, setFlashSections] = React.useState<Set<string>>(new Set());
 	const mode = interception?.mode ?? 'off';
 	const autoOverride = interception?.autoOverride;
 	const captureActive = mode === 'autoOverride' && autoOverride?.capturing;
@@ -966,9 +971,30 @@ const App: React.FC = () => {
 
 	React.useEffect(() => {
 		const length = request?.sections?.length ?? 0;
-		if (length > prevSectionsLengthRef.current && sectionsEndRef.current) {
+		const currentIds = request?.sections?.map(section => section.id) ?? [];
+		const prevIds = prevSectionIdsRef.current;
+		const newlyAdded = currentIds.filter(id => !prevIds.includes(id));
+
+		if (newlyAdded.length && sectionsEndRef.current) {
 			sectionsEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
 		}
+		if (newlyAdded.length) {
+			setFlashSections(prev => {
+				const next = new Set(prev);
+				for (const id of newlyAdded) {
+					next.add(id);
+					window.setTimeout(() => {
+						setFlashSections(inner => {
+							const updated = new Set(inner);
+							updated.delete(id);
+							return updated;
+						});
+					}, 1400);
+				}
+				return next;
+			});
+		}
+		prevSectionIdsRef.current = currentIds;
 		prevSectionsLengthRef.current = length;
 	}, [request?.sections?.length]);
 
@@ -1457,6 +1483,7 @@ const App: React.FC = () => {
 								isPinned
 								isEditing={editingSectionId === section.id}
 								isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
+								isFlashing={flashSections.has(section.id)}
 								onToggleCollapse={handleToggleCollapse}
 								onTogglePinned={handleTogglePinned}
 								onEditToggle={handleEditToggle}
@@ -1482,6 +1509,7 @@ const App: React.FC = () => {
 						isPinned={false}
 						isEditing={editingSectionId === section.id}
 						isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
+						isFlashing={flashSections.has(section.id)}
 						onToggleCollapse={handleToggleCollapse}
 						onTogglePinned={handleTogglePinned}
 						onEditToggle={handleEditToggle}

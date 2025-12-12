@@ -415,8 +415,32 @@ body {
 	box-shadow: 0 0 0 1px var(--vscode-list-activeSelectionBorder);
 }
 
+.section.recently-added {
+	border-color: var(--vscode-inputValidation-warningBorder);
+	box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.35);
+	background: color-mix(in srgb, var(--vscode-inputValidation-warningBackground) 35%, var(--vscode-sideBar-background));
+	animation: sectionFlash 1.2s ease-out;
+}
+
+.section.recently-added .section-header {
+	background: color-mix(in srgb, var(--vscode-inputValidation-warningBackground) 45%, var(--vscode-sideBarSectionHeader-background));
+}
+
+.section.recently-added .section-title .icon {
+	color: var(--vscode-inputValidation-warningBorder);
+}
+
 .section.drag-over {
 	outline: 1px dashed var(--vscode-focusBorder);
+}
+
+@keyframes sectionFlash {
+	from {
+		box-shadow: 0 0 0 0 rgba(255, 204, 0, 0.35);
+	}
+	to {
+		box-shadow: 0 0 0 12px rgba(255, 204, 0, 0);
+	}
 }
 
 .section-header {
