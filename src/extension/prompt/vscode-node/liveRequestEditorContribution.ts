@@ -14,6 +14,7 @@ import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestOverrideSc
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
 import { LiveRequestMetadataProvider } from './liveRequestMetadataProvider';
+import { LiveRequestPayloadProvider } from './liveRequestPayloadProvider';
 import { LiveReplayChatProvider } from './liveReplayChatProvider';
 
 type ModePickItem = vscode.QuickPickItem & { mode: LiveRequestEditorMode; disabled?: boolean };
@@ -26,6 +27,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 	private readonly _disposables = new DisposableStore();
 	private _provider?: LiveRequestEditorProvider;
 	private _metadataProvider?: LiveRequestMetadataProvider;
+	private _payloadProvider?: LiveRequestPayloadProvider;
 	private _replayChatProvider?: LiveReplayChatProvider;
 	private readonly _statusBarItem: vscode.StatusBarItem;
 
@@ -39,6 +41,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, false);
 		this._registerProvider();
 		this._registerMetadataProvider();
+		this._registerPayloadProvider();
 		this._registerReplayChatProvider();
 		this._registerCommands();
 		this._statusBarItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10002));
@@ -92,6 +95,29 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			this._logService.trace('Live Request Metadata provider registered');
 		} catch (error) {
 			this._logService.error('Failed to register Live Request Metadata provider', error);
+		}
+	}
+
+	private _registerPayloadProvider(): void {
+		try {
+			this._payloadProvider = this._instantiationService.createInstance(
+				LiveRequestPayloadProvider,
+				this._extensionContext.extensionUri
+			);
+			this._disposables.add(this._payloadProvider);
+			const registration = vscode.window.registerWebviewViewProvider(
+				LiveRequestPayloadProvider.viewType,
+				this._payloadProvider,
+				{
+					webviewOptions: {
+						retainContextWhenHidden: true
+					}
+				}
+			);
+			this._disposables.add(registration);
+			this._logService.trace('Live Request Payload provider registered');
+		} catch (error) {
+			this._logService.error('Failed to register Live Request Payload provider', error);
 		}
 	}
 

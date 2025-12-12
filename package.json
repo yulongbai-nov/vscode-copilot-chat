@@ -4995,6 +4995,13 @@
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				},
 				{
+					"id": "github.copilot.liveRequestPayload",
+					"name": "Live Request Payload",
+					"type": "webview",
+					"icon": "assets/live-request-editor.svg",
+					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
+				},
+				{
 					"id": "github.copilot.liveRequestEditor",
 					"name": "Live Request Editor",
 					"type": "webview",

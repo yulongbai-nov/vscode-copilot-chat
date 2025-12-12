@@ -86,6 +86,7 @@ function createSection(message: Raw.ChatMessage, index: number, tokenCount?: num
 
 function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequestSection[]): void {
 	const assistantToolCalls = new Map<number, Array<{ id?: string; name?: string; arguments?: string }>>();
+	const toolCallsById = new Map<string, { id?: string; name?: string; arguments?: string }>();
 	for (let index = 0; index < messages.length; index++) {
 		const message = messages[index];
 		if (message.role !== Raw.ChatRole.Assistant || !('toolCalls' in message) || !message.toolCalls?.length) {
@@ -93,11 +94,15 @@ function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequest
 		}
 		const entries: Array<{ id?: string; name?: string; arguments?: string }> = [];
 		for (const call of message.toolCalls) {
-			entries.push({
+			const entry = {
 				id: call.id,
 				name: call.function?.name,
 				arguments: extractToolArguments(call.function?.arguments)
-			});
+			};
+			entries.push(entry);
+			if (call.id) {
+				toolCallsById.set(call.id, entry);
+			}
 		}
 		if (entries.length) {
 			assistantToolCalls.set(index, entries);
@@ -114,7 +119,12 @@ function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequest
 			}
 			continue;
 		}
-		// Tool message sections keep only their toolCallId/name; invocation details render on the assistant card.
+		if (section.kind === 'tool' && typeof metadata.toolCallId === 'string') {
+			const toolInvocation = toolCallsById.get(metadata.toolCallId);
+			if (toolInvocation) {
+				metadata.toolInvocation = toolInvocation;
+			}
+		}
 		section.metadata = metadata;
 	}
 }

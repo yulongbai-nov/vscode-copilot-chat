@@ -30,6 +30,8 @@
      - Conversation picker is always enabled and now labels sessions as `<location> · <debug name> · …<sessionId tail>` to disambiguate concurrent sessions. Request/session/model metadata is refreshed via `onDidChangeMetadata` (includes `lastUpdated`) so the header and metadata tree keep request IDs, models, and session IDs in sync during Auto-apply capture/apply.
   7. **Debug bubbles for interception/auto-apply**
      - When interception or Auto-apply is active, the chat response stream emits a single `<debug-note>` bubble per request indicating the mode, session id, request id, and timestamp; it is clearly marked as debug-only and not sent to the model. Tests filter these bubbles out of user-facing assertions.
+  8. **Raw payload view**
+     - Added a dedicated `github.copilot.liveRequestPayload` webview view (same chat panel container/flag as the editor + metadata tree). It mirrors the current intercepted request’s `messages[]` JSON with copy/open-in-editor actions so engineers can pin/drag a read-only payload pane alongside the inspector.
 
   ### Verification
   - `npm run lint`
@@ -42,6 +44,7 @@
   - Manual sanity:
     1. With the feature flag on, send a prompt, open “Live Request Metadata,” and verify the metadata nodes/token meter update when you send, edit, switch conversations, or change models. Use “Configure metadata” to toggle fields and expand outline nodes for copy.
     2. Switch the mode toggle to **Auto**, send another prompt, edit one of the first three sections, and press **Resume**. Subsequent turns should send immediately with the override applied, the banner should display the chosen scope, and the section card should show the “Override · Show diff” chip. Use the banner actions (Pause next turn, Edit overrides, Clear overrides, Change scope, Preview limit) to confirm they dispatch correctly.
+    3. Pin “Live Request Payload,” intercept a prompt, and confirm the JSON mirrors the live `messages[]` state. Exercise Copy/Open controls and drag the view between the chat panel and sidebar to confirm it docks like the metadata view.
   - Known test debt (per `agent-prompt.md`): `npm run test:unit` can still timeout in the tool-calling, notebook prompt rendering, and agent prompt suites upstream. Treat these failures as pre-existing and mention them in reviews.
 
   ### Remaining Scope / Next Steps
