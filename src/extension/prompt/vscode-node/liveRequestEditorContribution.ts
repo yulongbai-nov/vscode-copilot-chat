@@ -253,6 +253,19 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const showPayloadViewCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestPayload.show',
+			async () => {
+				try {
+					await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+					await vscode.commands.executeCommand('github.copilot.liveRequestPayload.focus');
+				} catch (error) {
+					this._logService.error('Failed to show Live Request Payload view', error);
+					vscode.window.showErrorMessage('Failed to open Live Request Payload. See logs for details.');
+				}
+			}
+		);
+
 		const copyMetadataValue = vscode.commands.registerCommand(
 			'github.copilot.liveRequestMetadata.copyValue',
 			async (value?: string, label?: string) => {
@@ -272,6 +285,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(replayPromptCommand);
 		this._disposables.add(debugSampleReplayCommand);
 		this._disposables.add(openRawPayloadCommand);
+		this._disposables.add(showPayloadViewCommand);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {

@@ -2174,6 +2174,13 @@
 				"category": "Chat"
 			},
 			{
+				"command": "github.copilot.liveRequestPayload.show",
+				"title": "Show Live Request Payload",
+				"icon": "$(json)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
 				"command": "github.copilot.subagentPromptMonitor.copySection",
 				"title": "Copy Subagent Section",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
