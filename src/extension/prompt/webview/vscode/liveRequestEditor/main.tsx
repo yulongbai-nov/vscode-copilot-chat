@@ -795,7 +795,6 @@ const App: React.FC = () => {
 	const [replayView, setReplayView] = React.useState<'payload' | 'projection'>('payload');
 	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
 	const [lastReplayUri, setLastReplayUri] = React.useState<string | undefined>(undefined);
-	const rawPayloadJson = React.useMemo(() => JSON.stringify(request?.messages ?? [], null, 2), [request?.messages]);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -1119,35 +1118,6 @@ const App: React.FC = () => {
 		});
 	}, [request, sendMessage]);
 
-	const handleCopyRawPayload = React.useCallback(() => {
-		const payloadText = rawPayloadJson ?? '';
-		if (!payloadText.length) {
-			return;
-		}
-		if (navigator?.clipboard?.writeText) {
-			navigator.clipboard.writeText(payloadText).catch(() => {
-				// Ignore clipboard errors.
-			});
-		} else {
-			const textarea = document.createElement('textarea');
-			textarea.value = payloadText;
-			document.body.appendChild(textarea);
-			textarea.select();
-			document.execCommand('copy');
-			document.body.removeChild(textarea);
-		}
-	}, [rawPayloadJson]);
-
-	const handleOpenRawPayload = React.useCallback(() => {
-		if (!rawPayloadJson) {
-			return;
-		}
-		sendMessage('command', {
-			command: 'github.copilot.liveRequestEditor.openRawPayload',
-			args: [rawPayloadJson]
-		});
-	}, [rawPayloadJson, sendMessage]);
-
 	const handleToggleReplayView = React.useCallback(() => {
 		const targetUri = replayUri ?? lastReplayUri;
 		if (!targetUri) {
@@ -1379,34 +1349,6 @@ const App: React.FC = () => {
 								onToggleCollapse={handleToggleCollapse}
 							/>
 						) : null}
-					</div>
-				) : null}
-
-				{request ? (
-					<div className="inspector-extra-panels">
-						<CollapsiblePanel
-							id="debug:rawPayload"
-							title="Raw payload (debug)"
-							description="Current request messages as JSON."
-							isCollapsed={collapsedIdSet.has('debug:rawPayload')}
-							onToggleCollapse={handleToggleCollapse}
-							actions={(
-								<>
-									<vscode-button appearance="secondary" onClick={handleCopyRawPayload} title="Copy payload JSON" aria-label="Copy payload JSON">
-										<span className="codicon codicon-copy" aria-hidden="true" />
-										&nbsp;Copy
-									</vscode-button>
-									<vscode-button appearance="secondary" onClick={handleOpenRawPayload} title="Open payload in editor" aria-label="Open payload in editor">
-										<span className="codicon codicon-new-file" aria-hidden="true" />
-										&nbsp;Open
-									</vscode-button>
-								</>
-							)}
-						>
-							<pre className="raw-json-block">
-								{rawPayloadJson}
-							</pre>
-						</CollapsiblePanel>
 					</div>
 				) : null}
 
