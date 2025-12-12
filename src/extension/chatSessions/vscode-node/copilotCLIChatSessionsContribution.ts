@@ -1329,8 +1329,8 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 			await vscode.commands.executeCommand('vscode.open', newResource);
 		} finally {
 			newRef.dispose();
-			}
-		}));
+		}
+	}));
 	disposableStore.add(vscode.commands.registerCommand('agentSession.copilotcli.openChanges', async (sessionItemResource?: vscode.Uri) => {
 		if (!sessionItemResource) {
 			return;
