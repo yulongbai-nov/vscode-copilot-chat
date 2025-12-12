@@ -7,7 +7,7 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
-import { provideVSCodeDesignSystem, vsCodeButton, vsCodeCheckbox, vsCodeDropdown, vsCodeOption } from '@vscode/webview-ui-toolkit';
+import { provideVSCodeDesignSystem, vsCodeButton, vsCodeDropdown, vsCodeOption } from '@vscode/webview-ui-toolkit';
 
 interface VSCodeAPI<TState = unknown> {
 	postMessage(message: unknown): void;
@@ -31,11 +31,6 @@ declare global {
 			'vscode-option': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				value?: string;
 			};
-			'vscode-checkbox': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
-				checked?: boolean;
-				disabled?: boolean;
-				ariaLabel?: string;
-			};
 		}
 	}
 }
@@ -58,6 +53,7 @@ interface EditableChatRequestMetadata {
 	intentId?: string;
 	endpointUrl?: string;
 	modelFamily?: string;
+	chatSessionResource?: string;
 	requestOptions?: Record<string, unknown>;
 	lastLoggedAt?: number;
 	lastLoggedHash?: number;
@@ -153,6 +149,8 @@ interface SessionSummary {
 interface PersistedState {
 	pinned?: Record<string, string[]>;
 	collapsed?: Record<string, string[]>;
+	followLatest?: boolean;
+	selectedSessionKey?: string;
 }
 
 interface InterceptionState {
@@ -175,7 +173,7 @@ interface InterceptionState {
 
 const vscode = acquireVsCodeApi<PersistedState>();
 
-provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeDropdown(), vsCodeOption(), vsCodeCheckbox());
+provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeDropdown(), vsCodeOption());
 const markdown = new MarkdownIt({
 	linkify: true,
 	breaks: true,
@@ -814,6 +812,10 @@ const App: React.FC = () => {
 		}
 		return stored;
 	});
+	const initialFollowLatestRef = React.useRef<boolean | undefined>(persistedState.followLatest);
+	const initialSelectedSessionKeyRef = React.useRef<string | undefined>(persistedState.selectedSessionKey);
+	const didRestoreSelectionRef = React.useRef(false);
+	const sessionDropdownRef = React.useRef<(HTMLElement & { value?: string }) | null>(null);
 	const draggingSectionRef = React.useRef<string | null>(null);
 	const sectionsEndRef = React.useRef<HTMLDivElement | null>(null);
 	const prevSectionsLengthRef = React.useRef<number>(0);
@@ -833,6 +835,10 @@ const App: React.FC = () => {
 			vscode.setState?.(next);
 			return next;
 		});
+	}, []);
+
+	const sendMessage = React.useCallback((type: string, data?: Record<string, unknown>) => {
+		vscode.postMessage({ type, ...(data ?? {}) });
 	}, []);
 
 	const pinnedOrderMap = persistedState.pinned ?? {};
@@ -914,6 +920,35 @@ const App: React.FC = () => {
 		window.addEventListener('message', handler);
 		return () => window.removeEventListener('message', handler);
 	}, []);
+
+	React.useEffect(() => {
+		const initialFollowLatest = initialFollowLatestRef.current;
+		if (typeof initialFollowLatest === 'boolean') {
+			setFollowLatest(initialFollowLatest);
+			sendMessage('setFollowMode', { followLatest: initialFollowLatest });
+		}
+	}, [sendMessage]);
+
+	React.useEffect(() => {
+		if (didRestoreSelectionRef.current) {
+			return;
+		}
+		const initialFollowLatest = initialFollowLatestRef.current;
+		if (initialFollowLatest !== false) {
+			didRestoreSelectionRef.current = true;
+			return;
+		}
+		const initialSelectedSessionKey = initialSelectedSessionKeyRef.current;
+		if (!initialSelectedSessionKey) {
+			didRestoreSelectionRef.current = true;
+			return;
+		}
+		if (!sessions.some(session => session.key === initialSelectedSessionKey)) {
+			return;
+		}
+		didRestoreSelectionRef.current = true;
+		sendMessage('selectSession', { sessionKey: initialSelectedSessionKey });
+	}, [sendMessage, sessions]);
 
 	React.useEffect(() => {
 		if (interception?.pending) {
@@ -1038,9 +1073,6 @@ const App: React.FC = () => {
 	const hiddenSectionCount = captureActive ? Math.max(orderedSections.length - visibleSections.length, 0) : 0;
 	const pinnedSections = visibleSections.filter(section => pinnedIdSet.has(section.id));
 	const unpinnedSections = visibleSections.filter(section => !pinnedIdSet.has(section.id));
-	const sendMessage = React.useCallback((type: string, data?: Record<string, unknown>) => {
-		vscode.postMessage({ type, ...(data ?? {}) });
-	}, []);
 
 	const handleModeSelect = React.useCallback((nextMode: LiveRequestEditorMode) => {
 		sendMessage('setMode', { mode: nextMode });
@@ -1152,6 +1184,16 @@ const App: React.FC = () => {
 		});
 	}, [request, sendMessage]);
 
+	const handleOpenInChat = React.useCallback(() => {
+		if (!request) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.openInChat',
+			args: [{ sessionId: request.sessionId, location: request.location }]
+		});
+	}, [request, sendMessage]);
+
 	const handleShowPayloadDiff = React.useCallback(() => {
 		if (!request) {
 			return;
@@ -1173,11 +1215,15 @@ const App: React.FC = () => {
 		setReplayView(current => (current === 'payload' ? 'projection' : 'payload'));
 	}, [lastReplayUri, replayUri, sendMessage]);
 
-	const handleToggleFollowLatest = React.useCallback(() => {
-		const next = !followLatest;
+	const handleToggleFollowLatest = React.useCallback<React.ChangeEventHandler<HTMLInputElement>>((event) => {
+		const next = event.target.checked;
 		setFollowLatest(next);
+		updatePersistedState(prev => ({
+			...prev,
+			followLatest: next
+		}));
 		sendMessage('setFollowMode', { followLatest: next });
-	}, [followLatest, sendMessage]);
+	}, [sendMessage, updatePersistedState]);
 
 	const handleResumeSend = React.useCallback(() => {
 		sendMessage('resumeSend');
@@ -1187,21 +1233,58 @@ const App: React.FC = () => {
 		sendMessage('cancelIntercept');
 	}, [sendMessage]);
 
-	const handleSessionChange = React.useCallback<React.FormEventHandler<HTMLElement>>((event) => {
-		const dropdown = event.target as HTMLSelectElement & { value?: string };
-		const value = dropdown?.value;
+	const handleSessionSelected = React.useCallback((value: string) => {
 		if (typeof value !== 'string' || value.length === 0 || value === activeSessionKey) {
 			return;
 		}
-		setFollowLatest(false);
-		sendMessage('setFollowMode', { followLatest: false });
-		setActiveSessionKey(value);
 		sendMessage('selectSession', { sessionKey: value });
-		sendMessage('command', {
-			command: 'github.copilot.liveRequestPayload.setActiveSession',
-			args: [value]
-		});
 	}, [activeSessionKey, sendMessage]);
+
+	React.useEffect(() => {
+		const dropdown = sessionDropdownRef.current;
+		if (!dropdown) {
+			return;
+		}
+		const listener = (event: Event) => {
+			const value = (event.currentTarget as (HTMLElement & { value?: string }) | null)?.value;
+			if (typeof value === 'string') {
+				handleSessionSelected(value);
+			}
+		};
+		dropdown.addEventListener('change', listener);
+		dropdown.addEventListener('input', listener);
+		return () => {
+			dropdown.removeEventListener('change', listener);
+			dropdown.removeEventListener('input', listener);
+		};
+	}, [handleSessionSelected, sessions.length]);
+
+	React.useEffect(() => {
+		if (!activeSessionKey || followLatest) {
+			return;
+		}
+		updatePersistedState(prev => {
+			if (prev.followLatest === false && prev.selectedSessionKey === activeSessionKey) {
+				return prev;
+			}
+			return {
+				...prev,
+				followLatest: false,
+				selectedSessionKey: activeSessionKey
+			};
+		});
+	}, [activeSessionKey, followLatest, updatePersistedState]);
+
+	React.useEffect(() => {
+		const dropdown = sessionDropdownRef.current;
+		if (!dropdown) {
+			return;
+		}
+		const next = activeSessionKey ?? '';
+		if (dropdown.value !== next) {
+			dropdown.value = next;
+		}
+	}, [activeSessionKey, sessions.length]);
 	const formatSessionTooltip = React.useCallback((session: SessionSummary) => {
 		const created = session.createdAt ? `Created ${formatTimestamp(session.createdAt)}` : undefined;
 		const updated = session.lastUpdated ? `Updated ${formatTimestamp(session.lastUpdated)}` : undefined;
@@ -1238,33 +1321,47 @@ const App: React.FC = () => {
 								<label className="session-selector-label" htmlFor="live-request-session-dropdown">
 									Conversation
 								</label>
-								<vscode-dropdown
-									id="live-request-session-dropdown"
-									className="session-selector-dropdown"
-									value={activeSessionKey ?? ''}
-									onChange={handleSessionChange}
-								>
-									{sessions.map(session => (
-										<vscode-option
-											key={session.key}
-											value={session.key}
-											title={formatSessionTooltip(session)}
-										>
-											{session.label}
-											{session.isLatest ? ' · NEW' : ''}
-											{session.isActive ? ' · Current' : ''}
-										</vscode-option>
-									))}
-								</vscode-dropdown>
+								<div className="session-selector-row">
+									<vscode-dropdown
+										id="live-request-session-dropdown"
+										className="session-selector-dropdown"
+										ref={sessionDropdownRef}
+										value={activeSessionKey ?? ''}
+									>
+										{sessions.map(session => (
+											<vscode-option
+												key={session.key}
+												value={session.key}
+												title={formatSessionTooltip(session)}
+											>
+												{session.label}
+												{session.isLatest ? ' · NEW' : ''}
+												{session.isActive ? ' · Current' : ''}
+											</vscode-option>
+										))}
+									</vscode-dropdown>
+									<vscode-button
+										appearance="secondary"
+										onClick={handleOpenInChat}
+										title={request?.metadata?.chatSessionResource
+											? 'Open the selected conversation in the chat session editor'
+											: 'No session editor resource captured for this conversation (will focus the chat panel instead)'}
+									>
+										Open in chat
+									</vscode-button>
+								</div>
 								<div className="follow-toggle">
-									<label htmlFor="follow-latest-checkbox">Auto-follow latest</label>
-									<vscode-checkbox
-										id="follow-latest-checkbox"
-										ariaLabel="Auto-follow latest"
-										checked={followLatest}
-										onChange={handleToggleFollowLatest}
-										title="When on, automatically switch to the newest intercepted request"
-									/>
+									<span className="follow-toggle-label">Auto-follow latest</span>
+									<label className="toggle-switch" title="When on, automatically switch to the newest intercepted request">
+										<input
+											type="checkbox"
+											role="switch"
+											checked={followLatest}
+											onChange={handleToggleFollowLatest}
+											aria-label="Auto-follow latest"
+										/>
+										<span className="toggle-switch-slider" aria-hidden="true" />
+									</label>
 								</div>
 							</div>
 						)}

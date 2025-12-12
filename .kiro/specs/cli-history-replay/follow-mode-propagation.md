@@ -5,31 +5,32 @@ This note captures how session/selection changes propagate between the Live Requ
 ## Flow Overview
 
 ```mermaid
-flowchart TD
-  subgraph Webview
-    DD[Session dropdown] -->|selectSession| LREUI
-    Toggle[Auto-follow checkbox] -->|setFollowMode| LREUI
+sequenceDiagram
+  autonumber
+  participant User as User
+  participant Webview as Live Request Editor (webview)
+  participant Provider as LiveRequestEditorProvider (ext host)
+  participant Payload as LiveRequestPayloadProvider (ext host)
+  participant PayloadUI as Raw Payload view (webview)
+
+  rect rgb(230, 240, 255)
+    note over Webview,Provider: Follow OFF (stick to selection)
+    User->>Webview: Change conversation dropdown
+    Webview->>Provider: postMessage(selectSession)
+    Provider->>Provider: set activeSessionKey + currentRequest
+    Provider->>Payload: executeCommand(setActiveSession)
+    Provider-->>Webview: postMessage(stateUpdate)
+    Payload-->>PayloadUI: postMessage(state)
   end
 
-  subgraph Extension Host
-    LREUI -->|message: selectSession| LREProv
-    LREUI -->|message: setFollowMode| LREProv
-    LREUI -->|command: payload.setActiveSession| PayloadProv
-    LREProv -->|"stateUpdate: request/session/follow"| LREUI
-    LREProv -->|command: payload.setActiveSession| PayloadProv
+  rect rgb(255, 245, 220)
+    note over Webview,Provider: Follow ON (newest intercepted wins)
+    Provider-->>Provider: onDidChange(request) from service
+    Provider->>Provider: if followLatest: activate latest request
+    Provider->>Payload: executeCommand(setActiveSession)
+    Provider-->>Webview: postMessage(stateUpdate)
+    Payload-->>PayloadUI: postMessage(state)
   end
-
-  subgraph Payload View
-    PayloadProv -->|state: messages JSON| PayloadUI
-  end
-
-  %% Follow ON: latest wins
-  LREProv -->|latest request wins| LREUI
-  LREProv -->|latest request wins| PayloadProv
-
-  %% Follow OFF: user selection is source
-  LREUI -->|manual selection| LREProv
-  LREUI -->|manual selection| PayloadProv
 ```
 
 ## Mode Semantics
@@ -46,9 +47,10 @@ flowchart TD
 
 ## Notes / Follow-ups
 
-- Today the webview sends a direct payload sync command on selection; we can simplify by letting the provider own payload sync in both modes.  
-- If we move to provider-owned sync, webview would only emit “intent” (selectSession/setFollowMode); provider always forwards the current active session to the payload provider.  
+- Provider-owned propagation is the simplest: webview emits only `selectSession` / `setFollowMode`, and the provider always forwards the active session to the payload view.  
 - Checkbox text: “Auto-follow latest” (checked = follow on).  
 - Visual cues: container flash on session change (when follow on); payload view flashes on payload content change.
 
-Let me know if you want the provider-only propagation (no direct webview → payload command) and I’ll update the flow accordingly.
+Questions for review:
+- Should “stick to selection” also prevent the payload view from auto-selecting unless the LRE is open (today it follows LRE/provider selection when available)?
+- Is workspace-scoped persistence the right default, or do you want optional global persistence?

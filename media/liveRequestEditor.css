@@ -178,6 +178,17 @@ body {
 	min-width: 220px;
 }
 
+.session-selector-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	width: 100%;
+}
+
+.session-selector-row vscode-button {
+	white-space: nowrap;
+}
+
 .follow-toggle {
 	display: flex;
 	align-items: center;
@@ -186,9 +197,65 @@ body {
 	align-self: flex-start;
 }
 
-.follow-toggle label {
+.follow-toggle-label {
 	font-size: 12px;
 	color: var(--vscode-descriptionForeground);
+}
+
+.toggle-switch {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 18px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.toggle-switch input {
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.toggle-switch-slider {
+	display: inline-block;
+	position: relative;
+	width: 34px;
+	height: 18px;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+	border-radius: 999px;
+	transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.toggle-switch-slider::before {
+	content: '';
+	position: absolute;
+	top: 1px;
+	left: 1px;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--vscode-foreground);
+	opacity: 0.85;
+	transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+.toggle-switch input:checked + .toggle-switch-slider {
+	background: var(--vscode-button-background);
+	border-color: var(--vscode-button-background);
+}
+
+.toggle-switch input:checked + .toggle-switch-slider::before {
+	transform: translateX(16px);
+	background: var(--vscode-button-foreground);
+	opacity: 1;
+}
+
+.toggle-switch input:focus-visible + .toggle-switch-slider {
+	box-shadow: 0 0 0 2px var(--vscode-focusBorder);
 }
 
 .session-selector-label {
@@ -198,6 +265,11 @@ body {
 
 .session-selector-dropdown {
 	width: 100%;
+}
+
+.session-selector-row .session-selector-dropdown {
+	flex: 1;
+	width: auto;
 }
 
 .metadata {

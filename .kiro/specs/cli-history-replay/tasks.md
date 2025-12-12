@@ -63,13 +63,13 @@
 
 - [ ] 11. LRE follow-mode binding + persistence  _Requirements: 10.1–10.4, 11.1–11.3_
   - [x] 11.1 Add follow-mode semantics (manual selection disables follow; follow enables newest-wins) and visual flash cues.
-  - [ ] 11.2 Fix webview event wiring so the dropdown selection reliably propagates to provider state (no stale sections/payload).
-  - [ ] 11.3 Persist follow-mode + last manual selection in the LRE webview state (`acquireVsCodeApi().setState`) and restore on reload.
-  - [ ] 11.4 Persist intercepted sessions across restart in `LiveRequestEditorService` (`workspaceState`) and rehydrate on activation.
+  - [x] 11.2 Fix webview event wiring so the dropdown selection reliably propagates to provider state (no stale sections/payload).
+  - [x] 11.3 Persist follow-mode + last manual selection in the LRE webview state (`acquireVsCodeApi().setState`) and restore on reload.
+  - [x] 11.4 Persist intercepted sessions across restart in `LiveRequestEditorService` (`workspaceState`) and rehydrate on activation.
 
 - [ ] 12. Open selected conversation in chat  _Requirements: 12.1–12.3_
-  - [ ] 12.1 Capture `ChatContext.chatSessionContext.chatSessionItem.resource` when available and store it on `EditableChatRequestMetadata`.
-  - [ ] 12.2 Add “Open in chat” button next to the LRE conversation dropdown that opens the stored session resource, or shows a fallback message.
+  - [x] 12.1 Capture `ChatContext.chatSessionContext.chatSessionItem.resource` when available and store it on `EditableChatRequestMetadata`.
+  - [x] 12.2 Add “Open in chat” button next to the LRE conversation dropdown that opens the stored session resource, or shows a fallback message.
 
 - [ ] 13. Declare session participants in package.json  _Requirements: 13.1–13.2_
-  - [ ] 13.1 Add `contributes.chatParticipants` entries for session-backed participants created at runtime (e.g. `copilotcli`, `copilot-cloud-agent`, `claude-code`, `copilot-live-replay`, `copilot-live-replay-fork`).
+  - [x] 13.1 Add `contributes.chatParticipants` entries for session-backed participants created at runtime (e.g. `copilotcli`, `copilot-cloud-agent`, `claude-code`, `copilot-live-replay`, `copilot-live-replay-fork`).
