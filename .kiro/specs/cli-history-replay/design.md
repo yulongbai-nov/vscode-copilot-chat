@@ -13,6 +13,49 @@ This MVP adds a small workflow that demonstrates “native-parity” history rep
 
 The goal is to show that we can approximate “native history replay” for Copilot CLI by using the same underlying session and history machinery, without needing special VS Code core APIs.
 
+## Addendum: Live Request Editor session binding & persistence
+
+This MVP also improves the **Live Request Editor (LRE)** so it can act as a reliable “source of truth” UI for inspecting and forking prompts:
+
+- The LRE conversation dropdown, sections view, and raw payload view stay **in sync**.
+- “Follow latest” is explicit, user-controlled, and persists across reloads.
+- Intercepted sessions survive **VS Code restart** so prior captured requests remain inspectable.
+- When the intercepted request is associated with a chat-session resource, the LRE can **open it in the native chat session editor**.
+
+### Current Architecture (LRE)
+
+- `LiveRequestEditorService` (`src/extension/prompt/node/liveRequestEditorService.ts`)
+  - Captures and edits `EditableChatRequest` objects keyed by `{ sessionId, location }`.
+  - Emits `onDidChange`, `onDidChangeMetadata`, and `onDidRemoveRequest`.
+- `LiveRequestEditorProvider` (`src/extension/prompt/vscode-node/liveRequestEditorProvider.ts`)
+  - Webview view provider for `github.copilot.liveRequestEditor`.
+  - Maintains an **active session** and a `followLatest` mode that decides which request is shown.
+- `LiveRequestPayloadProvider` (`src/extension/prompt/vscode-node/liveRequestPayloadProvider.ts`)
+  - Dedicated draggable webview view (`github.copilot.liveRequestPayload`) showing the raw `messages[]` JSON for the active session.
+
+### Proposed Architecture (binding + persistence)
+
+**Data sources**
+- Source of truth for intercepted requests: `LiveRequestEditorService` (persisted).
+- Source of truth for “follow latest” & last manual selection: LRE webview persisted state (`acquireVsCodeApi().setState`), mirrored into the provider via messages.
+
+**Persistence**
+- Persist intercepted requests in `workspaceState` (versioned schema) so they survive restart.
+- Rehydrate requests into the service on activation; providers query the service for current requests on init.
+- Persist the LRE UI preferences (`followLatest`, last manually-selected session key) via webview `setState`.
+
+**Open in chat**
+- Capture `ChatContext.chatSessionContext.chatSessionItem.resource` (when present) during request handling and store it on the request metadata.
+- “Open in chat” uses this resource to `vscode.open` the session editor (best-effort; sessions without a resource can only be focused, not opened to an exact historic session via public APIs).
+
+### Control Flow (summary)
+
+- Manual dropdown selection:
+  - Forces `followLatest = false` and sets provider active session.
+  - Sections view and payload view update from the same active session key.
+- Follow latest enabled:
+  - New intercepted requests can pre-empt the active session; views flash to indicate the change.
+
 ## Current Architecture (CLI sessions)
 
 Key components involved in Copilot CLI chat sessions:

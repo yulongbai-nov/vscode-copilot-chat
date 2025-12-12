@@ -56,3 +56,20 @@
   - [ ] 9.5 Add targeted unit tests (or lightweight integration tests) that:
     - Verify the diff command builds the expected JSON strings for a simple request with one or two edited messages, and  
     - Assert that the “before” payload matches `originalMessages` while the “after” payload reflects edited `messages`, without mutating any underlying state.  
+
+- [x] 10. Live Request Payload view (dedicated)  _Requirements: 10.4_
+  - [x] 10.1 Add a draggable webview view `github.copilot.liveRequestPayload` that renders the active request `messages[]` as pretty JSON and supports copy/open-in-editor.
+  - [x] 10.2 Wire the Live Request Editor provider to notify the payload view when the active session changes.
+
+- [ ] 11. LRE follow-mode binding + persistence  _Requirements: 10.1–10.4, 11.1–11.3_
+  - [x] 11.1 Add follow-mode semantics (manual selection disables follow; follow enables newest-wins) and visual flash cues.
+  - [ ] 11.2 Fix webview event wiring so the dropdown selection reliably propagates to provider state (no stale sections/payload).
+  - [ ] 11.3 Persist follow-mode + last manual selection in the LRE webview state (`acquireVsCodeApi().setState`) and restore on reload.
+  - [ ] 11.4 Persist intercepted sessions across restart in `LiveRequestEditorService` (`workspaceState`) and rehydrate on activation.
+
+- [ ] 12. Open selected conversation in chat  _Requirements: 12.1–12.3_
+  - [ ] 12.1 Capture `ChatContext.chatSessionContext.chatSessionItem.resource` when available and store it on `EditableChatRequestMetadata`.
+  - [ ] 12.2 Add “Open in chat” button next to the LRE conversation dropdown that opens the stored session resource, or shows a fallback message.
+
+- [ ] 13. Declare session participants in package.json  _Requirements: 13.1–13.2_
+  - [ ] 13.1 Add `contributes.chatParticipants` entries for session-backed participants created at runtime (e.g. `copilotcli`, `copilot-cloud-agent`, `claude-code`, `copilot-live-replay`, `copilot-live-replay-fork`).

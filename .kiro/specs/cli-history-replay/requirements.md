@@ -124,3 +124,43 @@ The feature is intended as a sample / internal tool to explore “native-parity�
    - Use a stable, descriptive title (for example, `Live Request Editor · Payload diff · <shortId>`).  
 4. THE Live Request Editor webview replay metadata row SHALL surface a **“Show payload diff”** button adjacent to the existing replay actions (for example, next to “Replay edited prompt in CLI session”), which invokes the diff command for the currently selected request/replay.  
 5. THE diff helper SHALL be read-only and SHALL NOT modify the underlying request, replay state, or any Copilot CLI sessions; its sole purpose is observability.  
+
+### Requirement 10 – Live Request Editor follow mode and binding
+
+**User Story:** As a Copilot engineer using the Live Request Editor, I want the conversation dropdown, sections view, and raw payload view to stay synchronized so that changing the selected conversation always updates all views together.
+
+#### Acceptance Criteria
+
+1. THE system SHALL maintain a single “active session” selection in the Live Request Editor that is reflected by the dropdown UI.
+2. WHEN the user changes the dropdown selection, THE system SHALL set `followLatest=false` and the follow UI SHALL reflect that state.
+3. WHEN the active session changes, THEN the Live Request Editor sections view SHALL render the request for that active session.
+4. WHEN the active session changes, THEN the Live Request Payload view SHALL render the `messages[]` JSON for the same active session.
+
+### Requirement 11 – Persist intercepted sessions across restart
+
+**User Story:** As a Copilot engineer debugging prompts, I want intercepted sessions/requests to survive VS Code restart so that previously captured conversations remain inspectable.
+
+#### Acceptance Criteria
+
+1. THE system SHALL persist intercepted `EditableChatRequest` entries (keyed by `{ sessionId, location }`) in workspace-scoped storage.
+2. WHEN VS Code restarts, THEN the Live Request Editor and Live Request Payload views SHALL be able to show previously intercepted sessions without requiring a new request to be sent.
+3. THE persisted data SHALL be schema-versioned and the system SHALL ignore/clear incompatible persisted data safely.
+
+### Requirement 12 – Open selected conversation in native chat session editor (best-effort)
+
+**User Story:** As a Copilot engineer inspecting a captured request, I want a quick way to jump from the Live Request Editor to the corresponding native chat session editor when a session resource exists.
+
+#### Acceptance Criteria
+
+1. THE system SHALL provide an “Open in chat” action in the Live Request Editor UI for the currently selected conversation.
+2. WHEN the intercepted request is associated with a `ChatSessionItem.resource`, THEN the system SHALL open that resource via `vscode.open`.
+3. WHEN no session resource is available for the intercepted request, THEN the system SHALL fall back to focusing the chat surface and SHOULD show a non-blocking message explaining the limitation.
+
+### Requirement 13 – Declare dynamic chat participants in package.json
+
+**User Story:** As a Copilot engineer, I want chat-session-backed participants (CLI, cloud agent, replay, etc.) to register without “Unknown agent”/manifest errors so that session views and replay features work reliably.
+
+#### Acceptance Criteria
+
+1. THE system SHALL declare chat participants that are created dynamically via `vscode.chat.createChatParticipant(...)` in `package.json` `contributes.chatParticipants`.
+2. WHEN the extension activates, THEN it SHALL NOT emit “Unknown agent: …” errors for these participants.
