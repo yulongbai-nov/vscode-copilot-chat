@@ -229,6 +229,14 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 							display: flex;
 							flex-direction: column;
 							gap: 8px;
+							border: 1px solid var(--vscode-panel-border);
+							border-radius: 8px;
+							transition: border-color 0.35s ease, box-shadow 0.35s ease, background-color 0.35s ease;
+						}
+						.container.flash {
+							border-color: var(--vscode-inputValidation-warningBorder);
+							box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.35);
+							background-color: color-mix(in srgb, var(--vscode-inputValidation-warningBackground) 40%, transparent);
 						}
 						.header {
 							display: flex;
@@ -292,13 +300,22 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 						const vscode = acquireVsCodeApi();
 						const payloadEl = document.getElementById('payload');
 						const subtitle = document.getElementById('subtitle');
+						const container = document.querySelector('.container');
+						let lastContent = '';
 						window.addEventListener('message', event => {
 							if (event.data?.type !== 'state') {
 								return;
 							}
 							const payload = event.data.payload;
-							payloadEl.textContent = payload?.content ?? '// No active live request found.';
+							const nextContent = payload?.content ?? '// No active live request found.';
+							const changed = nextContent !== lastContent;
+							payloadEl.textContent = nextContent;
 							subtitle.textContent = payload?.label ?? 'Awaiting an intercepted chat request...';
+							if (changed && container) {
+								container.classList.add('flash');
+								window.setTimeout(() => container.classList.remove('flash'), 1200);
+								lastContent = nextContent;
+							}
 						});
 						document.getElementById('copy')?.addEventListener('click', () => {
 							vscode.postMessage({ type: 'copy', content: payloadEl.textContent ?? '' });
