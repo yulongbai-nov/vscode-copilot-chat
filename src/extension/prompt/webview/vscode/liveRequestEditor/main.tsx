@@ -1190,6 +1190,10 @@ const App: React.FC = () => {
 		}
 		setActiveSessionKey(value);
 		sendMessage('selectSession', { sessionKey: value });
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestPayload.setActiveSession',
+			args: [value]
+		});
 	}, [activeSessionKey, sendMessage]);
 	const formatSessionTooltip = React.useCallback((session: SessionSummary) => {
 		const created = session.createdAt ? `Created ${formatTimestamp(session.createdAt)}` : undefined;
