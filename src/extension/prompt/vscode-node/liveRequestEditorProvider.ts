@@ -345,9 +345,14 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		const key = this._toCompositeKey(request.sessionId, request.location);
 		this._requests.set(key, request);
 		const pendingCompositeKey = this._getPendingCompositeKey();
+		const incomingTimestamp = request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? Date.now();
+		const currentTimestamp = this._currentRequest
+			? this._currentRequest.metadata?.lastUpdated ?? this._currentRequest.metadata?.createdAt ?? 0
+			: 0;
 		const shouldActivate = !this._activeSessionKey
 			|| this._activeSessionKey === key
-			|| (pendingCompositeKey !== undefined && pendingCompositeKey === key);
+			|| (pendingCompositeKey !== undefined && pendingCompositeKey === key)
+			|| incomingTimestamp >= currentTimestamp;
 		if (shouldActivate) {
 			this._activeSessionKey = key;
 			this._currentRequest = request;

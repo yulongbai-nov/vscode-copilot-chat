@@ -808,6 +808,7 @@ const App: React.FC = () => {
 	const sectionsEndRef = React.useRef<HTMLDivElement | null>(null);
 	const prevSectionsLengthRef = React.useRef<number>(0);
 	const [bannerPulse, setBannerPulse] = React.useState(false);
+	const [sessionFlash, setSessionFlash] = React.useState(false);
 	const mode = interception?.mode ?? 'off';
 	const autoOverride = interception?.autoOverride;
 	const captureActive = mode === 'autoOverride' && autoOverride?.capturing;
@@ -909,6 +910,15 @@ const App: React.FC = () => {
 		}
 		setBannerPulse(false);
 	}, [interception?.pending?.nonce]);
+
+	React.useEffect(() => {
+		if (!activeSessionKey) {
+			return;
+		}
+		setSessionFlash(true);
+		const handle = window.setTimeout(() => setSessionFlash(false), 1200);
+		return () => window.clearTimeout(handle);
+	}, [activeSessionKey]);
 
 	React.useEffect(() => {
 		setEditingSectionId(null);
@@ -1172,7 +1182,7 @@ const App: React.FC = () => {
 	const replaySummary = replay?.projection;
 
 	return (
-		<>
+		<div className={`app-root${sessionFlash ? ' session-flash' : ''}`}>
 			<div className="status-banner">
 				<div className="header">
 					<div className="header-left">
@@ -1486,7 +1496,7 @@ const App: React.FC = () => {
 				))}
 				<div ref={sectionsEndRef} />
 			</div>
-		</>
+		</div>
 	);
 };
 

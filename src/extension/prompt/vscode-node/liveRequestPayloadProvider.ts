@@ -48,7 +48,10 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 	private _handleRequestUpdated(request: EditableChatRequest): void {
 		const key = this._toKey(request.sessionId, request.location);
 		this._requests.set(key, request);
-		if (!this._activeSessionKey) {
+		const incomingTimestamp = this._getTimestamp(request);
+		const active = this._activeSessionKey ? this._requests.get(this._activeSessionKey) : undefined;
+		const activeTimestamp = active ? this._getTimestamp(active) : 0;
+		if (!this._activeSessionKey || incomingTimestamp >= activeTimestamp) {
 			this._activeSessionKey = key;
 		}
 		this._postState();
@@ -152,6 +155,10 @@ export class LiveRequestPayloadProvider extends Disposable implements vscode.Web
 			this._activeSessionKey = this._toKey(candidate.sessionId, candidate.location);
 		}
 		return candidate;
+	}
+
+	private _getTimestamp(request: EditableChatRequest): number {
+		return request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0;
 	}
 
 	private _buildLabel(request: EditableChatRequest): string {
