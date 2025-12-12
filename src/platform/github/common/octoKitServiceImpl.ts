@@ -314,9 +314,6 @@ export class OctoKitService extends BaseOctoKitService implements IOctoKitServic
 		}
 		return this.getFileContentWithToken(owner, repo, ref, path, authToken);
 	}
-<<<<<<< HEAD
-}
-=======
 
 	async getUserOrganizations(): Promise<string[]> {
 		const authToken = (await this._authService.getPermissiveGitHubSession({ createIfNone: true }))?.accessToken;
@@ -334,4 +331,3 @@ export class OctoKitService extends BaseOctoKitService implements IOctoKitServic
 		return this.getOrganizationRepositoriesWithToken(org, authToken);
 	}
 }
->>>>>>> upstream/main

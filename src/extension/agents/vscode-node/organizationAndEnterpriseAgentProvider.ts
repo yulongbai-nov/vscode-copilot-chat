@@ -192,19 +192,8 @@ export class OrganizationAndEnterpriseAgentProvider extends Disposable implement
 				// Cache directory might not exist yet
 			}
 
-<<<<<<< HEAD
-				// Fetch full agent details including prompt content
-				const agentDetails = await this.octoKitService.getCustomAgentDetails(
-					agent.repo_owner,
-					agent.repo_name,
-					agent.name,
-					agent.version,
-					agent
-				);
-=======
 			// Track which orgs we've successfully processed
 			const processedOrgDirs = new Set<string>();
->>>>>>> upstream/main
 
 			// Process each organization
 			for (const org of agentsByOrg.keys()) {
