@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import path from 'path';
+import { execSync } from 'child_process';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { IFetcherService } from '../../../../platform/networking/common/fetcherService';
@@ -14,7 +15,15 @@ import { CommandExecutor, ICommandExecutor } from '../../vscode-node/util';
 import { FixtureFetcherService } from './util';
 
 // Disable these in CI to avoid dotnet/nuget cold-start timeouts; run locally when needed.
-const RUN_DOTNET_CLI_TESTS = !process.env['CI'] && !process.env['BUILD_ARTIFACTSTAGINGDIRECTORY'];
+const HAS_DOTNET = (() => {
+	try {
+		execSync('dotnet --version', { stdio: 'ignore' });
+		return true;
+	} catch {
+		return false;
+	}
+})();
+const RUN_DOTNET_CLI_TESTS = HAS_DOTNET && !process.env['CI'] && !process.env['BUILD_ARTIFACTSTAGINGDIRECTORY'];
 
 describe.runIf(RUN_DOTNET_CLI_TESTS)('get nuget MCP server info using dotnet CLI', { timeout: 30_000 }, () => {
 	let testingServiceCollection: TestingServiceCollection;
