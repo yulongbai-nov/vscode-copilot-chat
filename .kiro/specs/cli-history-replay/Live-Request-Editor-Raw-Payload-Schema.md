@@ -138,13 +138,15 @@
 
   Core logic:
   recomputeMessages(request: EditableChatRequest)
-  src/extension/prompt/node/liveRequestEditorService.ts:886
+  src/extension/prompt/node/liveRequestEditorService.ts:1121
 
   For each section:
 
   1. Skip if section.deleted (message is dropped).
   2. Get base message:
-      - If request.originalMessages[section.sourceMessageIndex] exists:
+      - If section.message exists:
+          - message = deepClone(section.message) (preserves leaf-level edits to nested fields).
+      - Else if request.originalMessages[section.sourceMessageIndex] exists:
           - message = deepClone(originalMessage) (keeps role, content parts, toolCalls, etc.).
       - Else:
           - message = createMessageShell(section.kind) (role‑appropriate shell).

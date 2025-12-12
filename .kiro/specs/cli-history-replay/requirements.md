@@ -114,16 +114,15 @@ The feature is intended as a sample / internal tool to explore “native-parity�
 
 #### Acceptance Criteria
 
-1. THE system SHALL expose a command (e.g. `github.copilot.liveRequestEditor.showReplayPayloadDiff`) that, given a `LiveRequestReplayKey` or `LiveRequestSessionKey`, opens a VS Code diff editor showing the **original** vs **edited** `Raw.ChatMessage[]` payloads for the current Live Request Editor replay.  
+1. THE system SHALL expose a command `github.copilot.liveRequestEditor.showReplayPayloadDiff` that, given a `LiveRequestSessionKey`, opens a VS Code diff editor showing the **original** vs **edited** `Raw.ChatMessage[]` payloads for that request.  
 2. WHEN invoked from the Live Request Editor replay row for a given request, THE system SHALL:
-   - Use `LiveRequestEditorService` to obtain the current edited payload (the same payload that `buildReplayForRequest(...)` would produce for send/CLI fork), and  
-   - Rebuild the original payload from `EditableChatRequest.originalMessages` (or equivalent source of truth), ensuring both sides use the same serialization shape (for example, pretty-printed JSON with stable key ordering).  
+   - Use `EditableChatRequest.originalMessages` as the “before” payload, and  
+   - Use `LiveRequestEditorService.getMessagesForSend(...)` as the “after” payload (the same message array that will be sent / used for replay & CLI fork).  
 3. THE diff view SHALL:
-   - Use in-memory, untitled documents (no workspace files),  
-   - Label the left side clearly as “Original payload” and the right side as “Edited payload”, and  
-   - Use a stable, descriptive title (for example, `Live Request Editor · Payload diff · <shortId>`).  
+   - Use in-memory, untitled documents (no workspace files), and  
+   - Use a stable, descriptive diff title (for example, `Live Request Editor · Payload diff · <shortId>`).  
 4. THE Live Request Editor webview replay metadata row SHALL surface a **“Show payload diff”** button adjacent to the existing replay actions (for example, next to “Replay edited prompt in CLI session”), which invokes the diff command for the currently selected request/replay.  
-5. THE diff helper SHALL be read-only and SHALL NOT modify the underlying request, replay state, or any Copilot CLI sessions; its sole purpose is observability.  
+5. THE diff helper SHALL NOT modify the underlying request, replay state, or any Copilot CLI sessions; its sole purpose is observability (the diff documents themselves may be editable but are untitled/ephemeral).  
 
 ### Requirement 10 – Live Request Editor follow mode and binding
 

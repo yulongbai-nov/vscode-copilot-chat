@@ -26,10 +26,10 @@ See also: `docs/copilot-chat-view-apis.md` (especially the **Replay → native C
 - We can open/focus only sessions for schemes we register; the default Copilot provider is contributed outside this repo.
 - We can render payload with the default agent ID inside the replay session, but the session label/type remains custom (and shows “preview”).
 
-## Feasible Interim (within current APIs)
-- Keep the replay tab projection-only.
-- On “Start chatting from this replay,” open/focus a fork session we own (e.g., `copilot-live-replay-fork`) seeded with the replay payload and using the default agent ID; enable model picker/attachments there.
-- Caveat: still a custom session type (likely “preview” badge); not the true native Copilot chat.
+## Implemented Interim (within current APIs)
+- The replay tab stays projection-only.
+- “Start chatting from this replay” opens a fork session we own (`copilot-live-replay-fork`) seeded with the replay payload while using the default agent ID (model picker/attachments available).
+- Caveat: it is still a custom session type (may show “preview”); there is still no API here to inject history into the built-in Copilot provider.
 
 ## Open Questions / Concerns
 - Is there an internal Copilot session API/command (outside this repo) to create/fork the default chat with injected history? If yes, we can wire it; if not, we’re limited to custom providers.
@@ -37,7 +37,7 @@ See also: `docs/copilot-chat-view-apis.md` (especially the **Replay → native C
 - Persistence: If we create a fork provider, should it persist sessions or stay ephemeral like replay?
 - Telemetry: How to attribute forked sessions vs. replay projection?
 
-## Next Steps (if no native API)
-1) Implement a “replay-fork” session provider that seeds payload and uses default agent ID, projection-only replay view remains.
-2) Clearly label the fork as “Forked from <session> turn <id>” and surface a breadcrumb/toast.
-3) Keep monitoring for a native Copilot session creation API to remove the custom session/preview badge.***
+## Status / Next Steps
+1) ✅ Fork session provider implemented (`copilot-live-replay-fork`) and registered in `package.json` chat participants to avoid “Unknown agent” errors.
+2) Optional UX: label the fork as “Forked from <session> turn <id>” and surface a breadcrumb/toast.
+3) Keep monitoring for a native Copilot session creation API to remove the custom session/preview badge.

@@ -6,6 +6,7 @@ This guide explains how to use the Live Request Editor, the metadata view, and t
 - Enable `github.copilot.chat.advanced.livePromptEditorEnabled`.
 - Open the **Live Request Editor** view (`github.copilot.liveRequestEditor.toggle` or the Copilot side panel).
 - Dock the **Live Request Metadata** tree (`github.copilot.liveRequestMetadata`) under the chat input for quick status.
+- Optional: open the **Live Request Payload** view (`github.copilot.liveRequestPayload`) to pin/drag a raw `messages[]` JSON pane alongside the editor.
 - Optional settings:
   - `github.copilot.chat.promptInspector.sessionMetadata.fields` (default `["sessionId","requestId"]`, app-scoped).
   - `github.copilot.chat.promptInspector.extraSections` (`requestOptions`, `rawRequest` outlines).
@@ -13,7 +14,7 @@ This guide explains how to use the Live Request Editor, the metadata view, and t
 
 ## What you see
 - **Live Request Editor (webview)**: section cards with Edit/Delete/Restore, token meter, interception/Auto banners.
-- **Conversation picker**: always enabled; labels include the surface (`Panel`, `Editor`, `Terminal`, etc.), the conversation/debug name, and the last 6 chars of the session id to disambiguate concurrent sessions.
+- **Conversation picker**: enabled once at least one request is captured; labels include the surface (`Panel`, `Editor`, `Terminal`, etc.), the conversation/debug name, and the last 6 chars of the session id to disambiguate concurrent sessions.
 - **Metadata strip**: shows model/location/budget plus Request ID and Session ID side-by-side so you can confirm you are editing the latest turn.
 - **Live Request Metadata (tree)**: read-only metadata + token budget + optional outlines.
 
@@ -41,11 +42,7 @@ Raw Request Payload
 - Idle state: “Live Request Editor idle — send a chat request to populate metadata.”
 - When `sessionMetadata.fields` is empty, the metadata section hides but the token node/placeholder remains.
 - Outline nodes truncate after a safety budget and surface “... entries truncated ...” markers.
-<<<<<<< HEAD
 - Models that reject sampling controls (e.g., `o1`, `o1-mini`, any `gpt-5.1*` including codex / codex-max / mini) have `temperature` / `top_p` / `n` stripped before send, so the Request Options node omits them.
-=======
-- Models that reject sampling controls (e.g., `o1`, `o1-mini`, any `gpt-5.1*` including codex / codex-max / mini) have `temperature` / `top_p` / `n` stripped before send, so the Request Options node omits them.
->>>>>>> 2f92728c (Strip sampling for all gpt-5.1 variants and document)
 
 ## Modes
 - **Send normally**: Sends immediately; editor is view-only.

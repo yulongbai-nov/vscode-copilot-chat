@@ -33,7 +33,7 @@ This MVP also improves the **Live Request Editor (LRE)** so it can act as a reli
 - `LiveRequestPayloadProvider` (`src/extension/prompt/vscode-node/liveRequestPayloadProvider.ts`)
   - Dedicated draggable webview view (`github.copilot.liveRequestPayload`) showing the raw `messages[]` JSON for the active session.
 
-### Proposed Architecture (binding + persistence)
+### Implemented Architecture (binding + persistence)
 
 **Data sources**
 - Source of truth for intercepted requests: `LiveRequestEditorService` (persisted).
@@ -84,7 +84,7 @@ Key components involved in Copilot CLI chat sessions:
   - Handles requests in the CLI session chat editor.
   - Uses `ICopilotCLISessionService` to get or create sessions and then calls `session.object.handleRequest(...)`.
 
-## Proposed Architecture (CLI history replay sample)
+## Implemented Architecture (CLI history replay sample)
 
 We add a **small, opt-in sample command** that:
 
@@ -159,7 +159,7 @@ In addition, we add a **simple sample command** that creates a brand new Copilot
 High-level flow for the sample replay:
 
 1. User right-clicks a Copilot CLI session in the chat sessions view.
-2. Chooses “Replay in new CLI session (sample)” (exact label TBD).
+2. Chooses “Replay Session in New CLI Session (Sample)” (`github.copilot.cli.sessions.replaySampleNative`).
 3. Extension handler:
    - Loads source session (read-only).
    - Creates a new session.

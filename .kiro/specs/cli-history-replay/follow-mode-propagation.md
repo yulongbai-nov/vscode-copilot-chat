@@ -1,56 +1,63 @@
 # Live Request Editor Follow Mode Change Propagation
 
-This note captures how session/selection changes propagate between the Live Request Editor webview, the extension host, and the payload view when **Auto-follow** is on vs off.
+This note captures how session/selection changes propagate between the Live Request Editor (LRE) webview, the extension host, and the raw payload view when **Auto-follow latest** is on vs off.
 
-## Flow Overview
+## Recommendation (Human Cognition)
+
+For debugging and prompt forensics, “surprising context switches” are the biggest source of confusion: the user’s attention and mental model stay on *what they selected*, but the UI silently moves to *a different session*.
+
+Recommendation:
+
+- **Auto-follow OFF** should not auto-switch the active session, even if new requests arrive for other sessions.
+- **Auto-follow ON** is for monitoring: the active session may switch to the newest intercepted request.
+- **Make switching explicit**: the Auto-follow toggle is the only “mode switch”.
+
+## Propagation Model (Source Of Truth)
+
+Even though the dropdown and toggle *feel* like “two-way binding”, the implementation is the idiomatic React/extension-host pattern:
+
+- **Extension host is the source of truth** for `activeSessionKey` and `followLatest`.
+- Webviews send **events** (`selectSession`, `setFollowMode`) to request changes.
+- Extension host broadcasts **state** (`stateUpdate`) back to webviews.
+
+## Flow Overview (Mermaid)
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant User as User
-  participant Webview as Live Request Editor (webview)
-  participant Provider as LiveRequestEditorProvider (ext host)
+  participant LRE_UI as Live Request Editor (webview)
+  participant LRE as LiveRequestEditorProvider (ext host)
+  participant Service as LiveRequestEditorService (ext host)
   participant Payload as LiveRequestPayloadProvider (ext host)
-  participant PayloadUI as Raw Payload view (webview)
+  participant Payload_UI as Raw Payload View (webview)
 
-  rect rgb(230, 240, 255)
-    note over Webview,Provider: Follow OFF (stick to selection)
-    User->>Webview: Change conversation dropdown
-    Webview->>Provider: postMessage(selectSession)
-    Provider->>Provider: set activeSessionKey + currentRequest
-    Provider->>Payload: executeCommand(setActiveSession)
-    Provider-->>Webview: postMessage(stateUpdate)
-    Payload-->>PayloadUI: postMessage(state)
-  end
+  alt Auto-follow OFF
+    User->>LRE_UI: Select conversation in dropdown
+    LRE_UI->>LRE: postMessage(selectSession)
+    LRE->>LRE: set activeSessionKey + currentRequest
+    LRE->>Payload: executeCommand(setActiveSession)
+    LRE-->>LRE_UI: postMessage(stateUpdate)
+    Payload-->>Payload_UI: postMessage(state)
 
-  rect rgb(255, 245, 220)
-    note over Webview,Provider: Follow ON (newest intercepted wins)
-    Provider-->>Provider: onDidChange(request) from service
-    Provider->>Provider: if followLatest: activate latest request
-    Provider->>Payload: executeCommand(setActiveSession)
-    Provider-->>Webview: postMessage(stateUpdate)
-    Payload-->>PayloadUI: postMessage(state)
+    Service-->>LRE: onDidChange(new request)
+    LRE-->>LRE_UI: postMessage(stateUpdate sessions list)
+    Note over LRE_UI: Active session stays unchanged
+  else Auto-follow ON (newest intercepted wins)
+    Service-->>LRE: onDidChange(new request)
+    LRE->>LRE: activate latest request
+    LRE->>Payload: executeCommand(setActiveSession)
+    LRE-->>LRE_UI: postMessage(stateUpdate)
+    Payload-->>Payload_UI: postMessage(state)
   end
 ```
 
-## Mode Semantics
+## Decisions (Current)
 
-- **Follow ON (Auto-follow)**  
-  - Source of change: the newest intercepted request.  
-  - Provider auto-activates the latest request (`lastUpdated`/`createdAt`) and posts `stateUpdate` (active session + payload) to the Live Request Editor webview.  
-  - Provider also notifies the payload provider to render the same active session. Dropdown reflects the active session; payload flashes on change.
+- **Single mode**: “Stick” is just Auto-follow OFF (`followLatest=false`); no separate state.
+- **Workspace-scoped persistence** is the default (captured requests are not global).
+- **Flash cue (implemented)**: the LRE border flashes when the active session changes due to Auto-follow being ON.
 
-- **Follow OFF (Stick)**  
-  - Source of change: user selection in the dropdown.  
-  - Webview sends `selectSession` to the provider and `payload.setActiveSession` to the payload provider; followLatest is set `false`.  
-  - Provider activates only the selected session and posts `stateUpdate` with `followLatest=false`. Payload provider locks to that session. Newer requests do not pre-empt until the user re-selects or re-enables follow.
+## Questions For Review
 
-## Notes / Follow-ups
-
-- Provider-owned propagation is the simplest: webview emits only `selectSession` / `setFollowMode`, and the provider always forwards the active session to the payload view.  
-- Checkbox text: “Auto-follow latest” (checked = follow on).  
-- Visual cues: container flash on session change (when follow on); payload view flashes on payload content change.
-
-Questions for review:
-- Should “stick to selection” also prevent the payload view from auto-selecting unless the LRE is open (today it follows LRE/provider selection when available)?
-- Is workspace-scoped persistence the right default, or do you want optional global persistence?
+- None (MVP): no separate “Jump to latest” button; use the Auto-follow switch and dropdown selection.
