@@ -94,6 +94,7 @@ interface LiveRequestSectionMetadata {
 	name?: string;
 	toolCallId?: string;
 	toolInvocation?: ToolInvocationMetadata;
+	toolCalls?: Array<{ id?: string; name?: string; arguments?: string }>;
 }
 
 interface LiveRequestSection {
@@ -389,14 +390,22 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		}
 		return DOMPurify.sanitize(markdown.render(section.content ?? ''));
 	}, [section.content]);
+	const assistantToolCalls = React.useMemo(() => {
+		if (section.kind !== 'assistant') {
+			return undefined;
+		}
+		const calls = section.metadata?.toolCalls;
+		if (!Array.isArray(calls) || !calls.length) {
+			return undefined;
+		}
+		return calls as Array<{ id?: string; name?: string; arguments?: string }>;
+	}, [section]);
+
 	const toolInvocation = React.useMemo(() => {
 		if (section.kind !== 'tool') {
 			return undefined;
 		}
-		if (section.metadata?.toolInvocation) {
-			return section.metadata.toolInvocation;
-		}
-		if (section.metadata?.name || section.metadata?.toolCallId) {
+		if (section.metadata?.toolCallId || section.metadata?.name) {
 			return {
 				id: typeof section.metadata.toolCallId === 'string' ? section.metadata.toolCallId : undefined,
 				name: typeof section.metadata.name === 'string' ? section.metadata.name : undefined
@@ -404,7 +413,6 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		}
 		return undefined;
 	}, [section]);
-	const toolArguments = toolInvocation?.arguments?.trim();
 
 	React.useEffect(() => {
 		if (isEditing) {
@@ -600,25 +608,41 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				id={sectionBodyId}
 				aria-hidden={collapsed && !isEditing}
 			>
-				{toolInvocation ? (
+				{assistantToolCalls ? (
 					<div className="section-tool-details">
 						<div className="tool-name-row">
-							<span className="tool-label">Tool</span>
+							<span className="tool-label">Tool calls</span>
+						</div>
+						{assistantToolCalls.map((call, index) => (
+							<div className="tool-call-block" key={call.id ?? `${section.id}-toolcall-${index}`}>
+								<div className="tool-name-row">
+									<span className="tool-name">{call.name ?? 'Unknown tool'}</span>
+									{call.id ? <span className="tool-id">#{call.id}</span> : null}
+								</div>
+								{call.arguments ? (
+									<div className="tool-args">
+										<div className="tool-label">Arguments</div>
+										<pre className="tool-args-block">
+											<code>{call.arguments}</code>
+										</pre>
+									</div>
+								) : (
+									<div className="tool-args tool-args-empty">No invocation arguments provided.</div>
+								)}
+							</div>
+						))}
+					</div>
+				) : null}
+				{!assistantToolCalls && toolInvocation ? (
+					<div className="section-tool-details">
+						<div className="tool-name-row">
+							<span className="tool-label">Tool call</span>
 							<span className="tool-name">{toolInvocation.name ?? 'Unknown tool'}</span>
 							{toolInvocation.id ? (
 								<span className="tool-id">#{toolInvocation.id}</span>
 							) : null}
 						</div>
-						{toolArguments ? (
-							<div className="tool-args">
-								<div className="tool-label">Arguments</div>
-								<pre className="tool-args-block">
-									<code>{toolArguments}</code>
-								</pre>
-							</div>
-						) : (
-							<div className="tool-args tool-args-empty">No invocation arguments provided.</div>
-						)}
+						<div className="tool-args tool-args-empty">Tool response content shown below.</div>
 					</div>
 				) : null}
 				{isEditing ? (
@@ -771,6 +795,7 @@ const App: React.FC = () => {
 	const [replayView, setReplayView] = React.useState<'payload' | 'projection'>('payload');
 	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
 	const [lastReplayUri, setLastReplayUri] = React.useState<string | undefined>(undefined);
+	const rawPayloadJson = React.useMemo(() => JSON.stringify(request?.messages ?? [], null, 2), [request?.messages]);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -1094,6 +1119,25 @@ const App: React.FC = () => {
 		});
 	}, [request, sendMessage]);
 
+	const handleCopyRawPayload = React.useCallback(() => {
+		const payloadText = rawPayloadJson ?? '';
+		if (!payloadText.length) {
+			return;
+		}
+		if (navigator?.clipboard?.writeText) {
+			navigator.clipboard.writeText(payloadText).catch(() => {
+				// Ignore clipboard errors.
+			});
+		} else {
+			const textarea = document.createElement('textarea');
+			textarea.value = payloadText;
+			document.body.appendChild(textarea);
+			textarea.select();
+			document.execCommand('copy');
+			document.body.removeChild(textarea);
+		}
+	}, [rawPayloadJson]);
+
 	const handleToggleReplayView = React.useCallback(() => {
 		const targetUri = replayUri ?? lastReplayUri;
 		if (!targetUri) {
@@ -1325,6 +1369,27 @@ const App: React.FC = () => {
 								onToggleCollapse={handleToggleCollapse}
 							/>
 						) : null}
+					</div>
+				) : null}
+
+				{request ? (
+					<div className="inspector-extra-panels">
+						<CollapsiblePanel
+							id="debug:rawPayload"
+							title="Raw payload (debug)"
+							description="Current request messages as JSON."
+							isCollapsed={collapsedIdSet.has('debug:rawPayload')}
+							onToggleCollapse={handleToggleCollapse}
+							actions={(
+								<vscode-button appearance="secondary" onClick={handleCopyRawPayload} title="Copy payload JSON" aria-label="Copy payload JSON">
+									<span className="codicon codicon-copy" aria-hidden="true" />
+								</vscode-button>
+							)}
+						>
+							<pre className="raw-json-block">
+								{rawPayloadJson}
+							</pre>
+						</CollapsiblePanel>
 					</div>
 				) : null}
 

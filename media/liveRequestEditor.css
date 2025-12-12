@@ -361,6 +361,19 @@ body {
 	word-break: break-word;
 }
 
+.raw-json-block {
+	margin: 8px 0 0 0;
+	padding: 8px;
+	background: var(--vscode-editorWidget-background);
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 6px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-size: 12px;
+	white-space: pre;
+	overflow: auto;
+	user-select: text;
+}
+
 .dirty-badge {
 	background: var(--vscode-editorWarning-foreground);
 	color: var(--vscode-editor-background);

@@ -85,32 +85,36 @@ function createSection(message: Raw.ChatMessage, index: number, tokenCount?: num
 }
 
 function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequestSection[]): void {
-	const toolCallMap = new Map<string, { id: string; name?: string; args?: string }>();
-	for (const message of messages) {
-		if (message.role === Raw.ChatRole.Assistant && 'toolCalls' in message && message.toolCalls?.length) {
-			for (const call of message.toolCalls) {
-				const name = call.function?.name;
-				const args = extractToolArguments(call.function?.arguments);
-				toolCallMap.set(call.id, { id: call.id, name, args });
-			}
+	const assistantToolCalls = new Map<number, Array<{ id?: string; name?: string; arguments?: string }>>();
+	for (let index = 0; index < messages.length; index++) {
+		const message = messages[index];
+		if (message.role !== Raw.ChatRole.Assistant || !('toolCalls' in message) || !message.toolCalls?.length) {
+			continue;
+		}
+		const entries: Array<{ id?: string; name?: string; arguments?: string }> = [];
+		for (const call of message.toolCalls) {
+			entries.push({
+				id: call.id,
+				name: call.function?.name,
+				arguments: extractToolArguments(call.function?.arguments)
+			});
+		}
+		if (entries.length) {
+			assistantToolCalls.set(index, entries);
 		}
 	}
 
 	for (const section of sections) {
-		if (section.kind !== 'tool') {
-			continue;
-		}
 		const metadata = section.metadata ?? {};
-		const toolCallId = typeof metadata.toolCallId === 'string' ? metadata.toolCallId : undefined;
-		const lookup = toolCallId ? toolCallMap.get(toolCallId) : undefined;
-		if (!lookup && !metadata.name) {
+		if (section.kind === 'assistant') {
+			const calls = assistantToolCalls.get(section.sourceMessageIndex);
+			if (calls?.length) {
+				metadata.toolCalls = calls;
+				section.metadata = metadata;
+			}
 			continue;
 		}
-		metadata.toolInvocation = {
-			id: lookup?.id ?? toolCallId,
-			name: lookup?.name ?? (typeof metadata.name === 'string' ? metadata.name : undefined),
-			arguments: lookup?.args
-		};
+		// Tool message sections keep only their toolCallId/name; invocation details render on the assistant card.
 		section.metadata = metadata;
 	}
 }
