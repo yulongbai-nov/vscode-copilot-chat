@@ -57,6 +57,12 @@ export interface EditableChatRequestMetadata {
 	intentId?: string;
 	endpointUrl?: string;
 	modelFamily?: string;
+	/**
+	 * When the intercepted request originated from a chat session editor backed by a
+	 * {@link vscode.ChatSessionItem}, this stores the session item resource URI so
+	 * the Live Request Editor can "Open in chat" for the same session.
+	 */
+	chatSessionResource?: string;
 	requestOptions?: OptionalChatRequestParams;
 	createdAt: number;
 	lastUpdated?: number;
@@ -175,6 +181,7 @@ export interface EditableChatRequestInit {
 	intentId?: string;
 	endpointUrl?: string;
 	modelFamily?: string;
+	chatSessionResource?: string;
 	requestOptions?: OptionalChatRequestParams;
 	isSubagent?: boolean;
 	maxPromptTokens?: number;

@@ -249,6 +249,7 @@ suite('defaultIntentRequestHandler', () => {
 			return undefined;
 		}
 		getRequest(): EditableChatRequest | undefined { return undefined; }
+		getAllRequests(): readonly EditableChatRequest[] { return []; }
 		getOriginalRequestMessages(): Raw.ChatMessage[] | undefined { return undefined; }
 		updateSectionContent(): EditableChatRequest | undefined { return undefined; }
 		updateLeafByPath(): EditableChatRequest | undefined { return undefined; }
@@ -414,6 +415,7 @@ suite('defaultIntentRequestHandler', () => {
 			undefined,
 			ChatLocation.Panel,
 			instaService.createInstance(ChatTelemetryBuilder, Date.now(), sessionId, undefined, turns.length > 1, request),
+			undefined,
 			{ maxToolCallIterations },
 			Event.None,
 		);

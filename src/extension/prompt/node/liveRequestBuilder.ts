@@ -24,6 +24,7 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 		intentId: ctx.intentId,
 		endpointUrl: ctx.endpointUrl,
 		modelFamily: ctx.modelFamily,
+		chatSessionResource: ctx.chatSessionResource,
 		requestOptions: ctx.requestOptions ? deepClone(ctx.requestOptions) : undefined,
 		createdAt: Date.now(),
 		lastUpdated: Date.now(),

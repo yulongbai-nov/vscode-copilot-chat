@@ -11,6 +11,7 @@ import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { IExtensionContribution } from '../../common/contributions';
 import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestOverrideScope, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
 import { LiveRequestMetadataProvider } from './liveRequestMetadataProvider';
@@ -276,6 +277,46 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const openInChatCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.openInChat',
+			async (sessionKey?: { sessionId?: string; location?: number } | string) => {
+				try {
+					const current = this._provider?.getCurrentRequest();
+					let key: { sessionId: string; location: ChatLocation } | undefined;
+
+					if (typeof sessionKey === 'string') {
+						const [sessionId, location] = sessionKey.split('::');
+						const parsed = Number(location);
+						if (sessionId && Number.isFinite(parsed)) {
+							key = { sessionId, location: parsed as ChatLocation };
+						}
+					} else if (sessionKey?.sessionId && typeof sessionKey.location === 'number') {
+						key = { sessionId: sessionKey.sessionId, location: sessionKey.location as ChatLocation };
+					} else if (current) {
+						key = { sessionId: current.sessionId, location: current.location as ChatLocation };
+					}
+
+					if (!key) {
+						return;
+					}
+
+					const request = this._liveRequestEditorService.getRequest(key);
+					const resourceText = request?.metadata?.chatSessionResource ?? current?.metadata?.chatSessionResource;
+					if (resourceText) {
+						const resource = vscode.Uri.parse(resourceText);
+						await vscode.commands.executeCommand('vscode.open', resource);
+						return;
+					}
+
+					await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+					vscode.window.setStatusBarMessage('No chat session editor resource captured for this conversation.', 2500);
+				} catch (error) {
+					this._logService.error('Failed to open conversation in chat', error);
+					vscode.window.showErrorMessage('Failed to open conversation in chat. See logs for details.');
+				}
+			}
+		);
+
 		const copyMetadataValue = vscode.commands.registerCommand(
 			'github.copilot.liveRequestMetadata.copyValue',
 			async (value?: string, label?: string) => {
@@ -297,6 +338,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(openRawPayloadCommand);
 		this._disposables.add(showPayloadViewCommand);
 		this._disposables.add(setPayloadSessionCommand);
+		this._disposables.add(openInChatCommand);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {

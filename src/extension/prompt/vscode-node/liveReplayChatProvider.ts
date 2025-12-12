@@ -154,12 +154,12 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		return {
 			history,
 			requestHandler: handlerEnabled
-				? async (request, _context, stream, token) => this._handleRequest(state, request, stream, token)
+				? async (request, context, stream, token) => this._handleRequest(state, request, context, stream, token)
 				: undefined
 		};
 	}
 
-	private async _handleRequest(state: ReplaySessionState, request: vscode.ChatRequest, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult> {
+	private async _handleRequest(state: ReplaySessionState, request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult> {
 		const composite = this._compositeKey(state.snapshot.key.sessionId, state.snapshot.key.location, state.snapshot.key.requestId);
 		try {
 			const forkId = state.resource.toString();
@@ -179,6 +179,7 @@ export class LiveReplayChatProvider extends Disposable implements vscode.ChatSes
 		const handler = this._instantiationService.createInstance(
 			ChatParticipantRequestHandler,
 			history,
+			context,
 			request,
 			stream,
 			token,
