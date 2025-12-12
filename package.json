@@ -1668,17 +1668,60 @@
 					}
 				]
 			},
-			{
-				"id": "github.copilot.chatReplay",
-				"name": "chatReplay",
-				"fullName": "Chat Replay",
-				"when": "debugType == 'vscode-chat-replay'",
-				"locations": [
-					"panel"
-				]
-			}
-		],
-		"languageModelChatProviders": [
+				{
+					"id": "github.copilot.chatReplay",
+					"name": "chatReplay",
+					"fullName": "Chat Replay",
+					"when": "debugType == 'vscode-chat-replay'",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "claude-code",
+					"name": "claude",
+					"fullName": "Claude Code CLI Agent",
+					"when": "config.github.copilot.chat.advanced.claudeCode.enabled",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilotcli",
+					"name": "cli",
+					"fullName": "Background Agent",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilot-cloud-agent",
+					"name": "cloud",
+					"fullName": "Cloud Agent",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilot-live-replay",
+					"name": "copilotReplay",
+					"fullName": "Copilot Replay",
+					"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilot-live-replay-fork",
+					"name": "copilotReplayFork",
+					"fullName": "Copilot Replay Fork",
+					"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+					"locations": [
+						"panel"
+					]
+				}
+			],
+			"languageModelChatProviders": [
 			{
 				"vendor": "copilot",
 				"displayName": "Copilot"
