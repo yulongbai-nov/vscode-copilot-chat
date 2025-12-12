@@ -1138,6 +1138,16 @@ const App: React.FC = () => {
 		}
 	}, [rawPayloadJson]);
 
+	const handleOpenRawPayload = React.useCallback(() => {
+		if (!rawPayloadJson) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.openRawPayload',
+			args: [rawPayloadJson]
+		});
+	}, [rawPayloadJson, sendMessage]);
+
 	const handleToggleReplayView = React.useCallback(() => {
 		const targetUri = replayUri ?? lastReplayUri;
 		if (!targetUri) {
@@ -1381,10 +1391,16 @@ const App: React.FC = () => {
 							isCollapsed={collapsedIdSet.has('debug:rawPayload')}
 							onToggleCollapse={handleToggleCollapse}
 							actions={(
-								<vscode-button appearance="secondary" onClick={handleCopyRawPayload} title="Copy payload JSON" aria-label="Copy payload JSON">
-									<span className="codicon codicon-copy" aria-hidden="true" />
-									&nbsp;Copy
-								</vscode-button>
+								<>
+									<vscode-button appearance="secondary" onClick={handleCopyRawPayload} title="Copy payload JSON" aria-label="Copy payload JSON">
+										<span className="codicon codicon-copy" aria-hidden="true" />
+										&nbsp;Copy
+									</vscode-button>
+									<vscode-button appearance="secondary" onClick={handleOpenRawPayload} title="Open payload in editor" aria-label="Open payload in editor">
+										<span className="codicon codicon-new-file" aria-hidden="true" />
+										&nbsp;Open
+									</vscode-button>
+								</>
 							)}
 						>
 							<pre className="raw-json-block">

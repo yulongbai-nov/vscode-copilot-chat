@@ -236,6 +236,23 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const openRawPayloadCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.openRawPayload',
+			async (payload?: unknown) => {
+				try {
+					const text = typeof payload === 'string' ? payload : undefined;
+					if (!text) {
+						return;
+					}
+					const doc = await vscode.workspace.openTextDocument({ content: text, language: 'json' });
+					await vscode.window.showTextDocument(doc, { preview: true });
+				} catch (error) {
+					this._logService.error('Failed to open raw payload in editor', error);
+					vscode.window.showErrorMessage('Failed to open raw payload in an editor. See logs for details.');
+				}
+			}
+		);
+
 		const copyMetadataValue = vscode.commands.registerCommand(
 			'github.copilot.liveRequestMetadata.copyValue',
 			async (value?: string, label?: string) => {
@@ -254,6 +271,7 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(copyMetadataValue);
 		this._disposables.add(replayPromptCommand);
 		this._disposables.add(debugSampleReplayCommand);
+		this._disposables.add(openRawPayloadCommand);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {
