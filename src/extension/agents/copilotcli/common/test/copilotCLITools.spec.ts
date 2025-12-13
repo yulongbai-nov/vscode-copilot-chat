@@ -152,7 +152,7 @@ describe('CopilotCLITools', () => {
 				{ type: 'user.message', data: { content: { text: 'Hello' }, attachments: [] } },
 				{ type: 'assistant.message', data: { content: { text: 'World' } } }
 			];
-			const turns = buildChatHistoryFromEvents(events);
+			const turns = buildChatHistoryFromEvents('', events, getVSCodeRequestId, delegationSummary);
 			const responseTurn = turns.find(t => t instanceof ChatResponseTurn2) as ChatResponseTurn2;
 			const responseParts: any = (responseTurn as any).response;
 			const parts: any[] = (responseParts.parts ?? responseParts._parts ?? responseParts);
@@ -167,7 +167,7 @@ describe('CopilotCLITools', () => {
 			const events: any[] = [
 				{ type: 'assistant.message', data: { content: '[object Object]' } }
 			];
-			const turns = buildChatHistoryFromEvents(events);
+			const turns = buildChatHistoryFromEvents('', events, getVSCodeRequestId, delegationSummary);
 			expect(turns).toHaveLength(1);
 			const responseTurn = turns[0] as ChatResponseTurn2;
 			const responseParts: any = (responseTurn as any).response;

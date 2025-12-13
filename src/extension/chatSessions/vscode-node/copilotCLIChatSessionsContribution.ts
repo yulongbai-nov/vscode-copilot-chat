@@ -33,7 +33,6 @@ import { ChatVariablesCollection, isPromptFile } from '../../prompt/common/chatV
 import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
 import { LiveRequestReplayKey } from '../../prompt/common/liveRequestEditorModel';
 import { Raw } from '@vscode/prompt-tsx';
-import { ChatSummarizerProvider } from '../../prompt/node/summarizer';
 import { IToolsService } from '../../tools/common/toolsService';
 import { ICopilotCLITerminalIntegration } from './copilotCLITerminalIntegration';
 import { CopilotCloudSessionsProvider } from './copilotCloudSessionsProvider';
