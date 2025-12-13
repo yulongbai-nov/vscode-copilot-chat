@@ -38,23 +38,23 @@ Note: older settings under `github.copilot.chat.advanced.*` are migrated automat
 ## Docs and Specs (index)
 
 - **Live Request Editor**
-  - User guide: `docs/live-request-editor-user-guide.md`
-  - Architecture notes: `docs/liveRequestEditor.md`
-  - State machine: `docs/live-request-editor-state-machine.md`
-  - Content kinds: `docs/live-request-editor-content-kinds.md`
-  - Interception consistency: `docs/live-request-editor-interception-consistency.md`
-  - Spec source of truth: `.kiro/specs/request-logger-prompt-editor/design.md`
+  - User guide: [`docs/live-request-editor-user-guide.md`](docs/live-request-editor-user-guide.md)
+  - Architecture notes: [`docs/liveRequestEditor.md`](docs/liveRequestEditor.md)
+  - State machine: [`docs/live-request-editor-state-machine.md`](docs/live-request-editor-state-machine.md)
+  - Content kinds: [`docs/live-request-editor-content-kinds.md`](docs/live-request-editor-content-kinds.md)
+  - Interception consistency: [`docs/live-request-editor-interception-consistency.md`](docs/live-request-editor-interception-consistency.md)
+  - Spec source of truth: [`.kiro/specs/request-logger-prompt-editor/design.md`](.kiro/specs/request-logger-prompt-editor/design.md)
 - **CLI replay / session rename**
-  - Handoff: `docs/cli-history-replay-handoff.md`
-  - Specs: `.kiro/specs/cli-history-replay/design.md`
+  - Handoff: [`docs/cli-history-replay-handoff.md`](docs/cli-history-replay-handoff.md)
+  - Specs: [`.kiro/specs/cli-history-replay/design.md`](.kiro/specs/cli-history-replay/design.md)
 - **Chat view APIs reference (core vs proposed)**
-  - `docs/copilot-chat-view-apis.md`
+  - [`docs/copilot-chat-view-apis.md`](docs/copilot-chat-view-apis.md)
 - **Tooling walkthroughs**
-  - Read file tool: `docs/read-file-tool-walkthrough.md`
-  - Run subagent tool: `docs/run-subagent-tool-walkthrough.md`
-  - Tools overview: `docs/tools.md`
+  - Read file tool: [`docs/read-file-tool-walkthrough.md`](docs/read-file-tool-walkthrough.md)
+  - Run subagent tool: [`docs/run-subagent-tool-walkthrough.md`](docs/run-subagent-tool-walkthrough.md)
+  - Tools overview: [`docs/tools.md`](docs/tools.md)
 - **Specs index**
-  - `.kiro/specs/README.md`
+  - [`.kiro/specs/README.md`](.kiro/specs/README.md)
 
 ## Development (build/run/verify)
 
