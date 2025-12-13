@@ -41,7 +41,7 @@ jobs:
         run: NODE_OPTIONS=--experimental-strip-types npm run build
 
       - name: Build VSIX
-        run: npm run package
+        run: npm exec vsce package
 
       - name: Locate VSIX
         id: vsix
