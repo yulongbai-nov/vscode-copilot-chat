@@ -109,6 +109,13 @@
 - [ ] 13. Graphiti memory layer (moved)  
   - Tracked in `.specs/graphiti-memory-integration/tasks.md`.  
 
+- [ ] 14. Session-sourced Live Request model  
+  - [ ] 14.1 Capture a per-session snapshot (normalized `IBuildPromptContext`, requestOptions, endpoint/model info) before prompt rendering and persist it in `LiveRequestEditorService`. _Requirements: 17.1_  
+  - [ ] 14.2 Add a snapshot-based renderer (reuse `PromptRenderer` with the captured context/config) to regenerate `Raw.ChatMessage[]` for section building/reset, with graceful fallback to existing `RenderPromptResult.messages`. _Requirements: 17.2, 17.3_  
+  - [ ] 14.3 Update the Live Request Builder/Editor to treat snapshot-rendered messages as the base, applying edits/deletes atop them and preserving `originalMessages` for reset/diff. _Requirements: 17.2, 17.4_  
+  - [ ] 14.4 Emit parity telemetry (snapshot render vs fallback) and wire error logging without user content. _Requirements: 17.3, 17.5_  
+  - [ ] 14.5 Add unit/integration coverage: snapshot capture, rerender parity, fallback path, and ensuring `ChatMLFetcher` sees edited snapshot-derived messages. _Requirements: 17.1–17.4_  
+
 ## Implementation Notes
 
 - Start by plumbing the editable request model (without UI) and verifying that edited messages can flow through `ChatMLFetcher` and `IRequestLogger` correctly and safely.

@@ -280,3 +280,16 @@ in a way that preserves the original ordering of arrays and the original shape o
 16.7 TESTS SHALL cover:
 - Messages with combinations of scalar fields, multiple `content` entries (text + non-text), and `toolCalls`, asserting that the hierarchy (`nodeType`, `parentId`, indices, `rawPath`) matches the Raw payload.  
 - Edits applied at leaf nodes (including message fields and request options) still respect Requirement 15 while the nested child nodes reflect the updated field values and unchanged surrounding structure.  
+
+### Requirement 17 – Session-sourced Live Request model
+
+**User Story:**  
+As an engineer debugging prompt fidelity, I want the Live Request Editor to rebuild its editable request from the normalized chat session state (not just the flattened payload) so that I can reliably regenerate the prompt and keep UI edits in sync with what the model will see.
+
+#### Acceptance Criteria
+
+17.1 THE Live Request Editor SHALL capture a session-scoped snapshot (normalized conversation history, current `toolCallRounds`, tool results, requestId/sessionId/location, endpoint/model, requestOptions) before prompt rendering.  
+17.2 WHEN building sections or resetting/regenerating, THE Live Request Editor SHALL be able to re-render the prompt from that snapshot (same prompt template/endpoint/config) and use the rendered `Raw.ChatMessage[]` as the base for edits.  
+17.3 IF snapshot-based render fails, THEN the system SHALL fall back to the last `RenderPromptResult.messages`, log a parity warning, and keep the editor functional.  
+17.4 THE final messages passed to `ChatMLFetcher` (and logged) SHALL reflect user edits applied atop the snapshot-rendered messages, preserving edit parity.  
+17.5 TELEMETRY SHALL record snapshot-vs-render parity checks (success/fallback) without user content.  
