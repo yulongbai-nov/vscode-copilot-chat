@@ -216,7 +216,13 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - Deleted sections get a dashed border + reduced opacity and expose a single `Restore` button inline.
   - Tool sections include a metadata strip that surfaces the tool name (or ID) and the JSON arguments passed to the invocation so advanced users can audit exactly what inputs were provided. Arguments reuse the markdown/code styling but are rendered in a monospace block for readability.
 - **Editing flow**
-  - `Edit` toggles an inline `<textarea>` editor (monospace, chat theme colors). Save posts `editSection` with the new value; cancel just hides the editor and reverts to the previous text.
+  - `Edit` switches the section body into an **advanced “Raw structure” editor** (per-message card):
+    - The card body swaps from markdown preview to a nested, foldable view of the underlying `Raw.ChatMessage` (keys as headers, values as leaves).
+    - Only **leaf values** are editable (strings/numbers/booleans/null). Object/array values are groups with expand/collapse.
+    - There is no aggregate “replace the entire message text” editor in the primary UX; text is edited via the concrete leaf fields (`content[i].text`, `toolCalls[i].function.arguments`, `name`, `toolCallId`, etc.). This preserves the original `content[]`/`toolCalls[]` structure.
+  - Editing affordances are **mode-aware**:
+    - In “Send normally”, sections are preview-only (no `Edit`).
+    - In “Pause & review” / “Auto-apply (Capturing)”, `Edit` is available.
   - `Delete` soft-deletes the section (marks `section.deleted = true`). Subsequent sends omit the message until restored.
   - `Reset` issues `resetRequest` to restore original messages/sections and clears the dirty badge. Confirmation can be implicit (no modal) because reset is undoable by editing again.
   - `Stick` toggles a `section.pinned` flag exposed via `updateSectionPinState`; pinned sections float to the top group, and pressing the button again “unsticks” them, returning them to their natural order.
@@ -225,13 +231,16 @@ Until the drawer experience lands inside the chat conversation surface, we rely 
   - Each section displays its token count and visualizes its share of the total prompt budget with a mini progress meter (e.g., “42 tokens · 8%” plus a bar).
   - Pinned section heading summarizes the cumulative token share of the pinned subset so users can gauge how much budget is locked.
 - **Conversation targeting**
-  - The interim webview always listens to `ILiveRequestEditorService.onDidChange` and `onDidChangeMetadata`; the last-updated session automatically re-renders in the view and keeps request/session/model metadata fresh in Auto-apply.
   - A conversation drop-down is always available (never greyed out) and sorted by recency, with labels of the form `<location> · <debug name or intent> · …<sessionId tail>` so users can disambiguate concurrent panel/editor/terminal sessions.
+  - The editor maintains a single **active session** selection that the dropdown reflects.
+  - A single “Auto-follow latest” toggle controls whether newly intercepted requests can change the active session:
+    - Auto-follow OFF: new requests update the session list but do not steal focus from the user’s selection.
+    - Auto-follow ON: the newest intercepted request becomes active; the editor frame flashes briefly to make the context switch explicit.
+  - The Live Request Payload view (raw `messages[]` JSON) stays in sync with the same active session selection.
 - **Advanced extras (opt-in)**
-  - Some users need insight into the full HTTP payload (tool schemas, requestOptions, telemetry) that would otherwise clutter the default UI. We expose a configuration key `github.copilot.chat.promptInspector.extraSections` that accepts an array of identifiers (`requestOptions`, `telemetry`, `rawRequest`).
-  - When non-empty, the inspector appends read-only panels after the metadata strip: formatted JSON for request options and raw request body (with copy buttons), plus a telemetry table showing intent ID, endpoint URL, timestamps, and parity diagnostics.
-  - Extra panels reuse the same collapsible `SectionCard` chrome (caret, hover toolbar, keyboard focus) so they behave like standard prompt sections and do not overwhelm the page.
-  - This setting never hides existing controls—it only augments the view so power users can replicate what `request.json` contains without leaving the inspector, while the default experience stays streamlined.
+  - Some users need insight into the full HTTP payload (tool schemas, requestOptions, telemetry) that would otherwise clutter the default UI.
+  - Request options and telemetry remain optional “extra” surfaces.
+  - Raw `messages[]` is exposed via a dedicated, draggable **Live Request Payload** view (`github.copilot.liveRequestPayload`) that supports select+copy and open-in-editor.
 - **Empty/error states**
   - When no editable request exists, show a centered “Waiting for chat request” message with instructions (“Send a prompt with the feature flag enabled…”).
   - When the service is disabled via settings, the view collapses to a short explanation plus a settings gear link.
@@ -440,8 +449,9 @@ We extend the chat panel UI (in the same TSX/React layer) with a **Prompt Inspec
 - Editing behaviour:
   - `Edit`:
     - Expands the section if collapsed.
-    - Switches the section body into an **embedded inline editor component** that visually matches the chat input (multi-line, markdown-friendly text area), but is implemented inside the Prompt Inspector, not by relocating the core chat input control.
-    - On change, updates `content` and triggers a mapping back to `messages`.
+    - Switches the section body into the same **advanced “Raw structure” editor** described above:
+      - Keys render as headers; only leaf values are editable.
+      - Each save applies a single leaf-level mutation (1:1 with a Raw payload field) and records an edit op suitable for undo/redo.
   - `Delete`:
     - Marks the section as deleted (ghosted or removed with a “Restore” affordance).
     - Excludes the section’s contribution when recomputing `messages`.
@@ -725,7 +735,14 @@ Undo pops from `undoStack`, applies the inverted op, and pushes the original op 
 - All edits in the UI are leaf-level:
   - Editing `content[0].text` → one `EditOp` targeting `"messages[i].content[0].text"`.
   - Editing `toolCalls[0].function.arguments` → one `EditOp` targeting `"messages[i].toolCalls[0].function.arguments"`.
-  - There is no aggregate “message text” editor in the primary UX; assistant and system messages show grouped child `text` boxes instead.
+- There is no aggregate “message text” editor in the primary UX; assistant and system messages show grouped child `text` boxes instead.
+
+#### Display paths vs stable targets (deletions and indices)
+
+The editor distinguishes between:
+
+- **Display `rawPath`**: what the user sees (e.g. `messages[2].content[1].text`). This uses the **current payload index** (0-based) as shown in the Live Request Payload view, so indices remain aligned after deletions.
+- **Stable edit target**: what the extension host uses to apply and record edits (e.g. by `section.id` / `sourceMessageIndex` plus a relative leaf path like `content[1].text`). This keeps undo/redo and subsequent edits stable even when the visible payload indices shift due to deletions.
 
 ### Relation to previous aggregate-text model
 

@@ -5,8 +5,8 @@
 - ✅ Backend plumbing landed: the feature flag is in `package.json`, the `ILiveRequestEditorService` + builder produce editable sections, and `defaultIntentRequestHandler` now feeds edited messages to the fetcher.
 - ✅ Send/reset helpers exist server-side (`getMessagesForSend`, `resetRequest`, `isDirty`), ensuring the prompt pipeline can already consume edited sections once a UI drives the mutations.
 - ✅ HTML tracer enrichment is applied end-to-end, aligning token counts/trace paths with sections even when tracing is optional.
-- ✅ Section edit/delete/reset logic is covered by unit + simulation tests; interception/subagent flows are validated.
-- 🚧 Remaining focus flows from the open items: (1) performance/accessibility hardening (Tasks 6.x), (2) deeper integration/simulation coverage (Tasks 7.3–7.6), and (3) new persistence + replay work (Tasks 11–13).
+- ✅ Legacy section edit/delete/reset logic is covered by unit + simulation tests; interception/subagent flows are validated.
+- 🚧 Remaining focus: (1) message-level fidelity editing UI (Tasks 2.6, 4.12–4.15, 7.8), (2) performance/accessibility hardening (Tasks 6.x), and (3) deeper integration/simulation coverage (Tasks 7.3–7.6).
 
 ---
 
@@ -21,7 +21,7 @@
   - [x] 2.4 Integrate optional `HTMLTracer` data (when available) to refine section boundaries and token counts, falling back gracefully when tracing is disabled. _Requirements: 2.5, 5.3_  
   - [x] 2.5 Track original messages and content to support reset and diffing. _Requirements: 3.4, 4.4_  
   - [ ] 2.6 Refine `LiveRequestSection` to support hierarchical projections (message nodes grouping child content/toolCall/metadata nodes) keyed by Raw indices and `rawPath`, without introducing a separate payload structure. _Requirements: 16.1–16.3_  
-  - [ ] 2.7 Add a per-request `EditHistory` model that records leaf-level edits (per-field `oldValue`/`newValue`) against Raw paths, suitable for undo/redo without aggregate text redistribution. _Requirements: 15.2–15.7_  
+  - [x] 2.7 Add a per-request `EditHistory` model that records leaf-level edits (per-field `oldValue`/`newValue`) against stable targets, suitable for undo/redo without aggregate text redistribution. _Requirements: 15.2–15.7_  
 
 - [ ] 3. Wiring into the chat request pipeline  
   - [x] 3.1 Update the intents/prompt-building layer (e.g., `defaultIntentRequestHandler`) to request an `EditableChatRequest` instead of raw `messages` when the feature flag is enabled. _Requirements: 1.2, 4.1, 5.1_  
@@ -35,7 +35,7 @@
   - [x] 4.3 Render Prompt Sections in the webview using components that visually match the chat panel (chat bubbles, markdown, code blocks) and section headers with labels + token counts. _Requirements: 2.2, 2.3, 2.5_  
   - [x] 4.4 Implement per-section collapse/expand controls with persistent state for the current editor session (stored in the webview state). _Requirements: 2.4_  
   - [x] 4.5 Implement the Section Action Menu that appears on hover/focus with `Edit` / `Delete` actions, visually matching the **chat code block hover toolbar** even though it runs inside the webview. _Requirements: 3.1, 3.2_  
-  - [x] 4.6 Implement inline edit mode per section (textarea/editor embedded in the webview) and update both section content and the underlying `EditableChatRequest.messages`. _Requirements: 3.3, 3.4, 4.1_  
+  - [x] 4.6 Implement inline edit mode per section (legacy textarea editor) and update both section content and the underlying `EditableChatRequest.messages`. _Requirements: 3.3, 3.4, 4.1_  
   - [x] 4.7 Implement delete/restore semantics per section (soft delete with clear visual treatment and “Restore” affordance). _Requirements: 3.5, 3.6_  
   - [x] 4.8 Add a metadata area showing model, location, and token limits derived from the request. _Requirements: 2.6_  
   - [x] 4.9 Ensure keyboard accessibility and ARIA labelling for sections, menus, and actions within the webview DOM. _Requirements: 6.1, 6.2_  
@@ -43,6 +43,8 @@
   - [x] 4.11 Surface tool invocation metadata (tool name + JSON arguments) inside tool sections so auditors can inspect the exact call inputs. _Requirements: 2.7_  
   - [ ] 4.12 Update the webview layout so each message card contains a structured, foldable “Raw structure” panel: keys (`content[i].text`, `toolCalls[i].function.arguments`, `name`, `requestOptions.temperature`) as headers and values as editable leaf editors or nested groups, respecting the Raw JSON hierarchy. _Requirements: 15.2, 16.1–16.5_  
   - [ ] 4.13 Wire new leaf-level edit actions from the webview to the extension host (e.g., `editLeaf` messages) so that each edit targets a single Raw field; update section projections to reflect the modified message while preserving all other fields. _Requirements: 15.2–15.7_  
+  - [ ] 4.14 Retire the legacy textarea editor: route `Edit` to the Raw structure editor only, hide `Edit` in “Send normally”, and ensure displayed `rawPath` indices match the payload view after deletions. _Requirements: 3.8, 3.9, 16.3_  
+  - [ ] 4.15 Add undo/redo controls for leaf edits in the Raw structure editor, using the per-request `EditHistory` (`undoLastEdit` / `redoLastEdit`). _Requirements: 3.4, 15.2_  
 
 - [x] 5. Apply, reset, and send integration  
   - [x] 5.1 Implement a mechanism to mark the `EditableChatRequest` as “dirty” when edits occur, and surface this in the UI. _Requirements: 4.1, 4.4_  
@@ -65,6 +67,7 @@
   - [ ] 7.5 Manually test keyboard navigation and screen reader behaviour within the Prompt Inspector. _Requirements: 6.1, 6.2_  
 - [ ] 7.6 Manually validate behaviour with multiple concurrent chat sessions (panel, side panel, editor-embedded) and switching via the conversation selector. _Requirements: 7.1–7.5_  
   - [x] 7.7 Evaluate adding a simulation/extension-harness scenario for edited-send flow (feature flag on, edit + replay through ChatMLFetcher) to raise stability signal. _Requirements: 1.2, 4.3, 5.4_  
+  - [ ] 7.8 Add targeted unit tests for leaf edits + hierarchy projection (multiple text parts, tool arguments, request options; `rawPath` alignment after deletions). _Requirements: 15.7, 16.7_  
 
 - [x] 8. Prompt interception mode  
   - [x] 8.1 Add a persisted configuration + command + status bar indicator for Prompt Interception Mode (default off). _Requirements: 8.1, 8.8_  
@@ -97,24 +100,14 @@
 - [x] 10.9 Rework Auto-apply state handling to two user-visible states (Capturing vs Applying), auto-arm capture when no overrides exist or after clearing, and hide redundant actions while capturing. _Requirements: 11.2, 11.3, 11.7_  
 - [x] 10.10 Update telemetry and status/banners to use simplified copy (“Auto-apply edits · <scope> · Applying/Capturing”), ensure one-shot “Pause next turn” does not alter persisted mode, and refresh docs accordingly. _Requirements: 11.5, 11.8_  
 
-- [ ] 11. Chat timeline prompt replay (edited history/system prompt)  
-  - [ ] 11.1 Build a replay builder that takes the edited `EditableChatRequest` and replays it into a new chat session timeline (chat bubbles, tool calls/results labelled as replayed). _Requirements: 12.1–12.4_  
-  - [ ] 11.2 Ensure deletions/edits are reflected in the replayed timeline and tag fork lineage (original turn id → replayed turn id). _Requirements: 12.2, 12.5_  
-  - [ ] 11.3 Gate replay behind the advanced flag and add telemetry for replay start/finish/cancel. _Requirements: 12.6_  
-  - [ ] 11.4 Add UI affordance to trigger replay after edits are confirmed, and surface errors/fallbacks when replay construction fails. _Requirements: 12.3, 12.4_  
+- [ ] 11. Chat timeline prompt replay (moved)  
+  - Tracked in `.kiro/specs/chat-timeline-replay/tasks.md`.  
 
-- [ ] 12. Chat history persistence (SQLite)  
-  - [ ] 12.1 Implement SQLite schema/migration v1 in the extension global storage (conversations, turns, sections, responses, tool_calls, references, embeddings/edges). _Requirements: 13.1–13.4_  
-  - [ ] 12.2 Add opt-in setting/command and workspace-trust guard; disable persistence on corruption with non-blocking warnings. _Requirements: 13.2, 13.6_  
-  - [ ] 12.3 Wire turn-finalization to append conversation/turn/section/response/tool data; enforce size/TTL/pruning and WAL/backoff on SQLITE_BUSY. _Requirements: 13.1, 13.5_  
-  - [ ] 12.4 Add export/purge commands and minimal FTS-backed query helpers for replay/search. _Requirements: 13.4_  
-  - [ ] 12.5 Add unit/integration tests for migrations, append-only writes, pruning, and integrity-check fallback. _Requirements: 13.3, 13.6_  
+- [ ] 12. Chat history persistence (moved)  
+  - Tracked in `.kiro/specs/chat-history-persistence/tasks.md`.  
 
-- [ ] 13. Graphiti memory layer (optional)  
-  - [ ] 13.1 Add feature gate + configuration (endpoint/apiKey/workspace/timeout/batch) and a thin TypeScript REST adapter for Graphiti. _Requirements: 14.1–14.3_  
-  - [ ] 13.2 Map turn/section/response/tool data to Graphiti nodes/edges with stable IDs, batching, and retry/backoff; fail open. _Requirements: 14.2, 14.4, 14.5_  
-  - [ ] 13.3 Add ingestion cursor/storage for idempotent resume and bounded retry queue; redact attachments unless explicitly enabled. _Requirements: 14.4_  
-  - [ ] 13.4 Add telemetry/diagnostics around sync success/failure and optional embedding submissions. _Requirements: 14.6_  
+- [ ] 13. Graphiti memory layer (moved)  
+  - Tracked in `.kiro/specs/graphiti-memory-integration/tasks.md`.  
 
 ## Implementation Notes
 
