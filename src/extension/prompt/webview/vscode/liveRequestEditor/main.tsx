@@ -993,6 +993,7 @@ const App: React.FC = () => {
 
 	React.useEffect(() => {
 		if (!activeSessionKey || !followLatest) {
+			setSessionFlash(false);
 			return;
 		}
 		setSessionFlash(true);
