@@ -148,9 +148,33 @@ When asked to “write the spec” or “create the core documents” for a feat
 ## Working Agreement & Workflow
 
 - **Branches & Commits**
-  - Default to feature branches named `feature/<short-feature-name>` (kebab-case).
+  - Default to branches named `<type>/<short-scope-name>` (kebab-case), for example:
+    - `feature/...` (new user-facing capability)
+    - `fix/...` (bug fix)
+    - `docs/...` (documentation only)
+    - `ci/...` (workflows/automation)
+    - `chore/...` (maintenance, build tooling, dependency bumps)
+    - `refactor/...` (internal restructure with no behavior change)
+    - `test/...` (test-only changes)
+    - `perf/...` (performance-only changes)
   - When a new feature starts, create a fresh branch from the latest `main` (or the agreed integration branch). If multiple features run in parallel, keep each on its own branch to avoid entanglement.
   - Keep commits small, reference the relevant tasks/requirements, and separate spec edits from code when practical. Mention both in the commit message when they ship together.
+  - **Scope drift protocol** (when a new, unrelated scope appears mid-branch):
+    1. STOP adding more changes in the new scope.
+    2. Stash the unrelated work (include untracked files): `git stash push -u -m "wip: <new-scope>"`
+       - If only part of your working tree is unrelated, use `git stash push -p` to stash selected hunks.
+    3. Finish the current scope first:
+       - Split into logical commits (spec vs code when practical).
+       - Run the “quad” verification before committing/pushing.
+       - Push and open/update the PR for the current scope.
+    4. Start the new scope on a new branch:
+       - Prefer branching from fresh `origin/main` (`git fetch origin && git checkout -b <type>/<name> origin/main`).
+       - Apply the stash (`git stash pop`) and continue.
+       - If the new work *depends* on unmerged changes from the first branch, branch from that feature branch instead and note the dependency in the PR description.
+    5. If the current branch name no longer matches the delivered scope:
+       - If no PR exists yet, rename locally + remote (`git branch -m ...`, push the new branch, delete the old remote branch).
+       - If a PR already exists, avoid renaming the remote head branch; prefer a follow-up PR/branch with the correct name.
+    6. Update `.specs/<feature>/...` before implementing additional scope (spec-first).
 - **Verification Before Every Commit/Push** (“quadruple check” + simulation):
   1. `npm run lint`
   2. `npm run typecheck`
