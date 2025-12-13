@@ -166,6 +166,9 @@ When asked to “write the spec” or “create the core documents” for a feat
   - If invoking ESLint directly (e.g. on specific files), use the repo’s Node wrapper so the local TS plugin can load:
     - `node --experimental-strip-types ./node_modules/eslint/bin/eslint.js --max-warnings=0 <files...>`
   - When pre-commit fails, reproduce locally with: `npx lint-staged --debug`.
+  - For quick “make my patch clean” runs, use:
+    - `npm run fix:changed` (formats + eslint --fix on changed files)
+    - `npm run fix:staged` (formats + eslint --fix on staged files, then re-stages)
 - **Spec-first loop**: update `.kiro/specs/<feature>/{design,requirements,tasks}.md` whenever scope changes. Do not implement functionality that isn’t captured in the spec.
 - **Task tracking**: drive work via `tasks.md`. If an ad hoc request arises, either add a task or note the deviation explicitly.
 - **Feature flags & configs**: keep new UX/code paths behind their feature flags or configuration keys until they’re GA-ready. Document every new setting in both the spec and `package.json`.
