@@ -11,9 +11,12 @@ import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { IExtensionContribution } from '../../common/contributions';
 import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestOverrideScope, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 import { LiveRequestEditorProvider } from './liveRequestEditorProvider';
 import { LiveRequestMetadataProvider } from './liveRequestMetadataProvider';
+import { LiveRequestPayloadProvider } from './liveRequestPayloadProvider';
+import { LiveReplayChatProvider } from './liveReplayChatProvider';
 
 type ModePickItem = vscode.QuickPickItem & { mode: LiveRequestEditorMode; disabled?: boolean };
 type ScopePickItem = vscode.QuickPickItem & { scope: LiveRequestOverrideScope };
@@ -25,6 +28,8 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 	private readonly _disposables = new DisposableStore();
 	private _provider?: LiveRequestEditorProvider;
 	private _metadataProvider?: LiveRequestMetadataProvider;
+	private _payloadProvider?: LiveRequestPayloadProvider;
+	private _replayChatProvider?: LiveReplayChatProvider;
 	private readonly _statusBarItem: vscode.StatusBarItem;
 
 	constructor(
@@ -37,6 +42,8 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		void vscode.commands.executeCommand('setContext', LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY, false);
 		this._registerProvider();
 		this._registerMetadataProvider();
+		this._registerPayloadProvider();
+		this._registerReplayChatProvider();
 		this._registerCommands();
 		this._statusBarItem = this._disposables.add(vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10002));
 		this._statusBarItem.name = 'Copilot Prompt Interception';
@@ -89,6 +96,37 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			this._logService.trace('Live Request Metadata provider registered');
 		} catch (error) {
 			this._logService.error('Failed to register Live Request Metadata provider', error);
+		}
+	}
+
+	private _registerPayloadProvider(): void {
+		try {
+			this._payloadProvider = this._instantiationService.createInstance(
+				LiveRequestPayloadProvider,
+				this._extensionContext.extensionUri
+			);
+			this._disposables.add(this._payloadProvider);
+			const registration = vscode.window.registerWebviewViewProvider(
+				LiveRequestPayloadProvider.viewType,
+				this._payloadProvider,
+				{
+					webviewOptions: {
+						retainContextWhenHidden: true
+					}
+				}
+			);
+			this._disposables.add(registration);
+			this._logService.trace('Live Request Payload provider registered');
+		} catch (error) {
+			this._logService.error('Failed to register Live Request Payload provider', error);
+		}
+	}
+
+	private _registerReplayChatProvider(): void {
+		try {
+			this._replayChatProvider = this._disposables.add(this._instantiationService.createInstance(LiveReplayChatProvider));
+		} catch (error) {
+			this._logService.error('Failed to register Live Request Replay chat provider', error);
 		}
 	}
 
@@ -150,6 +188,38 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 			}
 		);
 
+		const replayPromptCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.replayPrompt',
+			async () => {
+				if (!this._ensureLiveRequestEditorEnabled()) {
+					return;
+				}
+				if (!this._liveRequestEditorService.isReplayEnabled()) {
+					vscode.window.showInformationMessage('Timeline Replay is disabled. Enable github.copilot.chat.liveRequestEditor.timelineReplay.enabled to replay prompts.');
+					return;
+				}
+				const current = this._provider?.getCurrentRequest();
+				if (!current) {
+					vscode.window.showInformationMessage('Nothing to replay yet. Edit a prompt first.');
+					return;
+				}
+				const snapshot = this._liveRequestEditorService.buildReplayForRequest({ sessionId: current.sessionId, location: current.location });
+				if (!snapshot) {
+					vscode.window.showInformationMessage('Nothing to replay for this request.');
+					return;
+				}
+				const projection = snapshot.projection;
+				this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.replay.invoked', {
+					state: snapshot.state,
+					totalSections: String(projection?.totalSections ?? 0),
+					edited: String(projection?.editedCount ?? 0),
+					deleted: String(projection?.deletedCount ?? 0),
+					overflow: String(projection?.overflowCount ?? 0),
+				});
+				this._replayChatProvider?.showReplay(snapshot);
+			}
+		);
+
 		const configureMetadataCommand = vscode.commands.registerCommand(
 			'github.copilot.liveRequestMetadata.configureFields',
 			async () => {
@@ -157,6 +227,93 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 					return;
 				}
 				await this._metadataProvider.configureFields();
+			}
+		);
+
+		const debugSampleReplayCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.debugReplaySample',
+			async () => {
+				this._replayChatProvider?.showSampleReplay();
+			}
+		);
+
+		const openRawPayloadCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.openRawPayload',
+			async (payload?: unknown) => {
+				try {
+					const text = typeof payload === 'string' ? payload : undefined;
+					if (!text) {
+						return;
+					}
+					const doc = await vscode.workspace.openTextDocument({ content: text, language: 'json' });
+					await vscode.window.showTextDocument(doc, { preview: true });
+				} catch (error) {
+					this._logService.error('Failed to open raw payload in editor', error);
+					vscode.window.showErrorMessage('Failed to open raw payload in an editor. See logs for details.');
+				}
+			}
+		);
+
+		const setPayloadSessionCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestPayload.setActiveSession',
+			async (sessionKey?: { sessionId?: string; location?: number } | string) => {
+				if (!this._payloadProvider) {
+					return;
+				}
+				this._payloadProvider.setActiveSession(sessionKey);
+			}
+		);
+
+		const showPayloadViewCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestPayload.show',
+			async () => {
+				try {
+					await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+					await vscode.commands.executeCommand('github.copilot.liveRequestPayload.focus');
+				} catch (error) {
+					this._logService.error('Failed to show Live Request Payload view', error);
+					vscode.window.showErrorMessage('Failed to open Live Request Payload. See logs for details.');
+				}
+			}
+		);
+
+		const openInChatCommand = vscode.commands.registerCommand(
+			'github.copilot.liveRequestEditor.openInChat',
+			async (sessionKey?: { sessionId?: string; location?: number } | string) => {
+				try {
+					const current = this._provider?.getCurrentRequest();
+					let key: { sessionId: string; location: ChatLocation } | undefined;
+
+					if (typeof sessionKey === 'string') {
+						const [sessionId, location] = sessionKey.split('::');
+						const parsed = Number(location);
+						if (sessionId && Number.isFinite(parsed)) {
+							key = { sessionId, location: parsed as ChatLocation };
+						}
+					} else if (sessionKey?.sessionId && typeof sessionKey.location === 'number') {
+						key = { sessionId: sessionKey.sessionId, location: sessionKey.location as ChatLocation };
+					} else if (current) {
+						key = { sessionId: current.sessionId, location: current.location as ChatLocation };
+					}
+
+					if (!key) {
+						return;
+					}
+
+					const request = this._liveRequestEditorService.getRequest(key);
+					const resourceText = request?.metadata?.chatSessionResource ?? current?.metadata?.chatSessionResource;
+					if (resourceText) {
+						const resource = vscode.Uri.parse(resourceText);
+						await vscode.commands.executeCommand('vscode.open', resource);
+						return;
+					}
+
+					await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+					vscode.window.setStatusBarMessage('No chat session editor resource captured for this conversation.', 2500);
+				} catch (error) {
+					this._logService.error('Failed to open conversation in chat', error);
+					vscode.window.showErrorMessage('Failed to open conversation in chat. See logs for details.');
+				}
 			}
 		);
 
@@ -176,6 +333,12 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 		this._disposables.add(clearOverridesCommand);
 		this._disposables.add(configureMetadataCommand);
 		this._disposables.add(copyMetadataValue);
+		this._disposables.add(replayPromptCommand);
+		this._disposables.add(debugSampleReplayCommand);
+		this._disposables.add(openRawPayloadCommand);
+		this._disposables.add(showPayloadViewCommand);
+		this._disposables.add(setPayloadSessionCommand);
+		this._disposables.add(openInChatCommand);
 	}
 
 	private async _toggleInterceptionMode(source: 'command' | 'statusBar'): Promise<void> {

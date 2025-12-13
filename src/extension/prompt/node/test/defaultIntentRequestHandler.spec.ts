@@ -167,6 +167,7 @@ suite('defaultIntentRequestHandler', () => {
 		onDidUpdateSubagentHistory = Event.None;
 		onDidChangeInterception = Event.None;
 		onDidChangeMetadata = Event.None;
+		onDidChangeReplay = Event.None;
 
 		public enabled = true;
 		public interceptionEnabled = true;
@@ -187,6 +188,9 @@ suite('defaultIntentRequestHandler', () => {
 		isInterceptionEnabled(): boolean {
 			this.isInterceptionEnabledCalls++;
 			return this.enabled && this.interceptionEnabled;
+		}
+		isReplayEnabled(): boolean {
+			return this.enabled;
 		}
 		getInterceptionState() {
 			return {
@@ -245,12 +249,24 @@ suite('defaultIntentRequestHandler', () => {
 			return undefined;
 		}
 		getRequest(): EditableChatRequest | undefined { return undefined; }
+		getAllRequests(): readonly EditableChatRequest[] { return []; }
+		getOriginalRequestMessages(): Raw.ChatMessage[] | undefined { return undefined; }
 		updateSectionContent(): EditableChatRequest | undefined { return undefined; }
+		updateLeafByPath(): EditableChatRequest | undefined { return undefined; }
+		undoLastEdit(): EditableChatRequest | undefined { return undefined; }
+		redoLastEdit(): EditableChatRequest | undefined { return undefined; }
 		deleteSection(): EditableChatRequest | undefined { return undefined; }
 		restoreSection(): EditableChatRequest | undefined { return undefined; }
 		resetRequest(): EditableChatRequest | undefined { return undefined; }
 		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
 		applyTraceData(): EditableChatRequest | undefined { return undefined; }
+		buildReplayForRequest(): undefined { return undefined; }
+		getReplaySnapshot(): undefined { return undefined; }
+		restorePreviousReplay(): undefined { return undefined; }
+		markReplayForkActive(): undefined { return undefined; }
+		markReplayStale(): void {
+			// no-op
+		}
 
 		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
 			const messages = this._messages.length ? this._messages : fallback;
@@ -370,7 +386,8 @@ suite('defaultIntentRequestHandler', () => {
 		const telemetry = new SpyingTelemetryService();
 		const chatSessions = new IntegrationChatSessionService();
 		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
-		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext);
+		const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
+		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log);
 		return { service, chatSessions };
 	}
 
@@ -398,6 +415,7 @@ suite('defaultIntentRequestHandler', () => {
 			undefined,
 			ChatLocation.Panel,
 			instaService.createInstance(ChatTelemetryBuilder, Date.now(), sessionId, undefined, turns.length > 1, request),
+			undefined,
 			{ maxToolCallIterations },
 			Event.None,
 		);

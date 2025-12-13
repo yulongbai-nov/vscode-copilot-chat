@@ -69,11 +69,13 @@ As a developer tuning prompts, I want intuitive hover-based controls on each pro
 
 3.1 WHEN the mouse cursor hovers over a Prompt Section header or body, THEN the Live Chat Request Editor SHALL display a Section Action Menu aligned similarly to the **chat code block hover toolbar** in the chat panel (position, look and feel).  
 3.2 THE Section Action Menu SHALL include at least `Edit` and `Delete` actions for sections that are editable and deletable.  
-3.3 WHEN the user invokes `Edit` on a section, THEN the Live Chat Request Editor SHALL reveal an inline edit surface for that section (e.g., text area or embedded editor) containing the current underlying content.  
-3.4 WHEN the user modifies the content in the inline edit surface, THEN the Live Chat Request Editor SHALL update its internal state for that section while preserving a copy of the original content for potential reset.  
+3.3 WHEN the user invokes `Edit` on a message section, THEN the Live Chat Request Editor SHALL reveal an inline **advanced** edit surface for that section that exposes the Raw hierarchy (`role`, `name`, `toolCallId`, `content[]`, `toolCalls[]`) and allows edits only at **leaf fields** (see Requirements 15–16).  
+3.4 WHEN the user edits a leaf field in the advanced edit surface, THEN the Live Chat Request Editor SHALL apply a single, surgical mutation to the backing `EditableChatRequest` and record sufficient information (old/new leaf values) to support undo/redo and reset.  
 3.5 WHEN the user invokes `Delete` on a section, THEN the Live Chat Request Editor SHALL mark the section as deleted, visually distinguish it (or remove it) and exclude its contribution when recomputing the Chat Request.  
 3.6 THE Live Chat Request Editor SHALL provide a way to restore a deleted section before the request is sent (e.g., “Restore” or “Undo Delete” action).  
 3.7 THE Live Chat Request Editor MAY treat certain sections (e.g., core system prompts) as read-only in the initial version and SHALL visually indicate when a section cannot be edited or deleted.  
+3.8 WHEN the Live Request Editor is in “Send normally”, THEN the editor SHALL render sections in preview-only mode (no `Edit` affordances).  
+3.9 THE editor SHALL NOT provide an aggregate “replace the entire message text” editor as the primary UX; edits SHALL occur only via leaf fields that map 1:1 to the Raw payload.  
 
 ### Requirement 4 – Live Request Application and Sending
 
@@ -100,7 +102,7 @@ As a maintainer of the Copilot Chat extension, I want the Live Chat Request Edit
 5.2 THE Live Chat Request Editor SHALL use the output of `PromptRenderer` / `renderPromptElement` (including token counts and references) as the basis for constructing Prompt Sections where possible.  
 5.3 THE Live Chat Request Editor MAY use `HTMLTracer` data from `addPromptTrace` to refine section boundaries, but SHALL gracefully handle cases where tracing is disabled or unavailable.  
 5.4 THE Live Chat Request Editor SHALL ensure that the final request seen by `IRequestLogger.logChatRequest` matches what was displayed in the editor (after edits), or otherwise record discrepancies for debugging.  
-5.5 THE Live Chat Request Editor SHALL not introduce additional persistent storage for request data beyond existing logging; any edited state is ephemeral to the pending turn.  
+5.5 THE Live Chat Request Editor SHALL NOT introduce new long-term storage formats for request data beyond existing logging; however, it MAY cache intercepted requests in **workspace-scoped** storage for resilience/inspection across reloads, using schema versioning and safe fallback/clear behavior.  
 
 ### Requirement 6 – Accessibility, Performance, and Reliability
 
@@ -201,44 +203,80 @@ As an advanced Copilot user, I want to intercept the first turn of a chat sessio
 11.7 Auto-apply persistence SHALL be stored in extension global/workspace storage (depending on scope) using encrypted storage APIs when available; clearing overrides MUST remove the stored payload and re-arm capturing for the next turn while in Auto-apply.  
 11.8 TELEMETRY SHALL record mode transitions, captures, saved/cleared overrides, scope changes, preview-limit changes, and diff button usage with anonymized scope (session/workspace/global) but without storing user content.  
 
-### Requirement 12 – Chat Timeline Replay (Edited History/System Prompt)
+### Requirement 12 – Chat Timeline Replay (Moved)
+
+Tracked in `.specs/chat-timeline-replay`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
+
+### Requirement 13 – Chat History Persistence (Moved)
+
+Tracked in `.specs/chat-history-persistence`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
+
+### Requirement 14 – Graphiti Memory Integration (Moved)
+
+Tracked in `.specs/graphiti-memory-integration`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
+
+### Requirement 15 – Surgical Payload Editing Fidelity
 
 **User Story:**  
-As a Copilot user who edited a prompt, I want to replay the edited request into a new chat timeline so I can see the exact history/system/tool calls that will be used for follow-up.
+As a Copilot engineer debugging complex prompts (with images and other non-text parts), I want edits in the Live Request Editor to change only the specific leaf fields I touch in the underlying `Raw.ChatMessage[]` (for example, a single `text` string or `toolCalls[].function.arguments`) while preserving all other content parts and message-level metadata, so that the payload sent to the LLM remains structurally faithful to what was originally rendered.
 
 #### Acceptance Criteria
 
-12.1 WHEN the user confirms edits, THEN the system SHALL offer a “Replay edited prompt” action (gated by the advanced flag) that creates a new chat session/timeline without modifying the original session.  
-12.2 THE replayed timeline SHALL render bubbles for system/user/history/tool sections using the edited/deleted state (deleted sections omitted, edited text shown).  
-12.3 TOOL calls/results in the replay SHALL be marked as “replayed” and SHALL NOT re-execute tools; existing arguments/results are displayed verbatim.  
-12.4 IF replay construction fails, THEN the system SHALL fall back to a single replay bubble containing the entire edited prompt, leaving the original session untouched and surfacing a non-blocking error.  
-12.5 THE replay SHALL record lineage between the original turn and replayed turn (e.g., `replay_parent_turn_id`) for downstream telemetry/persistence.  
-12.6 TELEMETRY SHALL record replay start/finish/cancel outcomes and the replay session id (not user content).  
+15.1 WHEN a section is **not** edited or deleted, THEN the corresponding `Raw.ChatMessage` in the recomposed payload SHALL remain a deep clone of the original message emitted by the prompt renderer, including:
+- `role` (`System`/`User`/`Assistant`/`Tool`).
+- All `ChatCompletionContentPart` entries (Text, Image, Opaque, CacheBreakpoint).
+- Any `toolCalls`, `toolCallId`, `name`, and other metadata fields.
 
-### Requirement 13 – Chat History Persistence (SQLite)
+15.2 WHEN the user edits a **leaf field** (for example, a single `text` value on a `ChatCompletionContentPartText`, or `toolCalls[i].function.arguments`, or `messages[i].name`), THEN the Live Request Editor SHALL:
+- Mutate only that specific field in `Raw.ChatMessage[]`, and  
+- Preserve:
+  - Message `role`, `toolCalls`, `toolCallId`, `name`, and
+  - All `content` entries (Text/Image/Opaque/CacheBreakpoint) other than the targeted `Text` entry, including their ordering relative to each other.
+
+15.3 FOR messages that originally contained **multiple** `Text` content parts interleaved with non-text parts, editing one `Text` part via the UI SHALL:
+- Update only that part’s `text` field, and  
+- Leave all other `content` entries (including other `Text` parts and all non-text parts) untouched and in their original positions.
+
+15.4 WHEN the Live Request Editor exposes editing for tool arguments (for example, `toolCalls[i].function.arguments`), THEN edits SHALL:
+- Be confined to that arguments field, and  
+- Preserve the rest of the tool call record (`id`, `type`, `function.name`) and the surrounding chat message content.
+
+15.5 WHEN the Live Request Editor exposes editing for request-level options (for example, `requestOptions.temperature`), THEN edits SHALL:
+- Mutate only the specified option, and  
+- Preserve the rest of the requestOptions object and the `messages` array.
+
+15.6 WHEN the Live Request Editor builds replay payloads (e.g., via `buildReplayForRequest(...)`) or sends requests to the LLM, the resulting `Raw.ChatMessage[]` payload SHALL:
+- Honor the surgical editing semantics above, and  
+- Remain compatible with downstream consumers that expect canonical `Raw.ChatMessage` structures (including Chat Timeline Replay, CLI history replay, and any future telemetry/persistence layers).
+
+15.7 TESTS SHALL cover:
+- Editing a single-text-part message (text changed, non-text unchanged).  
+- Editing one of several `Text` parts with interleaved non-text parts, asserting that only the targeted `Text` part changes and all other parts remain in place.  
+- Editing tool arguments and request options, asserting that only the targeted fields change and the rest of the payload is preserved.
+
+### Requirement 16 – Hierarchical Message / Content / ToolCall View
 
 **User Story:**  
-As a Copilot user, I want my chat history (original + edited prompts, tool calls/results) persisted locally so I can reload, audit, and replay across VS Code restarts.
+As a Copilot engineer inspecting complex prompts (with multiple content parts and tool calls), I want the Live Request Editor to expose the **hierarchical structure** of each request (`messages[]`, `content[]`, `toolCalls[]`) so I can see where each piece of text or JSON lives in the Raw payload and reason about edits with structural context.
 
 #### Acceptance Criteria
 
-13.1 THE system SHALL store conversations, turns, sections, tool calls/results, responses, and references in a local SQLite DB (global storage), with append-only writes per turn.  
-13.2 A configuration/command SHALL gate persistence (default off) and SHALL be disabled in untrusted workspaces unless the user explicitly opts in.  
-13.3 THE SQLite layer SHALL run migrations with schema_version tracking, WAL mode, integrity_check after migration, and fail open (disable persistence) on corruption.  
-13.4 THE schema SHALL include replay linkage (`replay_parent_turn_id`), token counts/trace paths, and support optional FTS for sections/responses; export/purge commands SHALL be provided.  
-13.5 THE persistence layer SHALL enforce size/TTL caps (pruning oldest turns) and retry with backoff on SQLITE_BUSY; writes SHALL NOT block chat sends.  
-13.6 TESTS SHALL cover migrations, append-only writes, pruning, and corruption fallback; a reset command SHALL drop/recreate the DB only after user consent.  
-
-### Requirement 14 – Graphiti Memory Integration (Optional)
-
-**User Story:**  
-As an advanced user, I want to optionally mirror chat history into Graphiti so I can query prompts/responses via a graph/RAG layer without affecting local behaviour.
-
-#### Acceptance Criteria
-
-14.1 THE Graphiti sync SHALL be gated by a setting (default off) requiring trusted workspace and endpoint/apiKey/workspace configuration; no network traffic SHALL occur unless enabled.  
-14.2 THE extension SHALL provide a TypeScript REST adapter for Graphiti and ingest turn/section/response/tool data as nodes/edges with stable IDs (conversation/turn/section ids).  
-14.3 WHEN enabled, ingestion SHALL run on turn finalization, batching requests with timeout/backoff, and SHALL never block chat sends on failure.  
-14.4 THE sync SHALL be idempotent (stable IDs + content hashes) and maintain a local cursor to resume after failures; retries SHALL be bounded.  
-14.5 ATTACHMENTS SHALL be redacted (URIs + hashes only) unless an explicit opt-in is set; embeddings SHALL only be requested when the Graphiti instance advertises an embedder.  
-14.6 TELEMETRY/diagnostics SHALL record sync successes/failures and queue depth (no user content).  
+16.1 THE Live Request Editor SHALL treat each `Raw.ChatMessage` as a top-level **message node**, with one primary section per message (`nodeType === 'message'`, `sourceMessageIndex` matching the message index).  
+16.2 FOR each message, the editor SHALL surface child nodes for:
+- Top-level scalar fields (for example, `role`, `name`, `toolCallId`) as individual **field nodes**, and  
+- Structured fields/arrays (for example, `content[]`, `toolCalls[]`) as **group nodes** whose children represent individual items (for example, `content[i]`, `toolCalls[i]`),  
+in a way that preserves the original ordering of arrays and the original shape of the Raw message.  
+16.3 EACH section node (message or child) SHALL carry enough metadata to locate its backing Raw payload, including:
+- `sourceMessageIndex`, and  
+- When applicable, `contentIndex` or `toolCallIndex`, and  
+- A human-readable `rawPath` string (e.g., `messages[2].content[1]`, `messages[4].toolCalls[0]`) that is **0-based** and matches the current payload view for debugging.  
+16.4 THE Live Request Editor UI SHALL render:
+- Each **message node** as a “big card” representing the full message (header with role/kind, tokens, etc.), and  
+- Its field and group children (for example, `role`, `name`, `content`, `toolCalls`) as **nested boxes** inside that card, visually grouped by type (scalar fields vs content vs tool calls vs other metadata).  
+16.5 IN the current implementation, the primary **Edit** affordances SHALL be attached to **leaf nodes** (for example, `content[i].text`, `toolCalls[i].function.arguments`, `messages[i].name`, `requestOptions.temperature`), while message nodes act as visual group headers (assistant/system/user “big boxes”) that group their children.  
+16.6 THE hierarchical projection SHALL remain a pure viewmodel concern:
+- `EditableChatRequest.messages` remains the single source of truth,  
+- Downstream consumers (ChatML fetcher, Request Logger, replay, CLI fork) SHALL continue to consume only recomposed `Raw.ChatMessage[]`, not the hierarchical tree directly.  
+16.7 TESTS SHALL cover:
+- Messages with combinations of scalar fields, multiple `content` entries (text + non-text), and `toolCalls`, asserting that the hierarchy (`nodeType`, `parentId`, indices, `rawPath`) matches the Raw payload.  
+- Edits applied at leaf nodes (including message fields and request options) still respect Requirement 15 while the nested child nodes reflect the updated field values and unchanged surrounding structure.  

@@ -7,17 +7,32 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestReplaySnapshot, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestReplayEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
+import { buildReplayResource } from './liveReplayChatProvider';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
 
-type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
+type InspectorExtraSection = 'telemetry';
+
+const LIVE_REQUEST_PAYLOAD_DIFF_SCHEME = 'copilot-live-request-payload-diff';
+const MAX_LIVE_REQUEST_PAYLOAD_DIFF_ENTRIES = 20;
+
+type LiveRequestPayloadDiffSide = 'original' | 'edited';
+
+interface LiveRequestPayloadDiffEntry {
+	original: string;
+	edited: string;
+	createdAt: number;
+}
 
 type WebviewMessage =
 	| { type: 'setMode'; mode: LiveRequestEditorMode }
 	| { type: 'beginAutoOverrideCapture' }
 	| { type: 'clearAutoOverrides'; scope?: LiveRequestOverrideScope }
 	| { type: 'editSection'; sectionId: string; content: string }
+	| { type: 'editLeaf'; sectionId: string; path: string; value: unknown }
+	| { type: 'undoLeafEdit' }
+	| { type: 'redoLeafEdit' }
 	| { type: 'deleteSection'; sectionId: string }
 	| { type: 'restoreSection'; sectionId: string }
 	| { type: 'resetRequest' }
@@ -25,6 +40,7 @@ type WebviewMessage =
 	| { type: 'cancelIntercept' }
 	| { type: 'command'; command: string; args?: unknown[] }
 	| { type: 'selectSession'; sessionKey: string }
+	| { type: 'setFollowMode'; followLatest: boolean }
 	| { type: 'showOverrideDiff'; slotIndex: number; scope: LiveRequestOverrideScope; sessionKey?: string };
 
 interface SessionSummaryPayload {
@@ -43,6 +59,40 @@ interface SessionSummaryPayload {
 	createdAt?: number;
 }
 
+function stableJsonStringify(value: unknown, indent: number = 2): string {
+	const seen = new WeakSet<object>();
+
+	const normalize = (input: unknown): unknown => {
+		if (input === null || input === undefined) {
+			return input;
+		}
+		if (typeof input !== 'object') {
+			if (typeof input === 'bigint') {
+				return input.toString();
+			}
+			return input;
+		}
+		if (seen.has(input as object)) {
+			return '[Circular]';
+		}
+		seen.add(input as object);
+
+		if (Array.isArray(input)) {
+			return input.map(entry => normalize(entry));
+		}
+
+		const record = input as Record<string, unknown>;
+		const sortedKeys = Object.keys(record).sort((a, b) => a.localeCompare(b));
+		const output: Record<string, unknown> = {};
+		for (const key of sortedKeys) {
+			output[key] = normalize(record[key]);
+		}
+		return output;
+	};
+
+	return JSON.stringify(normalize(value), null, indent);
+}
+
 /**
  * WebView provider for the Live Request Editor / Prompt Inspector panel.
  * Displays the composed ChatML request sections before sending to the LLM,
@@ -57,13 +107,17 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 	private _view?: vscode.WebviewView;
 	private _currentRequest?: EditableChatRequest;
+	private _currentReplay?: LiveRequestReplaySnapshot;
 	private _interceptionState: PromptInterceptionState;
 	private _lastInterceptNonce?: number;
 	private readonly _requests = new Map<string, EditableChatRequest>();
+	private readonly _replays = new Map<string, LiveRequestReplaySnapshot>();
 	private _activeSessionKey?: string;
 	private _focusCommandAvailable?: boolean;
 	private _extraSections: InspectorExtraSection[];
+	private _followLatest = true;
 	private _autoOverrideScopePrompted = false;
+	private readonly _payloadDiffEntries = new Map<string, LiveRequestPayloadDiffEntry>();
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -74,6 +128,9 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._interceptionState = this._liveRequestEditorService.getInterceptionState();
 		this._setVisibilityContext(false);
 		this._extraSections = this._readExtraSectionsSetting();
+		this._register(vscode.workspace.registerTextDocumentContentProvider(LIVE_REQUEST_PAYLOAD_DIFF_SCHEME, {
+			provideTextDocumentContent: uri => this._providePayloadDiffContent(uri)
+		}));
 
 		// Listen for changes to the live request
 		this._register(this._liveRequestEditorService.onDidChange(request => {
@@ -89,12 +146,20 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._register(this._liveRequestEditorService.onDidChangeMetadata(event => {
 			this._handleMetadataChanged(event);
 		}));
+		this._register(this._liveRequestEditorService.onDidChangeReplay(event => {
+			this._handleReplayChanged(event);
+		}));
 		this._register(vscode.workspace.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('github.copilot.chat.promptInspector.extraSections')) {
 				this._extraSections = this._readExtraSectionsSetting();
 				this._postStateToWebview();
 			}
+			if (event.affectsConfiguration('github.copilot.chat.liveRequestEditor.timelineReplay.enabled')) {
+				this._postStateToWebview();
+			}
 		}));
+
+		this._seedRequestsFromService();
 	}
 
 	public resolveWebviewView(
@@ -119,6 +184,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		this._updateVisibilityContext();
 
 		// Send initial state if available
+		this._notifyPayloadActiveSession();
 		this._postStateToWebview();
 	}
 
@@ -247,6 +313,44 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						);
 					}
 					break;
+				case 'editLeaf': {
+					if (!this._currentRequest) {
+						break;
+					}
+					const message = payload as { sectionId?: unknown; path?: unknown; value?: unknown };
+					if (typeof message.sectionId !== 'string' || typeof message.path !== 'string') {
+						break;
+					}
+					const section = this._currentRequest.sections.find(candidate => candidate.id === message.sectionId);
+					if (!section || section.deleted) {
+						break;
+					}
+					const normalizedPath = message.path.trim().replace(/^\.+/, '');
+					if (!normalizedPath.length) {
+						break;
+					}
+					const targetPath = `messages[${section.sourceMessageIndex}].${normalizedPath}`;
+					this._liveRequestEditorService.updateLeafByPath(
+						{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location },
+						targetPath,
+						message.value
+					);
+					break;
+				}
+				case 'undoLeafEdit':
+					if (this._currentRequest) {
+						this._liveRequestEditorService.undoLastEdit(
+							{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
+						);
+					}
+					break;
+				case 'redoLeafEdit':
+					if (this._currentRequest) {
+						this._liveRequestEditorService.redoLastEdit(
+							{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
+						);
+					}
+					break;
 
 				case 'deleteSection':
 					if (payload.sectionId && this._currentRequest) {
@@ -282,11 +386,27 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 					this._resolvePendingIntercept('cancel', 'user');
 					break;
 
-				case 'command':
+				case 'command': {
 					if (typeof payload.command === 'string') {
-						await vscode.commands.executeCommand(payload.command, ...(payload.args ?? []));
+						// Special-case payload diff so we can use the current request
+						// even if the webview only has a sessionId/location pair.
+						if (payload.command === 'github.copilot.liveRequestEditor.showReplayPayloadDiff') {
+							const arg = (payload.args?.[0] ?? {}) as { sessionId?: string; location?: ChatLocation };
+							const key = (arg.sessionId && typeof arg.location === 'number')
+								? { sessionId: arg.sessionId, location: arg.location as ChatLocation }
+								: this._currentRequest
+									? { sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
+									: undefined;
+							if (!key) {
+								break;
+							}
+							await this._showReplayPayloadDiff(key);
+						} else {
+							await vscode.commands.executeCommand(payload.command, ...(payload.args ?? []));
+						}
 					}
 					break;
+				}
 				case 'showOverrideDiff': {
 					const message = payload;
 					if (typeof message.slotIndex === 'number') {
@@ -299,7 +419,18 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 				}
 				case 'selectSession':
 					if (typeof payload.sessionKey === 'string') {
+						this._followLatest = false;
 						this._activateSessionByKey(payload.sessionKey);
+					}
+					break;
+				case 'setFollowMode':
+					if (typeof payload.followLatest === 'boolean') {
+						this._followLatest = payload.followLatest;
+						if (this._followLatest) {
+							this._activateLatestRequest();
+						} else {
+							this._postStateToWebview();
+						}
 					}
 					break;
 
@@ -320,27 +451,79 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		const key = this._toCompositeKey(request.sessionId, request.location);
 		this._requests.set(key, request);
 		const pendingCompositeKey = this._getPendingCompositeKey();
-		const shouldActivate = !this._activeSessionKey
-			|| this._activeSessionKey === key
-			|| (pendingCompositeKey !== undefined && pendingCompositeKey === key);
+		const incomingTimestamp = request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? Date.now();
+		const currentTimestamp = this._currentRequest
+			? this._currentRequest.metadata?.lastUpdated ?? this._currentRequest.metadata?.createdAt ?? 0
+			: 0;
+		const shouldActivate = this._followLatest
+			? (!this._activeSessionKey
+				|| this._activeSessionKey === key
+				|| (pendingCompositeKey !== undefined && pendingCompositeKey === key)
+				|| incomingTimestamp >= currentTimestamp)
+			: (!this._activeSessionKey || this._activeSessionKey === key);
 		if (shouldActivate) {
 			this._activeSessionKey = key;
 			this._currentRequest = request;
+			this._notifyPayloadActiveSession();
 		}
 		this._postStateToWebview();
+	}
+
+	private _seedRequestsFromService(): void {
+		const requests = this._liveRequestEditorService.getAllRequests();
+		if (!requests.length) {
+			return;
+		}
+		for (const request of requests) {
+			const key = this._toCompositeKey(request.sessionId, request.location);
+			this._requests.set(key, request);
+		}
+		if (this._followLatest) {
+			let latest: EditableChatRequest | undefined;
+			let latestKey: string | undefined;
+			let latestTimestamp = -Infinity;
+			for (const [key, request] of this._requests) {
+				const ts = request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0;
+				if (ts >= latestTimestamp) {
+					latestTimestamp = ts;
+					latest = request;
+					latestKey = key;
+				}
+			}
+			this._activeSessionKey = latestKey;
+			this._currentRequest = latest;
+			this._currentReplay = latestKey ? this._replays.get(latestKey) : undefined;
+			return;
+		}
+		if (this._activeSessionKey && this._requests.has(this._activeSessionKey)) {
+			this._currentRequest = this._requests.get(this._activeSessionKey);
+			this._currentReplay = this._replays.get(this._activeSessionKey);
+			return;
+		}
+		const firstKey = this._requests.keys().next().value as string | undefined;
+		this._activeSessionKey = firstKey;
+		this._currentRequest = firstKey ? this._requests.get(firstKey) : undefined;
+		this._currentReplay = firstKey ? this._replays.get(firstKey) : undefined;
 	}
 
 	private _handleRequestRemoved(key: LiveRequestSessionKey): void {
 		const compositeKey = this._toCompositeKey(key.sessionId, key.location);
 		const wasActive = this._activeSessionKey === compositeKey;
 		this._requests.delete(compositeKey);
+		this._replays.delete(compositeKey);
 		if (wasActive) {
+			if (this._followLatest) {
+				this._activateLatestRequest();
+				return;
+			}
 			const nextKey = this._requests.keys().next().value as string | undefined;
 			this._activeSessionKey = nextKey;
 			this._currentRequest = nextKey ? this._requests.get(nextKey) : undefined;
+			this._currentReplay = nextKey ? this._replays.get(nextKey) : undefined;
 		} else if (!this._requests.size) {
 			this._activeSessionKey = undefined;
 			this._currentRequest = undefined;
+			this._currentReplay = undefined;
 		}
 		this._postStateToWebview();
 	}
@@ -356,7 +539,42 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}
 		this._activeSessionKey = compositeKey;
 		this._currentRequest = next;
+		this._currentReplay = this._replays.get(compositeKey);
+		this._notifyPayloadActiveSession();
 		this._postStateToWebview();
+	}
+
+	private _activateLatestRequest(): void {
+		let latest: EditableChatRequest | undefined;
+		let latestKey: string | undefined;
+		let latestTimestamp = -Infinity;
+		for (const [key, request] of this._requests) {
+			const ts = request.metadata?.lastUpdated ?? request.metadata?.createdAt ?? 0;
+			if (ts >= latestTimestamp) {
+				latestTimestamp = ts;
+				latest = request;
+				latestKey = key;
+			}
+		}
+		if (latest && latestKey) {
+			this._activeSessionKey = latestKey;
+			this._currentRequest = latest;
+			this._currentReplay = this._replays.get(latestKey);
+		}
+		this._notifyPayloadActiveSession();
+		this._postStateToWebview();
+	}
+
+	private _notifyPayloadActiveSession(): void {
+		if (!this._activeSessionKey) {
+			return;
+		}
+		try {
+			const key = this._fromCompositeKey(this._activeSessionKey);
+			void vscode.commands.executeCommand('github.copilot.liveRequestPayload.setActiveSession', key);
+		} catch {
+			// best-effort
+		}
 	}
 
 	private _getHtmlForWebview(webview: vscode.Webview): string {
@@ -397,13 +615,19 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			return;
 		}
 
+		const replayResource = this._currentReplay ? buildReplayResource(this._currentReplay).toString() : undefined;
+
 		this._view.webview.postMessage({
 			type: 'stateUpdate',
 			request: this._currentRequest,
+			replay: this._currentReplay,
+			replayUri: replayResource,
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
 			activeSessionKey: this._activeSessionKey,
-			extraSections: this._extraSections
+			extraSections: this._extraSections,
+			replayEnabled: this._liveRequestEditorService.isReplayEnabled(),
+			followLatest: this._followLatest
 		}).then(undefined, error => this._logService.error('Live Request Editor: failed to post state', error));
 	}
 
@@ -439,6 +663,24 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}
 		if (this._activeSessionKey === compositeKey) {
 			this._currentRequest = request;
+		}
+		this._postStateToWebview();
+	}
+
+	private _handleReplayChanged(event: LiveRequestReplayEvent): void {
+		const replay = event.replay;
+		const compositeKey = this._toCompositeKey(event.key.sessionId, event.key.location);
+		if (!replay) {
+			this._replays.delete(compositeKey);
+		} else {
+			this._replays.set(compositeKey, replay);
+			if (this._activeSessionKey === compositeKey) {
+				this._currentReplay = replay;
+			}
+		}
+		if (!this._activeSessionKey) {
+			this._activeSessionKey = compositeKey;
+			this._currentReplay = replay;
 		}
 		this._postStateToWebview();
 	}
@@ -502,6 +744,66 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			return undefined;
 		}
 		return { sessionId, location: location as ChatLocation };
+	}
+
+	private _providePayloadDiffContent(uri: vscode.Uri): string {
+		const params = new URLSearchParams(uri.query);
+		const id = params.get('id');
+		const side = params.get('side') as LiveRequestPayloadDiffSide | null;
+		if (!id || (side !== 'original' && side !== 'edited')) {
+			return '';
+		}
+		const entry = this._payloadDiffEntries.get(id);
+		if (!entry) {
+			return '';
+		}
+		return side === 'original' ? entry.original : entry.edited;
+	}
+
+	private _storePayloadDiffEntry(original: string, edited: string): string {
+		const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+		this._payloadDiffEntries.set(id, { original, edited, createdAt: Date.now() });
+		if (this._payloadDiffEntries.size > MAX_LIVE_REQUEST_PAYLOAD_DIFF_ENTRIES) {
+			const ordered = Array.from(this._payloadDiffEntries.entries()).sort((a, b) => a[1].createdAt - b[1].createdAt);
+			for (const [key] of ordered.slice(0, ordered.length - MAX_LIVE_REQUEST_PAYLOAD_DIFF_ENTRIES)) {
+				this._payloadDiffEntries.delete(key);
+			}
+		}
+		return id;
+	}
+
+	private async _showReplayPayloadDiff(key: LiveRequestSessionKey): Promise<void> {
+		const request = this._liveRequestEditorService.getRequest(key);
+		if (!request) {
+			void vscode.window.showInformationMessage('No Live Request Editor payload is available for this request.');
+			return;
+		}
+
+		// Original vs edited payloads, serialized with stable formatting.
+		const originalPayload = request.originalMessages;
+		const editedResult = this._liveRequestEditorService.getMessagesForSend(key, request.originalMessages);
+		if (editedResult.error) {
+			void vscode.window.showWarningMessage('Cannot build payload diff because the edited request is invalid. Reset the prompt and try again.');
+			return;
+		}
+
+		const shortId = request.sessionId.slice(-6);
+		const beforeJson = stableJsonStringify(originalPayload, 2);
+		const afterJson = stableJsonStringify(editedResult.messages, 2);
+		const diffId = this._storePayloadDiffEntry(beforeJson, afterJson);
+		const left = vscode.Uri.from({
+			scheme: LIVE_REQUEST_PAYLOAD_DIFF_SCHEME,
+			path: `/Original payload · ${shortId}.json`,
+			query: `id=${diffId}&side=original`
+		});
+		const right = vscode.Uri.from({
+			scheme: LIVE_REQUEST_PAYLOAD_DIFF_SCHEME,
+			path: `/Edited payload · ${shortId}.json`,
+			query: `id=${diffId}&side=edited`
+		});
+
+		const title = vscode.l10n.t('Live Request Editor · Payload diff · {0}', shortId);
+		await vscode.commands.executeCommand('vscode.diff', left, right, title);
 	}
 
 	private async _showOverrideDiff(scope: LiveRequestOverrideScope, slotIndex: number, sessionKey?: LiveRequestSessionKey): Promise<void> {

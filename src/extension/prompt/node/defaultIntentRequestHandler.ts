@@ -88,6 +88,7 @@ export class DefaultIntentRequestHandler {
 		protected readonly documentContext: IDocumentContext | undefined,
 		private readonly location: ChatLocation,
 		private readonly chatTelemetryBuilder: ChatTelemetryBuilder,
+		private readonly chatSessionResource: string | undefined,
 		private readonly handlerOptions: IDefaultIntentRequestHandlerOptions = { maxToolCallIterations: 15 },
 		private readonly onPaused: Event<boolean>, // todo: use a PauseController instead
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
@@ -321,6 +322,7 @@ export class DefaultIntentRequestHandler {
 				topP: this.options.topP,
 				location: this.location,
 				overrideRequestLocation: this.handlerOptions.overrideRequestLocation,
+				chatSessionResource: this.chatSessionResource,
 				interactionContext: this.documentContext?.document.uri,
 				responseProcessor: typeof intentInvocation.processResponse === 'function' ? intentInvocation as IResponseProcessor : undefined,
 			},
@@ -581,6 +583,7 @@ interface IDefaultToolLoopOptions extends IToolCallingLoopOptions {
 	temperature: number;
 	topP: number;
 	overrideRequestLocation?: ChatLocation;
+	chatSessionResource?: string;
 }
 
 class PromptInterceptionCancelledError extends CancellationError {
@@ -810,6 +813,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			intentId: this.options.intent?.id,
 			endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
 			modelFamily: this.options.invocation.endpoint.family,
+			chatSessionResource: this.options.chatSessionResource,
 			requestOptions,
 			maxPromptTokens: this.options.invocation.endpoint.modelMaxPromptTokens,
 		};

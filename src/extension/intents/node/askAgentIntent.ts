@@ -81,6 +81,7 @@ export class AskAgentIntent implements IIntent {
 			documentContext,
 			location,
 			chatTelemetry,
+			undefined,
 			this.getIntentHandlerOptions(request),
 			onPaused,
 		);

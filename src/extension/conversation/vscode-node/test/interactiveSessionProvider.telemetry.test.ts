@@ -32,6 +32,7 @@ suite('Conversation telemetry tests - Integration tests', function () {
 			const instantiationService = accessor.get(IInstantiationService);
 			const session = instantiationService.createInstance(ChatParticipantRequestHandler,
 				[],
+				{} as vscode.ChatContext,
 				request,
 				stream,
 				token,

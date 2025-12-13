@@ -10,11 +10,12 @@ import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { Emitter } from '../../../../util/vs/base/common/event';
 import { EditableChatRequest, LiveRequestSessionKey } from '../../common/liveRequestEditorModel';
-import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestOverrideScope, PromptInterceptionState } from '../../common/liveRequestEditorService';
+import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestOverrideScope, LiveRequestReplayEvent, PromptInterceptionState } from '../../common/liveRequestEditorService';
 import { OptionalChatRequestParams } from '../../../../platform/networking/common/fetch';
 import { LiveRequestEditorProvider } from '../liveRequestEditorProvider';
 
 const mockExtraSectionsValue: string[] = [];
+let registeredTextDocumentContentProvider: { scheme: string; provider: vscode.TextDocumentContentProvider } | undefined;
 
 vi.mock('vscode', async () => {
 	const shim = await import('../../../../util/common/test/shims/vscodeTypesShim');
@@ -32,6 +33,10 @@ vi.mock('vscode', async () => {
 		window: {},
 		workspace: {
 			getConfiguration: configurationGetter,
+			registerTextDocumentContentProvider: vi.fn().mockImplementation((scheme: string, provider: vscode.TextDocumentContentProvider) => {
+				registeredTextDocumentContentProvider = { scheme, provider };
+				return { dispose: vi.fn() };
+			}),
 			onDidChangeConfiguration: vi.fn().mockReturnValue({ dispose: vi.fn() })
 		}
 	};
@@ -43,6 +48,7 @@ describe('LiveRequestEditorProvider', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockExtraSectionsValue.length = 0;
+		registeredTextDocumentContentProvider = undefined;
 		logService = {
 			trace: vi.fn(),
 			debug: vi.fn(),
@@ -113,6 +119,47 @@ describe('LiveRequestEditorProvider', () => {
 		);
 	});
 
+	test('forwards leaf edits to LiveRequestEditorService.updateLeafByPath', async () => {
+		const { provider, service } = createProvider(logService);
+		const request = createRequest('leaf-session');
+		request.sections = [{
+			id: 'user-2',
+			kind: 'user',
+			label: 'User',
+			content: 'original',
+			originalContent: 'original',
+			collapsed: false,
+			editable: true,
+			deletable: true,
+			sourceMessageIndex: 2,
+		}];
+		(provider as any)._currentRequest = request;
+
+		await (provider as any)._handleWebviewMessage({
+			type: 'editLeaf',
+			sectionId: 'user-2',
+			path: 'content[0].text',
+			value: 'edited'
+		});
+
+		expect(service.updateLeafByPath).toHaveBeenCalledWith(
+			{ sessionId: 'leaf-session', location: ChatLocation.Panel },
+			'messages[2].content[0].text',
+			'edited'
+		);
+	});
+
+	test('forwards leaf undo/redo to LiveRequestEditorService', async () => {
+		const { provider, service } = createProvider(logService);
+		(provider as any)._currentRequest = createRequest('undo-session');
+
+		await (provider as any)._handleWebviewMessage({ type: 'undoLeafEdit' });
+		expect(service.undoLastEdit).toHaveBeenCalledWith({ sessionId: 'undo-session', location: ChatLocation.Panel });
+
+		await (provider as any)._handleWebviewMessage({ type: 'redoLeafEdit' });
+		expect(service.redoLastEdit).toHaveBeenCalledWith({ sessionId: 'undo-session', location: ChatLocation.Panel });
+	});
+
 	test('includes telemetry extra section when posting state', () => {
 		mockExtraSectionsValue.push('telemetry');
 		const { provider } = createProvider(logService);
@@ -129,11 +176,63 @@ describe('LiveRequestEditorProvider', () => {
 			extraSections: ['telemetry']
 		}));
 	});
+
+	test('showReplayPayloadDiff opens a labeled diff over virtual JSON payloads', async () => {
+		const { provider, service } = createProvider(logService);
+		const request: EditableChatRequest = {
+			...createRequest('diff-session'),
+			originalMessages: [{
+				role: Raw.ChatRole.User,
+				content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'original' }],
+				z: 1,
+				a: 2
+			} as unknown as Raw.ChatMessage]
+		};
+
+		(service.getRequest as Mock).mockReturnValue(request);
+		(service.getMessagesForSend as Mock).mockReturnValue({
+			messages: [{
+				role: Raw.ChatRole.User,
+				content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'edited' }],
+				z: 1,
+				a: 2
+			} as unknown as Raw.ChatMessage]
+		});
+
+		await (provider as any)._showReplayPayloadDiff({ sessionId: request.sessionId, location: request.location });
+
+		const diffCall = (vscode.commands.executeCommand as Mock).mock.calls.find(call => call[0] === 'vscode.diff') as [string, vscode.Uri, vscode.Uri, string] | undefined;
+		expect(diffCall).toBeTruthy();
+		expect(diffCall?.[3]).toContain('Payload diff');
+
+		const [, leftUri, rightUri] = diffCall!;
+		expect(leftUri.scheme).toBe('copilot-live-request-payload-diff');
+		expect(rightUri.scheme).toBe('copilot-live-request-payload-diff');
+		expect(leftUri.path).toContain('Original payload');
+		expect(rightUri.path).toContain('Edited payload');
+
+		const leftParams = new URLSearchParams(leftUri.query);
+		const rightParams = new URLSearchParams(rightUri.query);
+		expect(leftParams.get('id')).toBeTruthy();
+		expect(leftParams.get('id')).toBe(rightParams.get('id'));
+		expect(leftParams.get('side')).toBe('original');
+		expect(rightParams.get('side')).toBe('edited');
+
+		expect(registeredTextDocumentContentProvider?.scheme).toBe('copilot-live-request-payload-diff');
+		const token = new vscode.CancellationTokenSource().token;
+		const originalContentResult = registeredTextDocumentContentProvider?.provider.provideTextDocumentContent(leftUri, token);
+		const originalContent = await Promise.resolve(originalContentResult);
+		const originalText = originalContent ?? '';
+		expect(originalText).toContain('"original"');
+		expect(originalText.indexOf('"a": 2')).toBeLessThan(originalText.indexOf('"z": 1'));
+	});
+
 	function createProvider(logSvc: ILogService) {
 		const onDidChange = new Emitter<EditableChatRequest>();
 		const onDidRemove = new Emitter<{ sessionId: string; location: ChatLocation }>();
 		const onDidInterception = new Emitter<PromptInterceptionState>();
 		const onDidMetadata = new Emitter<LiveRequestMetadataEvent>();
+		const onDidReplay = new Emitter<LiveRequestReplayEvent>();
 		let currentMode: LiveRequestEditorMode = 'off';
 		let currentScope: LiveRequestOverrideScope | undefined;
 		let previewLimit = 3;
@@ -155,18 +254,25 @@ describe('LiveRequestEditorProvider', () => {
 			onDidUpdateSubagentHistory: new Emitter<void>().event,
 			onDidChangeInterception: onDidInterception.event,
 			onDidChangeMetadata: onDidMetadata.event,
+			onDidChangeReplay: onDidReplay.event,
 			isEnabled: () => true,
 			isInterceptionEnabled: () => true,
+			isReplayEnabled: () => true,
 			prepareRequest: () => undefined,
-			getRequest: () => undefined,
+			getRequest: vi.fn(),
+			getAllRequests: () => [],
 			updateSectionContent: () => undefined,
+			updateLeafByPath: vi.fn(),
+			undoLastEdit: vi.fn(),
+			redoLastEdit: vi.fn(),
 			deleteSection: () => undefined,
 			restoreSection: () => undefined,
 			resetRequest: () => undefined,
 			updateTokenCounts: () => undefined,
 			applyTraceData: () => undefined,
+			getOriginalRequestMessages: () => undefined,
 			updateRequestOptions: (_key: LiveRequestSessionKey, _requestOptions: OptionalChatRequestParams | undefined) => undefined,
-			getMessagesForSend: (_key: LiveRequestSessionKey, _fallback: Raw.ChatMessage[]) => ({ messages: [] as Raw.ChatMessage[] }),
+			getMessagesForSend: vi.fn().mockImplementation((_key: LiveRequestSessionKey, _fallback: Raw.ChatMessage[]) => ({ messages: [] as Raw.ChatMessage[] })),
 			getInterceptionState: () => currentInterceptionState,
 			setMode: async mode => {
 				currentMode = mode;
@@ -208,6 +314,11 @@ describe('LiveRequestEditorProvider', () => {
 			getSubagentRequests: () => [],
 			clearSubagentHistory: () => undefined,
 			getMetadataSnapshot: () => undefined,
+			buildReplayForRequest: () => undefined,
+			getReplaySnapshot: () => undefined,
+			restorePreviousReplay: () => undefined,
+			markReplayForkActive: () => undefined,
+			markReplayStale: () => undefined,
 		};
 		const buildState = (overrides: Partial<PromptInterceptionState> = {}): PromptInterceptionState => {
 			const autoOverride = overrides.autoOverride

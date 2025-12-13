@@ -8,6 +8,7 @@ import * as ReactDOM from 'react-dom';
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 import { provideVSCodeDesignSystem, vsCodeButton, vsCodeDropdown, vsCodeOption } from '@vscode/webview-ui-toolkit';
+import { RawStructureEditor } from './rawStructureEditor';
 
 interface VSCodeAPI<TState = unknown> {
 	postMessage(message: unknown): void;
@@ -22,6 +23,7 @@ declare global {
 		interface IntrinsicElements {
 			'vscode-button': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				appearance?: 'primary' | 'secondary';
+				disabled?: boolean;
 			};
 			'vscode-dropdown': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
 				value?: string;
@@ -40,7 +42,7 @@ type SectionActionIconType = 'edit' | 'close' | 'delete' | 'pin' | 'pinFilled' |
 
 type LiveRequestEditorMode = 'off' | 'interceptOnce' | 'interceptAlways' | 'autoOverride';
 
-type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
+type InspectorExtraSection = 'telemetry';
 
 interface EditableChatRequestMetadata {
 	requestId?: string;
@@ -52,6 +54,7 @@ interface EditableChatRequestMetadata {
 	intentId?: string;
 	endpointUrl?: string;
 	modelFamily?: string;
+	chatSessionResource?: string;
 	requestOptions?: Record<string, unknown>;
 	lastLoggedAt?: number;
 	lastLoggedHash?: number;
@@ -68,7 +71,14 @@ interface RawChatMessageContentPart {
 interface RawChatMessage {
 	role?: string;
 	content?: RawChatMessageContentPart[];
+	name?: string;
+	toolCallId?: string;
 	[key: string]: unknown;
+}
+
+interface EditHistory {
+	undoStack: unknown[];
+	redoStack: unknown[];
 }
 
 interface EditableChatRequest {
@@ -81,6 +91,7 @@ interface EditableChatRequest {
 	messages?: RawChatMessage[];
 	sections: LiveRequestSection[];
 	metadata?: EditableChatRequestMetadata;
+	editHistory?: EditHistory;
 }
 
 interface ToolInvocationMetadata {
@@ -93,6 +104,7 @@ interface LiveRequestSectionMetadata {
 	name?: string;
 	toolCallId?: string;
 	toolInvocation?: ToolInvocationMetadata;
+	toolCalls?: Array<{ id?: string; name?: string; arguments?: string }>;
 }
 
 interface LiveRequestSection {
@@ -100,6 +112,8 @@ interface LiveRequestSection {
 	label: string;
 	kind: string;
 	content?: string;
+	message?: RawChatMessage;
+	sourceMessageIndex?: number;
 	tokenCount?: number;
 	collapsed?: boolean;
 	editable?: boolean;
@@ -116,10 +130,15 @@ interface LiveRequestSection {
 interface StateUpdateMessage {
 	type: 'stateUpdate';
 	request?: EditableChatRequest;
+	replay?: LiveRequestReplaySnapshot;
+	replayUri?: string;
+	replayView?: 'payload' | 'projection';
 	interception?: InterceptionState;
 	sessions?: SessionSummary[];
 	activeSessionKey?: string;
 	extraSections?: InspectorExtraSection[];
+	replayEnabled?: boolean;
+	followLatest?: boolean;
 }
 
 interface SessionSummary {
@@ -141,6 +160,8 @@ interface SessionSummary {
 interface PersistedState {
 	pinned?: Record<string, string[]>;
 	collapsed?: Record<string, string[]>;
+	followLatest?: boolean;
+	selectedSessionKey?: string;
 }
 
 interface InterceptionState {
@@ -177,7 +198,7 @@ function formatNumber(value?: number): string {
 	return Number(value).toLocaleString();
 }
 
-const EXTRA_SECTION_VALUES: InspectorExtraSection[] = ['requestOptions', 'telemetry', 'rawRequest'];
+const EXTRA_SECTION_VALUES: InspectorExtraSection[] = ['telemetry'];
 
 const MODE_OPTIONS: Array<{ label: string; mode: LiveRequestEditorMode; description: string }> = [
 	{ label: 'Send normally', mode: 'off', description: 'Send requests immediately.' },
@@ -337,15 +358,21 @@ const EmptyState: React.FC = () => (
 
 interface SectionCardProps {
 	section: LiveRequestSection;
+	payloadIndex?: number;
 	totalTokens: number;
 	isPinned: boolean;
 	isEditing: boolean;
 	isCollapsed: boolean;
+	isFlashing: boolean;
+	canEdit: boolean;
+	canUndo: boolean;
+	canRedo: boolean;
 	onToggleCollapse: (sectionId: string) => void;
 	onTogglePinned: (sectionId: string) => void;
 	onEditToggle: (sectionId: string) => void;
-	onCancelEdit: () => void;
-	onSaveEdit: (sectionId: string, content: string) => void;
+	onEditLeaf: (sectionId: string, path: string, value: unknown) => void;
+	onUndoLeafEdit: () => void;
+	onRedoLeafEdit: () => void;
 	onDelete: (sectionId: string) => void;
 	onRestore: (sectionId: string) => void;
 	onShowDiff?: (section: LiveRequestSection) => void;
@@ -355,22 +382,27 @@ interface SectionCardProps {
 
 const SectionCard: React.FC<SectionCardProps> = ({
 	section,
+	payloadIndex,
 	totalTokens,
 	isPinned,
 	isEditing,
 	isCollapsed,
+	isFlashing,
+	canEdit,
+	canUndo,
+	canRedo,
 	onToggleCollapse,
 	onTogglePinned,
 	onEditToggle,
-	onCancelEdit,
-	onSaveEdit,
+	onEditLeaf,
+	onUndoLeafEdit,
+	onRedoLeafEdit,
 	onDelete,
 	onRestore,
 	onShowDiff,
 	draggingRef,
 	onReorderPinned,
 }) => {
-	const [draftContent, setDraftContent] = React.useState(section.content ?? '');
 	const [dragPosition, setDragPosition] = React.useState<'none' | 'above' | 'below'>('none');
 	const collapsed = isCollapsed && !isEditing;
 	const deleted = !!section.deleted;
@@ -384,14 +416,49 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		}
 		return DOMPurify.sanitize(markdown.render(section.content ?? ''));
 	}, [section.content]);
+	const assistantToolCalls = React.useMemo(() => {
+		if (section.kind !== 'assistant') {
+			return undefined;
+		}
+		const formatArgs = (value: unknown): string | undefined => {
+			if (value === undefined || value === null) {
+				return undefined;
+			}
+			if (typeof value === 'string') {
+				return value;
+			}
+			try {
+				return JSON.stringify(value, null, 2);
+			} catch {
+				return String(value);
+			}
+		};
+
+		const messageCalls = (section.message as { toolCalls?: unknown } | undefined)?.toolCalls;
+		if (Array.isArray(messageCalls) && messageCalls.length) {
+			return messageCalls.map(call => {
+				const record = call as Record<string, unknown>;
+				const fn = (record['function'] as Record<string, unknown> | undefined) ?? undefined;
+				return {
+					id: typeof record['id'] === 'string' ? record['id'] : undefined,
+					name: typeof fn?.['name'] === 'string' ? fn['name'] as string : undefined,
+					arguments: formatArgs(fn?.['arguments'])
+				};
+			});
+		}
+
+		const metaCalls = section.metadata?.toolCalls;
+		if (!Array.isArray(metaCalls) || !metaCalls.length) {
+			return undefined;
+		}
+		return metaCalls as Array<{ id?: string; name?: string; arguments?: string }>;
+	}, [section.kind, section.message, section.metadata]);
+
 	const toolInvocation = React.useMemo(() => {
 		if (section.kind !== 'tool') {
 			return undefined;
 		}
-		if (section.metadata?.toolInvocation) {
-			return section.metadata.toolInvocation;
-		}
-		if (section.metadata?.name || section.metadata?.toolCallId) {
+		if (section.metadata?.toolCallId || section.metadata?.name) {
 			return {
 				id: typeof section.metadata.toolCallId === 'string' ? section.metadata.toolCallId : undefined,
 				name: typeof section.metadata.name === 'string' ? section.metadata.name : undefined
@@ -399,13 +466,6 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		}
 		return undefined;
 	}, [section]);
-	const toolArguments = toolInvocation?.arguments?.trim();
-
-	React.useEffect(() => {
-		if (isEditing) {
-			setDraftContent(section.content ?? '');
-		}
-	}, [isEditing, section.content]);
 
 	const className = [
 		'section',
@@ -413,6 +473,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		collapsed ? 'collapsed' : '',
 		deleted ? 'deleted' : '',
 		isPinned ? 'pinned' : '',
+		isFlashing ? 'recently-added' : '',
 		dragPosition === 'above' ? 'drag-over-above' : '',
 		dragPosition === 'below' ? 'drag-over-below' : ''
 	].filter(Boolean).join(' ');
@@ -476,10 +537,6 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		setDragPosition('none');
 	}, [draggingRef]);
 
-	const handleSaveClick = React.useCallback(() => {
-		onSaveEdit(section.id, draftContent);
-	}, [section.id, draftContent, onSaveEdit]);
-
 	const handleHeaderKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
@@ -542,18 +599,20 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				</div>
 				<div className='section-toolbar' role='toolbar' aria-label={`Actions for ${section.label}`}>
 					{deleted ? (
-						<button
-							type='button'
-							className='section-toolbar-button'
-							onClick={handleToolbarAction(() => onRestore(section.id))}
-							title='Restore section'
-							aria-label='Restore section'
-						>
-							<SectionActionIcon type='restore' />
-						</button>
+						canEdit ? (
+							<button
+								type='button'
+								className='section-toolbar-button'
+								onClick={handleToolbarAction(() => onRestore(section.id))}
+								title='Restore section'
+								aria-label='Restore section'
+							>
+								<SectionActionIcon type='restore' />
+							</button>
+						) : null
 					) : (
 						<>
-							{section.editable && (
+							{section.editable && canEdit && (
 								<button
 									type='button'
 									className='section-toolbar-button'
@@ -565,7 +624,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 									<SectionActionIcon type={isEditing ? 'close' : 'edit'} />
 								</button>
 							)}
-							{section.deletable && (
+							{section.deletable && canEdit && (
 								<button
 									type='button'
 									className='section-toolbar-button'
@@ -595,44 +654,54 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				id={sectionBodyId}
 				aria-hidden={collapsed && !isEditing}
 			>
-				{toolInvocation ? (
+				{assistantToolCalls ? (
 					<div className='section-tool-details'>
 						<div className='tool-name-row'>
-							<span className='tool-label'>Tool</span>
+							<span className='tool-label'>Tool calls</span>
+						</div>
+						{assistantToolCalls.map((call, index) => (
+							<div className='tool-call-block' key={call.id ?? `${section.id}-toolcall-${index}`}>
+								<div className='tool-name-row'>
+									<span className='tool-name'>{call.name ?? 'Unknown tool'}</span>
+									{call.id ? <span className='tool-id'>#{call.id}</span> : null}
+								</div>
+								{call.arguments ? (
+									<div className='tool-args'>
+										<div className='tool-label'>Arguments</div>
+										<pre className='tool-args-block'>
+											<code>{call.arguments}</code>
+										</pre>
+									</div>
+								) : (
+									<div className='tool-args tool-args-empty'>No invocation arguments provided.</div>
+								)}
+							</div>
+						))}
+					</div>
+				) : null}
+				{!assistantToolCalls && toolInvocation ? (
+					<div className='section-tool-details'>
+						<div className='tool-name-row'>
+							<span className='tool-label'>Tool call</span>
 							<span className='tool-name'>{toolInvocation.name ?? 'Unknown tool'}</span>
 							{toolInvocation.id ? (
 								<span className='tool-id'>#{toolInvocation.id}</span>
 							) : null}
 						</div>
-						{toolArguments ? (
-							<div className='tool-args'>
-								<div className='tool-label'>Arguments</div>
-								<pre className='tool-args-block'>
-									<code>{toolArguments}</code>
-								</pre>
-							</div>
-						) : (
-							<div className='tool-args tool-args-empty'>No invocation arguments provided.</div>
-						)}
+						<div className='tool-args tool-args-empty'>Tool response content shown below.</div>
 					</div>
 				) : null}
-				{isEditing ? (
-					<>
-						<textarea
-							className='section-editor'
-							value={draftContent}
-							onChange={event => setDraftContent(event.target.value)}
-							data-section={section.id}
-						/>
-						<div className='editor-actions'>
-							<vscode-button appearance='secondary' onClick={onCancelEdit}>
-								Cancel
-							</vscode-button>
-							<vscode-button appearance='primary' onClick={handleSaveClick}>
-								Save
-							</vscode-button>
-						</div>
-					</>
+				{isEditing && typeof payloadIndex === 'number' ? (
+					<RawStructureEditor
+						section={section}
+						payloadIndex={payloadIndex}
+						canEdit={canEdit}
+						canUndo={canUndo}
+						canRedo={canRedo}
+						onEditLeaf={onEditLeaf}
+						onUndoLeafEdit={onUndoLeafEdit}
+						onRedoLeafEdit={onRedoLeafEdit}
+					/>
 				) : (
 					<div className='section-rendered' dangerouslySetInnerHTML={{ __html: renderedContent }} />
 				)}
@@ -761,6 +830,12 @@ const App: React.FC = () => {
 	const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
 	const [sessions, setSessions] = React.useState<SessionSummary[]>([]);
 	const [activeSessionKey, setActiveSessionKey] = React.useState<string | undefined>(undefined);
+	const [replayEnabled, setReplayEnabled] = React.useState(false);
+	const [replay, setReplay] = React.useState<LiveRequestReplaySnapshot | undefined>(undefined);
+	const [replayView, setReplayView] = React.useState<'payload' | 'projection'>('payload');
+	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
+	const [lastReplayUri, setLastReplayUri] = React.useState<string | undefined>(undefined);
+	const [followLatest, setFollowLatest] = React.useState(true);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -770,13 +845,23 @@ const App: React.FC = () => {
 		}
 		return stored;
 	});
+	const initialFollowLatestRef = React.useRef<boolean | undefined>(persistedState.followLatest);
+	const initialSelectedSessionKeyRef = React.useRef<string | undefined>(persistedState.selectedSessionKey);
+	const didRestoreSelectionRef = React.useRef(false);
+	const sessionDropdownRef = React.useRef<(HTMLElement & { value?: string }) | null>(null);
 	const draggingSectionRef = React.useRef<string | null>(null);
+	const sectionsEndRef = React.useRef<HTMLDivElement | null>(null);
+	const prevSectionsLengthRef = React.useRef<number>(0);
+	const prevSectionIdsRef = React.useRef<string[]>([]);
 	const [bannerPulse, setBannerPulse] = React.useState(false);
+	const [sessionFlash, setSessionFlash] = React.useState(false);
+	const [flashSections, setFlashSections] = React.useState<Set<string>>(new Set());
 	const mode = interception?.mode ?? 'off';
 	const autoOverride = interception?.autoOverride;
 	const captureActive = mode === 'autoOverride' && autoOverride?.capturing;
 	const displayMode: LiveRequestEditorMode = mode === 'interceptOnce' ? 'interceptAlways' : mode;
 	const previewLimit = autoOverride?.previewLimit ?? 3;
+	const canEditSections = displayMode !== 'off';
 
 	const updatePersistedState = React.useCallback((updater: (prev: PersistedState) => PersistedState) => {
 		setPersistedState(prev => {
@@ -784,6 +869,10 @@ const App: React.FC = () => {
 			vscode.setState?.(next);
 			return next;
 		});
+	}, []);
+
+	const sendMessage = React.useCallback((type: string, data?: Record<string, unknown>) => {
+		vscode.postMessage({ type, ...(data ?? {}) });
 	}, []);
 
 	const pinnedOrderMap = persistedState.pinned ?? {};
@@ -844,16 +933,56 @@ const App: React.FC = () => {
 		const handler = (event: MessageEvent<StateUpdateMessage>) => {
 			if (event.data?.type === 'stateUpdate') {
 				setRequest(event.data.request);
+				setReplay(event.data.replay);
+				const incomingReplayUri = event.data.replayUri ?? (event.data.replay ? toReplayUri(event.data.replay) : undefined);
+				setReplayUri(incomingReplayUri);
+				if (incomingReplayUri) {
+					setLastReplayUri(incomingReplayUri);
+				}
+				if (event.data.replayView === 'payload' || event.data.replayView === 'projection') {
+					setReplayView(event.data.replayView);
+				}
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
 				setActiveSessionKey(event.data.activeSessionKey);
+				setFollowLatest(event.data.followLatest ?? true);
 				const extras = (event.data.extraSections ?? []).filter(isInspectorExtraSection);
 				setExtraSections(extras);
+				setReplayEnabled(!!event.data.replayEnabled);
 			}
 		};
 		window.addEventListener('message', handler);
 		return () => window.removeEventListener('message', handler);
 	}, []);
+
+	React.useEffect(() => {
+		const initialFollowLatest = initialFollowLatestRef.current;
+		if (typeof initialFollowLatest === 'boolean') {
+			setFollowLatest(initialFollowLatest);
+			sendMessage('setFollowMode', { followLatest: initialFollowLatest });
+		}
+	}, [sendMessage]);
+
+	React.useEffect(() => {
+		if (didRestoreSelectionRef.current) {
+			return;
+		}
+		const initialFollowLatest = initialFollowLatestRef.current;
+		if (initialFollowLatest !== false) {
+			didRestoreSelectionRef.current = true;
+			return;
+		}
+		const initialSelectedSessionKey = initialSelectedSessionKeyRef.current;
+		if (!initialSelectedSessionKey) {
+			didRestoreSelectionRef.current = true;
+			return;
+		}
+		if (!sessions.some(session => session.key === initialSelectedSessionKey)) {
+			return;
+		}
+		didRestoreSelectionRef.current = true;
+		sendMessage('selectSession', { sessionKey: initialSelectedSessionKey });
+	}, [sendMessage, sessions]);
 
 	React.useEffect(() => {
 		if (interception?.pending) {
@@ -865,8 +994,28 @@ const App: React.FC = () => {
 	}, [interception?.pending?.nonce]);
 
 	React.useEffect(() => {
+		if (!activeSessionKey || !followLatest) {
+			setSessionFlash(false);
+			return;
+		}
+		setSessionFlash(true);
+		const handle = window.setTimeout(() => setSessionFlash(false), 1200);
+		return () => window.clearTimeout(handle);
+	}, [activeSessionKey, followLatest]);
+
+	React.useEffect(() => {
 		setEditingSectionId(null);
 	}, [activeSessionKey]);
+
+	React.useEffect(() => {
+		if (!canEditSections) {
+			setEditingSectionId(null);
+		}
+	}, [canEditSections]);
+
+	React.useEffect(() => {
+		prevSectionsLengthRef.current = request?.sections?.length ?? 0;
+	}, [request?.id]);
 
 	React.useEffect(() => {
 		if (!request?.sections) {
@@ -904,6 +1053,35 @@ const App: React.FC = () => {
 		}
 	}, [request, editingSectionId, activeSessionKey, setPinnedForActiveSession, setCollapsedForActiveSession, hasCollapsedState, updatePersistedState]);
 
+	React.useEffect(() => {
+		const length = request?.sections?.length ?? 0;
+		const currentIds = request?.sections?.map(section => section.id) ?? [];
+		const prevIds = prevSectionIdsRef.current;
+		const newlyAdded = currentIds.filter(id => !prevIds.includes(id));
+
+		if (newlyAdded.length && sectionsEndRef.current) {
+			sectionsEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+		}
+		if (newlyAdded.length) {
+			setFlashSections(prev => {
+				const next = new Set(prev);
+				for (const id of newlyAdded) {
+					next.add(id);
+					window.setTimeout(() => {
+						setFlashSections(inner => {
+							const updated = new Set(inner);
+							updated.delete(id);
+							return updated;
+						});
+					}, 1400);
+				}
+				return next;
+			});
+		}
+		prevSectionIdsRef.current = currentIds;
+		prevSectionsLengthRef.current = length;
+	}, [request?.sections?.length]);
+
 	const validationErrorCode = request?.metadata?.lastValidationErrorCode;
 	const validationMessage = validationErrorCode ? describeValidationError(validationErrorCode) : undefined;
 	const totalTokens = React.useMemo(() => computeTotalTokens(request), [request]);
@@ -936,9 +1114,6 @@ const App: React.FC = () => {
 	const hiddenSectionCount = captureActive ? Math.max(orderedSections.length - visibleSections.length, 0) : 0;
 	const pinnedSections = visibleSections.filter(section => pinnedIdSet.has(section.id));
 	const unpinnedSections = visibleSections.filter(section => !pinnedIdSet.has(section.id));
-	const sendMessage = React.useCallback((type: string, data?: Record<string, unknown>) => {
-		vscode.postMessage({ type, ...(data ?? {}) });
-	}, []);
 
 	const handleModeSelect = React.useCallback((nextMode: LiveRequestEditorMode) => {
 		sendMessage('setMode', { mode: nextMode });
@@ -1012,16 +1187,22 @@ const App: React.FC = () => {
 	}, [setCollapsedForActiveSession]);
 
 	const handleEditToggle = React.useCallback((sectionId: string) => {
+		if (!canEditSections) {
+			return;
+		}
 		setEditingSectionId(current => (current === sectionId ? null : sectionId));
-	}, []);
+	}, [canEditSections]);
 
-	const handleCancelEdit = React.useCallback(() => {
-		setEditingSectionId(null);
-	}, []);
+	const handleEditLeaf = React.useCallback((sectionId: string, path: string, value: unknown) => {
+		sendMessage('editLeaf', { sectionId, path, value });
+	}, [sendMessage]);
 
-	const handleSaveEdit = React.useCallback((sectionId: string, content: string) => {
-		sendMessage('editSection', { sectionId, content });
-		setEditingSectionId(null);
+	const handleUndoLeafEdit = React.useCallback(() => {
+		sendMessage('undoLeafEdit', {});
+	}, [sendMessage]);
+
+	const handleRedoLeafEdit = React.useCallback(() => {
+		sendMessage('redoLeafEdit', {});
 	}, [sendMessage]);
 
 	const handleDelete = React.useCallback((sectionId: string) => {
@@ -1036,6 +1217,61 @@ const App: React.FC = () => {
 		sendMessage('resetRequest', {});
 	}, [sendMessage]);
 
+	const handleReplay = React.useCallback(() => {
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.replayPrompt' });
+	}, [sendMessage]);
+
+	const handleReplayInCli = React.useCallback(() => {
+		if (!request) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.openInCopilotCLI',
+			args: [{ sessionId: request.sessionId, location: request.location }]
+		});
+	}, [request, sendMessage]);
+
+	const handleOpenInChat = React.useCallback(() => {
+		if (!request) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.openInChat',
+			args: [{ sessionId: request.sessionId, location: request.location }]
+		});
+	}, [request, sendMessage]);
+
+	const handleShowPayloadDiff = React.useCallback(() => {
+		if (!request) {
+			return;
+		}
+		sendMessage('command', {
+			command: 'github.copilot.liveRequestEditor.showReplayPayloadDiff',
+			args: [{ sessionId: request.sessionId, location: request.location }]
+		});
+	}, [request, sendMessage]);
+
+	const handleToggleReplayView = React.useCallback(() => {
+		const targetUri = replayUri ?? lastReplayUri;
+		if (!targetUri) {
+			return;
+		}
+		// Ensure the replay chat is visible before toggling view for immediate feedback.
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.startReplayChat', args: [targetUri] });
+		sendMessage('command', { command: 'github.copilot.liveRequestEditor.toggleReplayView', args: [targetUri] });
+		setReplayView(current => (current === 'payload' ? 'projection' : 'payload'));
+	}, [lastReplayUri, replayUri, sendMessage]);
+
+	const handleToggleFollowLatest = React.useCallback<React.ChangeEventHandler<HTMLInputElement>>((event) => {
+		const next = event.target.checked;
+		setFollowLatest(next);
+		updatePersistedState(prev => ({
+			...prev,
+			followLatest: next
+		}));
+		sendMessage('setFollowMode', { followLatest: next });
+	}, [sendMessage, updatePersistedState]);
+
 	const handleResumeSend = React.useCallback(() => {
 		sendMessage('resumeSend');
 	}, [sendMessage]);
@@ -1044,21 +1280,72 @@ const App: React.FC = () => {
 		sendMessage('cancelIntercept');
 	}, [sendMessage]);
 
-	const handleSessionChange = React.useCallback<React.FormEventHandler<HTMLElement>>((event) => {
-		const dropdown = event.target as HTMLSelectElement & { value?: string };
-		const value = dropdown?.value;
+	const handleSessionSelected = React.useCallback((value: string) => {
 		if (typeof value !== 'string' || value.length === 0 || value === activeSessionKey) {
 			return;
 		}
-		setActiveSessionKey(value);
 		sendMessage('selectSession', { sessionKey: value });
 	}, [activeSessionKey, sendMessage]);
+
+	React.useEffect(() => {
+		const dropdown = sessionDropdownRef.current;
+		if (!dropdown) {
+			return;
+		}
+		const listener = (event: Event) => {
+			const value = (event.currentTarget as (HTMLElement & { value?: string }) | null)?.value;
+			if (typeof value === 'string') {
+				handleSessionSelected(value);
+			}
+		};
+		dropdown.addEventListener('change', listener);
+		dropdown.addEventListener('input', listener);
+		return () => {
+			dropdown.removeEventListener('change', listener);
+			dropdown.removeEventListener('input', listener);
+		};
+	}, [handleSessionSelected, sessions.length]);
+
+	React.useEffect(() => {
+		if (!activeSessionKey || followLatest) {
+			return;
+		}
+		updatePersistedState(prev => {
+			if (prev.followLatest === false && prev.selectedSessionKey === activeSessionKey) {
+				return prev;
+			}
+			return {
+				...prev,
+				followLatest: false,
+				selectedSessionKey: activeSessionKey
+			};
+		});
+	}, [activeSessionKey, followLatest, updatePersistedState]);
+
+	React.useEffect(() => {
+		const dropdown = sessionDropdownRef.current;
+		if (!dropdown) {
+			return;
+		}
+		const next = activeSessionKey ?? '';
+		if (dropdown.value !== next) {
+			dropdown.value = next;
+		}
+	}, [activeSessionKey, sessions.length]);
 	const formatSessionTooltip = React.useCallback((session: SessionSummary) => {
 		const created = session.createdAt ? `Created ${formatTimestamp(session.createdAt)}` : undefined;
 		const updated = session.lastUpdated ? `Updated ${formatTimestamp(session.lastUpdated)}` : undefined;
 		const parts = [session.locationLabel, created, updated].filter(Boolean);
 		return parts.join(' • ');
 	}, []);
+
+	React.useEffect(() => {
+		if (!replay) {
+			return;
+		}
+		// Reset view to payload when a new replay version/key arrives.
+		setReplayView('payload');
+	}, [replay?.key.sessionId, replay?.key.location, replay?.key.requestId, replay?.version]);
 
 	if (!request || !request.sections || request.sections.length === 0) {
 		return <EmptyState />;
@@ -1068,9 +1355,20 @@ const App: React.FC = () => {
 	const promptText = request.metadata?.maxPromptTokens
 		? `${formatNumber(totalTokens)} / ${formatNumber(request.metadata.maxPromptTokens)} (${formatPercent(totalTokens, request.metadata.maxPromptTokens)})`
 		: `${formatNumber(totalTokens)} tokens`;
+	const replaySummary = replay?.projection;
+	const canUndo = (request.editHistory?.undoStack?.length ?? 0) > 0;
+	const canRedo = (request.editHistory?.redoStack?.length ?? 0) > 0;
+	const payloadIndexBySectionId = new Map<string, number>();
+	let nextPayloadIndex = 0;
+	for (const section of request.sections) {
+		if (!section.deleted) {
+			payloadIndexBySectionId.set(section.id, nextPayloadIndex);
+			nextPayloadIndex += 1;
+		}
+	}
 
 	return (
-		<>
+		<div className={`app-root${sessionFlash ? ' session-flash' : ''}`}>
 			<div className='status-banner'>
 				<div className='header'>
 					<div className='header-left'>
@@ -1080,24 +1378,48 @@ const App: React.FC = () => {
 								<label className='session-selector-label' htmlFor='live-request-session-dropdown'>
 									Conversation
 								</label>
-								<vscode-dropdown
-									id='live-request-session-dropdown'
-									className='session-selector-dropdown'
-									value={activeSessionKey ?? ''}
-									onChange={handleSessionChange}
-								>
-									{sessions.map(session => (
-										<vscode-option
-											key={session.key}
-											value={session.key}
-											title={formatSessionTooltip(session)}
-										>
-											{session.label}
-											{session.isLatest ? ' · NEW' : ''}
-											{session.isActive ? ' · Current' : ''}
-										</vscode-option>
-									))}
-								</vscode-dropdown>
+								<div className='session-selector-row'>
+									<vscode-dropdown
+										id='live-request-session-dropdown'
+										className='session-selector-dropdown'
+										ref={sessionDropdownRef}
+										value={activeSessionKey ?? ''}
+									>
+										{sessions.map(session => (
+											<vscode-option
+												key={session.key}
+												value={session.key}
+												title={formatSessionTooltip(session)}
+											>
+												{session.label}
+												{session.isLatest ? ' · NEW' : ''}
+												{session.isActive ? ' · Current' : ''}
+											</vscode-option>
+										))}
+									</vscode-dropdown>
+									<vscode-button
+										appearance='secondary'
+										onClick={handleOpenInChat}
+										title={request?.metadata?.chatSessionResource
+											? 'Open the selected conversation in the chat session editor'
+											: 'No session editor resource captured for this conversation (will focus the chat panel instead)'}
+									>
+										Open in chat
+									</vscode-button>
+								</div>
+								<div className='follow-toggle'>
+									<span className='follow-toggle-label'>Auto-follow latest</span>
+									<label className='toggle-switch' title='When on, automatically switch to the newest intercepted request'>
+										<input
+											type='checkbox'
+											role='switch'
+											checked={followLatest}
+											onChange={handleToggleFollowLatest}
+											aria-label='Auto-follow latest'
+										/>
+										<span className='toggle-switch-slider' aria-hidden='true' />
+									</label>
+								</div>
 							</div>
 						)}
 					</div>
@@ -1173,6 +1495,66 @@ const App: React.FC = () => {
 						<div className='status-meter'>
 							<div className='status-meter-fill' style={{ width: formatPercent(totalTokens, request.metadata.maxPromptTokens) }} />
 							<span className='status-meter-label'>{formatPercent(totalTokens, request.metadata.maxPromptTokens)}</span>
+						</div>
+					) : null}
+					{replayEnabled ? (
+						<div className='metadata-row replay-row'>
+							<div className='replay-row-main'>
+								<div className='metadata-item'>
+									<span className='metadata-label'>Replay:</span>
+									<span>{replay ? (replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state) : 'Not built yet'}</span>
+								</div>
+								<div className='metadata-item'>
+									<span className='metadata-label'>View:</span>
+									<span>{replayView === 'payload' ? 'Native' : 'Projection debug'}</span>
+								</div>
+								{replaySummary ? (
+									<>
+										<div className='metadata-item'>
+											<span className='metadata-label'>Sections:</span>
+											<span>{replaySummary.totalSections}{replaySummary.overflowCount > 0 ? ` (+${replaySummary.overflowCount} more)` : ''}</span>
+										</div>
+										<div className='metadata-item'>
+											<span className='metadata-label'>Edited:</span>
+											<span>{replaySummary.editedCount} · Deleted: {replaySummary.deletedCount}</span>
+										</div>
+										{replaySummary.trimmed ? (
+											<div className='metadata-item'>
+												<span className='metadata-label'>Trimmed:</span>
+												<span>Yes</span>
+											</div>
+										) : null}
+									</>
+								) : (
+									<div className='metadata-item'>
+										<span className='metadata-label'>Sections:</span>
+										<span>—</span>
+									</div>
+								)}
+								<div className='metadata-item'>
+									<span className='metadata-label'>Updated:</span>
+									<span>{replay?.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
+								</div>
+							</div>
+							<div className='replay-row-action'>
+								<vscode-button appearance='secondary' onClick={handleReplay}>
+									Replay edited prompt
+								</vscode-button>
+								<vscode-button appearance='secondary' onClick={handleReplayInCli}>
+									Replay edited prompt in CLI session
+								</vscode-button>
+								<vscode-button appearance='secondary' onClick={handleShowPayloadDiff}>
+									Show payload diff
+								</vscode-button>
+								<vscode-button
+									appearance='secondary'
+									onClick={handleToggleReplayView}
+									title='Switch between native payload view and projection debug view'
+									disabled={!replayUri && !lastReplayUri}
+								>
+									{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}
+								</vscode-button>
+							</div>
 						</div>
 					) : null}
 				</div>
@@ -1281,15 +1663,21 @@ const App: React.FC = () => {
 							<SectionCard
 								key={section.id}
 								section={section}
+								payloadIndex={payloadIndexBySectionId.get(section.id)}
 								totalTokens={totalTokens}
 								isPinned
 								isEditing={editingSectionId === section.id}
 								isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
+								isFlashing={flashSections.has(section.id)}
+								canEdit={canEditSections}
+								canUndo={canUndo}
+								canRedo={canRedo}
 								onToggleCollapse={handleToggleCollapse}
 								onTogglePinned={handleTogglePinned}
 								onEditToggle={handleEditToggle}
-								onCancelEdit={handleCancelEdit}
-								onSaveEdit={handleSaveEdit}
+								onEditLeaf={handleEditLeaf}
+								onUndoLeafEdit={handleUndoLeafEdit}
+								onRedoLeafEdit={handleRedoLeafEdit}
 								onDelete={handleDelete}
 								onRestore={handleRestore}
 								onShowDiff={handleShowDiff}
@@ -1306,15 +1694,21 @@ const App: React.FC = () => {
 					<SectionCard
 						key={section.id}
 						section={section}
+						payloadIndex={payloadIndexBySectionId.get(section.id)}
 						totalTokens={totalTokens}
 						isPinned={false}
 						isEditing={editingSectionId === section.id}
 						isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
+						isFlashing={flashSections.has(section.id)}
+						canEdit={canEditSections}
+						canUndo={canUndo}
+						canRedo={canRedo}
 						onToggleCollapse={handleToggleCollapse}
 						onTogglePinned={handleTogglePinned}
 						onEditToggle={handleEditToggle}
-						onCancelEdit={handleCancelEdit}
-						onSaveEdit={handleSaveEdit}
+						onEditLeaf={handleEditLeaf}
+						onUndoLeafEdit={handleUndoLeafEdit}
+						onRedoLeafEdit={handleRedoLeafEdit}
 						onDelete={handleDelete}
 						onRestore={handleRestore}
 						onShowDiff={handleShowDiff}
@@ -1322,12 +1716,52 @@ const App: React.FC = () => {
 						onReorderPinned={handleReorderPinned}
 					/>
 				))}
+				<div ref={sectionsEndRef} />
 			</div>
-		</>
+		</div>
 	);
 };
 
 const rootElement = document.getElementById('app');
 if (rootElement) {
 	ReactDOM.render(<App />, rootElement);
+}
+interface LiveRequestReplaySection {
+	id: string;
+	kind: string;
+	label: string;
+	content: string;
+	edited: boolean;
+	sourceMessageIndex: number;
+}
+
+interface LiveRequestReplayProjection {
+	sections: LiveRequestReplaySection[];
+	totalSections: number;
+	overflowCount: number;
+	editedCount: number;
+	deletedCount: number;
+	trimmed?: boolean;
+}
+
+interface LiveRequestReplaySnapshot {
+	key: {
+		sessionId: string;
+		location: number;
+		requestId: string;
+	};
+	state: string;
+	version: number;
+	updatedAt: number;
+	payload?: RawChatMessage[];
+	projection?: LiveRequestReplayProjection;
+	parentTurnId?: string;
+	debugName?: string;
+	model?: string;
+	staleReason?: string;
+}
+
+function toReplayUri(snapshot: LiveRequestReplaySnapshot): string {
+	const composite = `${snapshot.key.sessionId}::${snapshot.key.location}::${snapshot.key.requestId}`;
+	return `copilot-live-replay:/${composite}?${snapshot.version ?? 0}`;
 }

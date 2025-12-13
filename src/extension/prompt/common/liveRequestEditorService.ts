@@ -9,7 +9,7 @@ import { Event } from '../../../util/vs/base/common/event';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot } from './liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestReplayKey, LiveRequestReplaySnapshot, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot } from './liveRequestEditorModel';
 
 export type { LiveRequestEditorMode, LiveRequestOverrideScope } from './liveRequestEditorModel';
 
@@ -74,6 +74,11 @@ export interface LiveRequestMetadataEvent {
 	readonly metadata?: LiveRequestMetadataSnapshot;
 }
 
+export interface LiveRequestReplayEvent {
+	readonly key: LiveRequestReplayKey;
+	readonly replay?: LiveRequestReplaySnapshot;
+}
+
 export interface ILiveRequestEditorService {
 	readonly _serviceBrand: undefined;
 
@@ -82,15 +87,40 @@ export interface ILiveRequestEditorService {
 	readonly onDidUpdateSubagentHistory: Event<void>;
 	readonly onDidChangeInterception: Event<PromptInterceptionState>;
 	readonly onDidChangeMetadata: Event<LiveRequestMetadataEvent>;
+	readonly onDidChangeReplay: Event<LiveRequestReplayEvent>;
 
 	isEnabled(): boolean;
 	isInterceptionEnabled(): boolean;
+	isReplayEnabled(): boolean;
 
 	prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined;
 
 	getRequest(key: LiveRequestSessionKey): EditableChatRequest | undefined;
 
+	/**
+	 * Returns all currently known intercepted requests.
+	 * Callers MUST treat returned requests as read-only.
+	 */
+	getAllRequests(): readonly EditableChatRequest[];
+
+	/**
+	 * Legacy section-level editor used by the main section textarea UI and
+	 * Auto-apply overrides. New leaf-level edits should prefer updateLeafByPath.
+	 */
 	updateSectionContent(key: LiveRequestSessionKey, sectionId: string, newContent: string): EditableChatRequest | undefined;
+
+	/**
+	 * Update a single leaf field in the underlying Raw payload (for example,
+	 * messages[3].content[1].text or requestOptions.temperature) and record
+	 * the change in the per-request EditHistory.
+	 */
+	updateLeafByPath(key: LiveRequestSessionKey, targetPath: string, newValue: unknown): EditableChatRequest | undefined;
+
+	/**
+	 * Undo / redo the most recent leaf-level EditOp, if any.
+	 */
+	undoLastEdit(key: LiveRequestSessionKey): EditableChatRequest | undefined;
+	redoLastEdit(key: LiveRequestSessionKey): EditableChatRequest | undefined;
 
 	deleteSection(key: LiveRequestSessionKey, sectionId: string): EditableChatRequest | undefined;
 
@@ -135,6 +165,18 @@ export interface ILiveRequestEditorService {
 	clearSubagentHistory(): void;
 
 	getMetadataSnapshot(key: LiveRequestSessionKey): LiveRequestMetadataSnapshot | undefined;
+
+	buildReplayForRequest(key: LiveRequestSessionKey): LiveRequestReplaySnapshot | undefined;
+	getReplaySnapshot(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
+	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
+	markReplayForkActive(key: LiveRequestReplayKey, forkSessionId: string): LiveRequestReplaySnapshot | undefined;
+	markReplayStale(key: LiveRequestSessionKey, requestId?: string, reason?: string): void;
+
+	/**
+	 * Returns the original (pre-edit) messages for a request key, if present.
+	 * The returned array is a deep clone and safe to mutate by callers.
+	 */
+	getOriginalRequestMessages(key: LiveRequestSessionKey): Raw.ChatMessage[] | undefined;
 }
 
 export interface PromptContextChangeEvent {

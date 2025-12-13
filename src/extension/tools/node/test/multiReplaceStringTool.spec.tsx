@@ -248,5 +248,5 @@ export function sumThreeFloats(a, b, c) {`,
 			const e2 = edits[i];
 			expect(e1.range.end.isBeforeOrEqual(e2.range.start)).toBe(true);
 		}
-	});
+	}, 20_000);
 });

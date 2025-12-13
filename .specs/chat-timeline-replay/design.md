@@ -22,8 +22,8 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 1) **Replay Builder**: Build a “replay projection” from `EditableChatRequest.messages` (plus tool metadata/request options/intent/debug name), mapping sections to chat bubbles and dropping deleted sections. System/prefix collapsed by default; edited sections labeled “Edited.” Reuse trimming/summarization from prompt render to avoid divergence.
 2) **Replay Session Manager**: Create/reuse a forked “replayed prompt” conversation keyed to the source session/location; optionally link via `replay_parent_turn_id`.
 3) **Invocation Surface**: Command (e.g., `github.copilot.liveRequestEditor.replayPrompt`) and/or button in the Live Request Editor banner, gated by feature flag.
-4) **Display Surface**: Render via chat participant/content provider in the chat panel; no model call. Replay is read-only by default; user must click “Start chatting from this replay” to enable input.
-5) **Fork payload**: Seed the forked session with the exact trimmed payload that was (or would be) sent to avoid divergence; use the richer projection for display only.
+4) **Display Surface**: Render via chat participant/content provider in the chat panel; no model call. Replay is read-only by default; user must click “Start chatting from this replay” to continue.
+5) **Fork payload + live continuation**: Seed the forked session with the exact trimmed payload that was (or would be) sent to avoid divergence; use the richer projection for display only. When continuing, fork/create a normal Copilot chat session (default participant) preloaded with the replay payload; keep the replay view projection-only.
 6) **Persistence (future)**: If/when chat-history-persistence (SQLite) is enabled, store replay metadata (replay_parent_turn_id/session_id, trimmed payload hash, version) so forks survive reloads; otherwise replay remains in-memory only (keep a one-level “restore previous replay” buffer per turn).
 
 ### Data & Control Flow
@@ -44,7 +44,7 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 - Provide “Back to conversation” + “Open Live Request Editor” links. Replay is read-only until the user explicitly chooses “Start chatting from this replay.”
 - Entry point: explicit “Replay edited prompt” action in the Live Request Editor banner. No surprise auto-launch; optional toast if auto-opened.
 - Option A (one fork per turn): a new replay replaces the previous fork for that turn. Optional soft safety net: keep the last replaced fork in memory for “Restore previous replay.”
-- When enabling input (continuing from fork), switch focus to the replay session and show a breadcrumb/toast indicating the fork.
+- When enabling input (continuing from fork), switch focus to the default Copilot chat session that was seeded from the replay payload and show a breadcrumb/toast indicating the fork; keep the replay tab as projection/debug only.
 - Cap rendered sections (30) and show “View replayed prompt (N more)” to avoid overloading the view.
 - In replay/fork view, keep interception/auto-override off by default; expose a human toggle if needed. In off mode, disable edit/delete controls and auto-scroll to the latest section.
 
@@ -65,6 +65,7 @@ When a user edits or deletes sections in the Live Request Editor and sends, offe
 - **Trimmed prompts**: show warning and token counts when available.
 - **Session confusion**: clear labels and back-navigation.
 - **Performance**: collapse by default, cap sections, lazy-expand.
+- **Preview badge**: custom replay provider shows “preview”; live continuation must use the default Copilot provider to avoid preview branding on the active chat.
 
 ### Open Questions
 - Should replay be read-only or allow continuing the forked session?

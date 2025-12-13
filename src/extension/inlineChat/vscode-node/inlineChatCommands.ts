@@ -375,7 +375,7 @@ function fetchSuggestion(accessor: ServicesAccessor, thread: vscode.CommentThrea
 			}
 		}, () => { });
 
-		const requestHandler = instantiationService.createInstance(ChatParticipantRequestHandler, [], request, stream, CancellationToken.None, {
+		const requestHandler = instantiationService.createInstance(ChatParticipantRequestHandler, [], {} as vscode.ChatContext, request, stream, CancellationToken.None, {
 			agentId: getChatParticipantIdFromName(editorAgentName),
 			agentName: editorAgentName,
 			intentId: request.command,

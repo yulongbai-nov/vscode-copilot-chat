@@ -296,6 +296,8 @@ export function buildChatHistoryFromEvents(sessionId: string, events: readonly S
 		details = getVSCodeRequestId(event.id) ?? details;
 		switch (event.type) {
 			case 'user.message': {
+				const rawContent = event.data.content;
+				const content = typeof rawContent === 'string' ? rawContent : '';
 				// Flush any pending response parts before adding user message
 				if (currentResponseParts.length > 0) {
 					turns.push(new ChatResponseTurn2(currentResponseParts, {}, ''));
@@ -312,7 +314,7 @@ export function buildChatHistoryFromEvents(sessionId: string, events: readonly S
 				const references: ChatPromptReference[] = [];
 
 				try {
-					references.push(...extractChatPromptReferences(event.data.content || ''));
+					references.push(...extractChatPromptReferences(content || ''));
 				} catch (ex) {
 					// ignore errors from parsing references
 				}
@@ -327,7 +329,7 @@ export function buildChatHistoryFromEvents(sessionId: string, events: readonly S
 				((event.data.attachments || []) as Attachment[])
 					.filter(attachment => !isInstructionAttachmentPath(attachment.path))
 					.forEach(attachment => {
-						const range = attachment.displayName ? getRangeInPrompt(event.data.content || '', attachment.displayName) : undefined;
+						const range = attachment.displayName ? getRangeInPrompt(content || '', attachment.displayName) : undefined;
 						const attachmentPath = attachment.type === 'directory' ?
 							getFolderAttachmentPath(attachment.path) :
 							attachment.path;
@@ -343,7 +345,7 @@ export function buildChatHistoryFromEvents(sessionId: string, events: readonly S
 						});
 					});
 
-				let prompt = stripReminders(event.data.content || '');
+				let prompt = stripReminders(content || '');
 				const info = isFirstUserMessage ? delegationSummaryService.extractPrompt(sessionId, prompt) : undefined;
 				if (info) {
 					prompt = info.prompt;
@@ -354,9 +356,16 @@ export function buildChatHistoryFromEvents(sessionId: string, events: readonly S
 				break;
 			}
 			case 'assistant.message': {
-				if (event.data.content) {
+				const rawContent = event.data.content;
+				let content: string;
+				if (typeof rawContent === 'string') {
+					content = rawContent === '[object Object]' ? '[non-text content]' : rawContent;
+				} else {
+					content = rawContent ? '[non-text content]' : '';
+				}
+				if (content) {
 					// Extract PR metadata if present
-					const { cleanedContent, prPart } = extractPRMetadata(event.data.content);
+					const { cleanedContent, prPart } = extractPRMetadata(content);
 
 					// Add PR part first if it exists
 					if (prPart) {

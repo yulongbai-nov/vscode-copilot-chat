@@ -1316,7 +1316,7 @@
 				"locations": [
 					"editor"
 				],
-				"commands": [
+			"commands": [
 					{
 						"name": "generate",
 						"when": "!config.inlineChat.enableV2",
@@ -1666,17 +1666,60 @@
 					}
 				]
 			},
-			{
-				"id": "github.copilot.chatReplay",
-				"name": "chatReplay",
-				"fullName": "Chat Replay",
-				"when": "debugType == 'vscode-chat-replay'",
-				"locations": [
-					"panel"
-				]
-			}
-		],
-		"languageModelChatProviders": [
+				{
+					"id": "github.copilot.chatReplay",
+					"name": "chatReplay",
+					"fullName": "Chat Replay",
+					"when": "debugType == 'vscode-chat-replay'",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "claude-code",
+					"name": "claude",
+					"fullName": "Claude Code CLI Agent",
+					"when": "config.github.copilot.chat.advanced.claudeCode.enabled",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilotcli",
+					"name": "cli",
+					"fullName": "Background Agent",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilot-cloud-agent",
+					"name": "cloud",
+					"fullName": "Cloud Agent",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilot-live-replay",
+					"name": "copilotReplay",
+					"fullName": "Copilot Replay",
+					"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+					"locations": [
+						"panel"
+					]
+				},
+				{
+					"id": "copilot-live-replay-fork",
+					"name": "copilotReplayFork",
+					"fullName": "Copilot Replay Fork",
+					"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+					"locations": [
+						"panel"
+					]
+				}
+			],
+			"languageModelChatProviders": [
 			{
 				"vendor": "copilot",
 				"displayName": "Copilot"
@@ -1850,6 +1893,37 @@
 				"command": "github.copilot.cli.sessions.resumeInTerminal",
 				"title": "%github.copilot.command.cli.sessions.resumeInTerminal%",
 				"icon": "$(terminal)",
+				"category": "Copilot CLI"
+			},
+			{
+				"command": "github.copilot.cli.sessions.newTerminalSession",
+				"title": "%github.copilot.cli.sessions.newTerminalSession%",
+				"icon": "$(terminal)",
+				"category": "Copilot CLI"
+			},
+			{
+				"command": "github.copilot.cli.sessions.replaySampleNative",
+				"title": "%github.copilot.cli.sessions.replaySampleNative%",
+				"category": "Copilot CLI"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.openInCopilotCLI",
+				"title": "%github.copilot.liveRequestEditor.openInCopilotCLI%",
+				"category": "Copilot CLI"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.showReplayPayloadDiff",
+				"title": "%github.copilot.liveRequestEditor.showReplayPayloadDiff%",
+				"category": "Copilot CLI"
+			},
+			{
+				"command": "github.copilot.cli.sessions.createSampleNative",
+				"title": "%github.copilot.cli.sessions.createSampleNative%",
+				"category": "Copilot CLI"
+			},
+			{
+				"command": "github.copilot.cli.sessions.rename",
+				"title": "%github.copilot.cli.sessions.rename%",
 				"category": "Copilot CLI"
 			},
 			{
@@ -2052,12 +2126,37 @@
 				"category": "Chat"
 			},
 			{
-				"command": "github.copilot.liveRequestEditor.show",
-				"title": "Copilot: Show Prompt Inspector",
-				"icon": "$(open-preview)",
-				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-				"category": "Chat"
-			},
+			"command": "github.copilot.liveRequestEditor.show",
+			"title": "Copilot: Show Prompt Inspector",
+			"icon": "$(open-preview)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.replayPrompt",
+			"title": "%github.copilot.command.liveRequestEditor.replayPrompt%",
+			"icon": "$(history)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.startReplayChat",
+			"title": "Copilot: Start chatting from replay",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.toggleReplayView",
+			"title": "Copilot: Toggle replay view (payload/projection)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+			"category": "Chat"
+		},
+		{
+			"command": "github.copilot.liveRequestEditor.debugReplaySample",
+			"title": "Copilot: Show sample replay (debug)",
+			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+			"category": "Chat"
+		},
 		{
 			"command": "github.copilot.liveRequestEditor.reset",
 			"title": "Live Request Editor: Reset",
@@ -2102,6 +2201,20 @@
 				"icon": "$(copy)",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestPayload.show",
+				"title": "Show Live Request Payload",
+				"icon": "$(json)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestPayload.setActiveSession",
+				"title": "Live Request Payload: Set Active Session",
+				"category": "Chat",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"icon": "$(json)"
 			},
 			{
 				"command": "github.copilot.subagentPromptMonitor.copySection",
@@ -2666,6 +2779,11 @@
 						"%github.copilot.config.liveRequestEditor.autoOverride.scope.global%"
 					],
 					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.scopePreference%"
+				},
+				"github.copilot.chat.liveRequestEditor.timelineReplay.enabled": {
+					"type": "boolean",
+					"default": false,
+					"markdownDescription": "%github.copilot.config.liveRequestEditor.timelineReplay.enabled%"
 				}
 			}
 		},
@@ -4740,8 +4858,23 @@
 					"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
 					"when": "chatSessionType == copilot-cloud-agent",
 					"group": "context"
-				}
-			]
+				},
+        {
+          "command": "github.copilot.cli.sessions.delete",
+          "when": "chatSessionType == copilotcli && config.chat.agentSessionsViewLocation == 'single-view'",
+          "group": "context"
+        },
+        {
+          "command": "github.copilot.cli.sessions.rename",
+          "when": "chatSessionType == copilotcli",
+          "group": "context@5"
+        },
+        {
+          "command": "github.copilot.cli.sessions.replaySampleNative",
+          "when": "chatSessionType == copilotcli",
+          "group": "context@10"
+        }
+      ]
 		},
 		"icons": {
 			"copilot-logo": {
@@ -4878,6 +5011,13 @@
 					"id": "github.copilot.liveRequestMetadata",
 					"name": "Live Request Metadata",
 					"icon": "assets/icon-live-request-metadata.svg",
+					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
+				},
+				{
+					"id": "github.copilot.liveRequestPayload",
+					"name": "Live Request Payload",
+					"type": "webview",
+					"icon": "assets/live-request-editor.svg",
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				},
 				{
@@ -5134,6 +5274,28 @@
 				]
 			},
 			{
+				"type": "copilot-live-replay",
+				"name": "Copilot Replay",
+				"displayName": "Copilot Replay",
+				"icon": "$(history)",
+				"order": 99,
+				"description": "Displays replayed prompt sections from the Live Request Editor.",
+				"welcomeTitle": "Replay edited prompt",
+				"welcomeMessage": "Review and continue from a replayed prompt.",
+				"inputPlaceholder": "Start chatting from this replay",
+				"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"canDelegate": false,
+				"capabilities": {
+					"supportsFileAttachments": true,
+					"supportsProblemAttachments": true,
+					"supportsToolAttachments": true,
+					"supportsImageAttachments": true,
+					"supportsSymbolAttachments": true,
+					"supportsSearchResultAttachments": true,
+					"supportsSourceControlAttachments": true
+				}
+			},
+			{
 				"type": "copilotcli",
 				"name": "cli",
 				"displayName": "Background Agent",
@@ -5238,16 +5400,18 @@
 		"prepare": "husky",
 		"vscode-dts:dev": "node node_modules/@vscode/dts/index.js dev && mv vscode.proposed.*.ts src/extension",
 		"vscode-dts:main": "node node_modules/@vscode/dts/index.js main && mv vscode.d.ts src/extension",
-		"build": "node .esbuild.ts",
-		"compile": "node .esbuild.ts --dev",
+		"build": "node --experimental-strip-types .esbuild.ts",
+		"compile": "node --experimental-strip-types .esbuild.ts --dev",
 		"watch": "npm-run-all -p watch:*",
-		"watch:esbuild": "node .esbuild.ts --watch --dev",
+		"watch:esbuild": "node --experimental-strip-types .esbuild.ts --watch --dev",
 		"watch:tsc-extension": "tsc --noEmit --watch --project tsconfig.json",
 		"watch:tsc-extension-web": "tsc --noEmit --watch --project tsconfig.worker.json",
 		"watch:tsc-simulation-workbench": "tsc --noEmit --watch --project test/simulation/workbench/tsconfig.json",
 		"typecheck": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project test/simulation/workbench/tsconfig.json && tsc --noEmit --project tsconfig.worker.json && tsc --noEmit --project src/extension/completions-core/vscode-node/extension/src/copilotPanel/webView/tsconfig.json && tsc --noEmit --project src/extension/prompt/webview/vscode/liveRequestEditor/tsconfig.json",
-		"lint": "eslint . --max-warnings=0",
-		"lint-staged": "eslint --max-warnings=0",
+		"lint": "node --experimental-strip-types ./node_modules/eslint/bin/eslint.js . --max-warnings=0",
+		"lint-staged": "node --experimental-strip-types ./node_modules/eslint/bin/eslint.js --max-warnings=0",
+		"fix:changed": "node ./script/fixChangedFiles.mjs",
+		"fix:staged": "node ./script/fixChangedFiles.mjs --staged-only --restage",
 		"tsfmt": "npx tsfmt -r --verify",
 		"test": "npm-run-all test:*",
 		"test:extension": "vscode-test",
@@ -5297,6 +5461,7 @@
 		"@types/picomatch": "^4.0.0",
 		"@types/react": "17.0.44",
 		"@types/react-dom": "^18.2.17",
+		"@types/react-test-renderer": "^17.0.9",
 		"@types/sinon": "^17.0.4",
 		"@types/source-map-support": "^0.5.10",
 		"@types/tar": "^6.1.13",
@@ -5350,6 +5515,7 @@
 		"prettier": "^3.6.2",
 		"react": "^17.0.2",
 		"react-dom": "17.0.2",
+		"react-test-renderer": "17.0.2",
 		"rimraf": "^6.0.1",
 		"run-script-os": "^1.1.6",
 		"shiki": "~1.15.0",

@@ -6,8 +6,11 @@
 import { ITraceData, ITokenizer, Raw, toMode } from '@vscode/prompt-tsx';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { deepClone } from '../../../util/vs/base/common/objects';
+import { stringHash } from '../../../util/vs/base/common/hash';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
-import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestSection, LiveRequestSectionKind, LiveRequestTraceSnapshot } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestReplayProjection, LiveRequestReplaySection, LiveRequestSection, LiveRequestSectionKind, LiveRequestTraceSnapshot } from '../common/liveRequestEditorModel';
+
+export const DEFAULT_REPLAY_SECTION_CAP = 30;
 
 export function buildEditableChatRequest(ctx: EditableChatRequestInit): EditableChatRequest {
 	const clonedMessages = ctx.renderResult.messages.map(message => deepClone(message));
@@ -21,6 +24,7 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 		intentId: ctx.intentId,
 		endpointUrl: ctx.endpointUrl,
 		modelFamily: ctx.modelFamily,
+		chatSessionResource: ctx.chatSessionResource,
 		requestOptions: ctx.requestOptions ? deepClone(ctx.requestOptions) : undefined,
 		createdAt: Date.now(),
 		lastUpdated: Date.now(),
@@ -82,33 +86,146 @@ function createSection(message: Raw.ChatMessage, index: number, tokenCount?: num
 }
 
 function annotateToolSections(messages: Raw.ChatMessage[], sections: LiveRequestSection[]): void {
-	const toolCallMap = new Map<string, { id: string; name?: string; args?: string }>();
-	for (const message of messages) {
-		if (message.role === Raw.ChatRole.Assistant && 'toolCalls' in message && message.toolCalls?.length) {
-			for (const call of message.toolCalls) {
-				const name = call.function?.name;
-				const args = extractToolArguments(call.function?.arguments);
-				toolCallMap.set(call.id, { id: call.id, name, args });
+	const assistantToolCalls = new Map<number, Array<{ id?: string; name?: string; arguments?: string }>>();
+	const toolCallsById = new Map<string, { id?: string; name?: string; arguments?: string }>();
+	for (let index = 0; index < messages.length; index++) {
+		const message = messages[index];
+		if (message.role !== Raw.ChatRole.Assistant || !('toolCalls' in message) || !message.toolCalls?.length) {
+			continue;
+		}
+		const entries: Array<{ id?: string; name?: string; arguments?: string }> = [];
+		for (const call of message.toolCalls) {
+			const entry = {
+				id: call.id,
+				name: call.function?.name,
+				arguments: extractToolArguments(call.function?.arguments)
+			};
+			entries.push(entry);
+			if (call.id) {
+				toolCallsById.set(call.id, entry);
 			}
+		}
+		if (entries.length) {
+			assistantToolCalls.set(index, entries);
 		}
 	}
 
 	for (const section of sections) {
-		if (section.kind !== 'tool') {
-			continue;
-		}
 		const metadata = section.metadata ?? {};
-		const toolCallId = typeof metadata.toolCallId === 'string' ? metadata.toolCallId : undefined;
-		const lookup = toolCallId ? toolCallMap.get(toolCallId) : undefined;
-		if (!lookup && !metadata.name) {
+		if (section.kind === 'assistant') {
+			const calls = assistantToolCalls.get(section.sourceMessageIndex);
+			if (calls?.length) {
+				metadata.toolCalls = calls;
+				section.metadata = metadata;
+			}
 			continue;
 		}
-		metadata.toolInvocation = {
-			id: lookup?.id ?? toolCallId,
-			name: lookup?.name ?? (typeof metadata.name === 'string' ? metadata.name : undefined),
-			arguments: lookup?.args
-		};
+		if (section.kind === 'tool' && typeof metadata.toolCallId === 'string') {
+			const toolInvocation = toolCallsById.get(metadata.toolCallId);
+			if (toolInvocation) {
+				metadata.toolInvocation = toolInvocation;
+			}
+		}
 		section.metadata = metadata;
+	}
+}
+
+export interface BuildReplayProjectionOptions {
+	readonly cap?: number;
+	readonly requestOptions?: OptionalChatRequestParams;
+	readonly trimmed?: boolean;
+}
+
+export function buildReplayProjection(sections: LiveRequestSection[], options?: BuildReplayProjectionOptions): LiveRequestReplayProjection | undefined {
+	const cap = Math.max(1, options?.cap ?? DEFAULT_REPLAY_SECTION_CAP);
+	const requestOptions = options?.requestOptions ? deepClone(options.requestOptions) : undefined;
+	const trimmed = options?.trimmed;
+	const replaySections: LiveRequestReplaySection[] = [];
+	let editedCount = 0;
+	let deletedCount = 0;
+	let totalSections = 0;
+
+	for (const section of sections) {
+		if (section.deleted) {
+			deletedCount++;
+			continue;
+		}
+		totalSections++;
+		const edited = section.editedContent !== undefined
+			|| section.overrideState !== undefined
+			|| section.content !== section.originalContent;
+		if (edited) {
+			editedCount++;
+		}
+		if (replaySections.length >= cap) {
+			continue;
+		}
+		replaySections.push({
+			id: section.id,
+			kind: section.kind,
+			label: section.label,
+			content: section.content,
+			message: section.message ? deepClone(section.message) : undefined,
+			collapsed: section.collapsed,
+			edited,
+			sourceMessageIndex: section.sourceMessageIndex,
+			tokenCount: section.tokenCount,
+			hoverTitle: section.hoverTitle,
+			metadata: section.metadata ? { ...section.metadata } : undefined,
+		});
+	}
+
+	if (!replaySections.length) {
+		return undefined;
+	}
+
+	return {
+		sections: replaySections,
+		totalSections,
+		overflowCount: Math.max(0, totalSections - replaySections.length),
+		editedCount,
+		deletedCount,
+		trimmed,
+		requestOptions,
+	};
+}
+
+export function computeChatMessagesHash(messages: Raw.ChatMessage[]): number {
+	if (!messages.length) {
+		return 0;
+	}
+	try {
+		const serialized = JSON.stringify(messages);
+		return stringHash(serialized, 0);
+	} catch {
+		return stringHash(String(messages.length), 0);
+	}
+}
+
+export function computeReplayProjectionHash(projection: LiveRequestReplayProjection | undefined): number {
+	if (!projection) {
+		return 0;
+	}
+	try {
+		const serialized = JSON.stringify({
+			sections: projection.sections.map(section => ({
+				id: section.id,
+				kind: section.kind,
+				label: section.label,
+				content: section.content,
+				sourceMessageIndex: section.sourceMessageIndex,
+				metadata: section.metadata,
+			})),
+			totalSections: projection.totalSections,
+			overflowCount: projection.overflowCount,
+			editedCount: projection.editedCount,
+			deletedCount: projection.deletedCount,
+			trimmed: projection.trimmed,
+			requestOptions: projection.requestOptions,
+		});
+		return stringHash(serialized, 0);
+	} catch {
+		return stringHash(String(projection.sections.length), 0);
 	}
 }
 
@@ -297,7 +414,7 @@ function buildLabel(kind: LiveRequestSectionKind, message: Raw.ChatMessage, inde
 	return `${baseLabel} #${index + 1}`;
 }
 
-function renderMessageContent(message: Raw.ChatMessage): string {
+export function renderMessageContent(message: Raw.ChatMessage): string {
 	const parts = message.content.map(part => {
 		const kind = part.type;
 		switch (kind) {

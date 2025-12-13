@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import type { ChatRequest, ChatRequestTurn2, ChatResponseStream, ChatResult, Location } from 'vscode';
+import type { ChatContext, ChatRequest, ChatRequestTurn2, ChatResponseStream, ChatResult, Location } from 'vscode';
 import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
 import { IAuthenticationChatUpgradeService } from '../../../platform/authentication/common/authenticationUpgrade';
 import { getChatParticipantIdFromName, getChatParticipantNameFromId, workspaceAgentName } from '../../../platform/chat/common/chatAgents';
@@ -70,6 +70,7 @@ export class ChatParticipantRequestHandler {
 
 	constructor(
 		private readonly rawHistory: ReadonlyArray<ChatRequestTurn | ChatResponseTurn>,
+		private readonly chatContext: ChatContext,
 		private request: ChatRequest,
 		stream: ChatResponseStream,
 		private readonly token: CancellationToken,
@@ -244,7 +245,21 @@ export class ChatParticipantRequestHandler {
 				if (typeof intent.handleRequest === 'function') {
 					chatResult = intent.handleRequest(this.conversation, this.request, this.stream, this.token, this.documentContext, this.chatAgentArgs.agentName, this.location, this.chatTelemetry, this.onPaused);
 				} else {
-					const intentHandler = this._instantiationService.createInstance(DefaultIntentRequestHandler, intent, this.conversation, this.request, this.stream, this.token, this.documentContext, this.location, this.chatTelemetry, undefined, this.onPaused);
+					const chatSessionResource = this.chatContext.chatSessionContext?.chatSessionItem.resource.toString();
+					const intentHandler = this._instantiationService.createInstance(
+						DefaultIntentRequestHandler,
+						intent,
+						this.conversation,
+						this.request,
+						this.stream,
+						this.token,
+						this.documentContext,
+						this.location,
+						this.chatTelemetry,
+						chatSessionResource,
+						undefined,
+						this.onPaused
+					);
 					chatResult = intentHandler.getResult();
 				}
 

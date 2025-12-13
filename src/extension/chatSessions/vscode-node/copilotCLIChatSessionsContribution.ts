@@ -30,6 +30,9 @@ import { ICopilotCLISession } from '../../agents/copilotcli/node/copilotcliSessi
 import { ICopilotCLISessionItem, ICopilotCLISessionService } from '../../agents/copilotcli/node/copilotcliSessionService';
 import { PermissionRequest, requestPermission } from '../../agents/copilotcli/node/permissionHelpers';
 import { ChatVariablesCollection, isPromptFile } from '../../prompt/common/chatVariablesCollection';
+import { ILiveRequestEditorService } from '../../prompt/common/liveRequestEditorService';
+import { LiveRequestReplayKey } from '../../prompt/common/liveRequestEditorModel';
+import { Raw } from '@vscode/prompt-tsx';
 import { IToolsService } from '../../tools/common/toolsService';
 import { ICopilotCLITerminalIntegration } from './copilotCLITerminalIntegration';
 import { CopilotCloudSessionsProvider } from './copilotCloudSessionsProvider';
@@ -222,6 +225,7 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 
 	private readonly _onDidCommitChatSessionItem = this._register(new Emitter<{ original: vscode.ChatSessionItem; modified: vscode.ChatSessionItem }>());
 	public readonly onDidCommitChatSessionItem: Event<{ original: vscode.ChatSessionItem; modified: vscode.ChatSessionItem }> = this._onDidCommitChatSessionItem.event;
+	private readonly _customLabels = new Map<string, string>();
 
 	constructor(
 		readonly worktreeManager: CopilotCLIWorktreeManager,
@@ -229,12 +233,18 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 		@ICopilotCLITerminalIntegration private readonly terminalIntegration: ICopilotCLITerminalIntegration,
 		@IGitService private readonly gitService: IGitService,
 		@IRunCommandExecutionService private readonly commandExecutionService: IRunCommandExecutionService,
+		@IVSCodeExtensionContext private readonly extensionContext: IVSCodeExtensionContext,
 	) {
 		super();
 		this._register(this.terminalIntegration);
 		this._register(this.copilotcliSessionService.onDidChangeSessions(() => {
 			this.notifySessionsChange();
 		}));
+
+		const storedLabels = this.extensionContext.globalState.get<Record<string, string>>('github.copilot.cli.sessionLabels', {});
+		for (const [id, label] of Object.entries(storedLabels)) {
+			this._customLabels.set(id, label);
+		}
 	}
 
 	public notifySessionsChange(): void {
@@ -244,6 +254,16 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 
 	public swap(original: vscode.ChatSessionItem, modified: vscode.ChatSessionItem): void {
 		this._onDidCommitChatSessionItem.fire({ original, modified });
+	}
+
+	public async setCustomLabel(sessionId: string, label: string): Promise<void> {
+		this._customLabels.set(sessionId, label);
+		const payload: Record<string, string> = {};
+		for (const [id, lbl] of this._customLabels) {
+			payload[id] = lbl;
+		}
+		await this.extensionContext.globalState.update('github.copilot.cli.sessionLabels', payload);
+		this.notifySessionsChange();
 	}
 
 	public async provideChatSessionItems(token: vscode.CancellationToken): Promise<vscode.ChatSessionItem[]> {
@@ -261,7 +281,7 @@ export class CopilotCLIChatSessionItemProvider extends Disposable implements vsc
 		const worktreePath = this.worktreeManager.getWorktreePath(session.id);
 		const worktreeRelativePath = this.worktreeManager.getWorktreeRelativePath(session.id);
 
-		const label = session.label;
+		const label = this._customLabels.get(session.id) ?? session.label;
 		const tooltipLines = [vscode.l10n.t(`Background agent session: {0}`, label)];
 		let badge: vscode.MarkdownString | undefined;
 		let changes: vscode.ChatSessionItem['changes'] | undefined;
@@ -1056,7 +1076,7 @@ export class CopilotCLIChatSessionParticipant extends Disposable {
 	}
 }
 
-export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCLIChatSessionItemProvider, copilotCLISessionService: ICopilotCLISessionService, gitService: IGitService): IDisposable {
+export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCLIChatSessionItemProvider, copilotCLISessionService: ICopilotCLISessionService, gitService: IGitService, liveRequestEditorService: ILiveRequestEditorService): IDisposable {
 	const disposableStore = new DisposableStore();
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.delete', async (sessionItem?: vscode.ChatSessionItem) => {
 		if (sessionItem?.resource) {
@@ -1096,6 +1116,220 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.resumeInTerminal', async (sessionItem?: vscode.ChatSessionItem) => {
 		if (sessionItem?.resource) {
 			await copilotcliSessionItemProvider.resumeCopilotCLISessionInTerminal(sessionItem);
+		}
+	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.newTerminalSession', async () => {
+		await copilotcliSessionItemProvider.createCopilotCLITerminal();
+	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.rename', async (sessionItem?: vscode.ChatSessionItem) => {
+		if (!sessionItem?.resource) {
+			return;
+		}
+
+		const sessionId = SessionIdForCLI.parse(sessionItem.resource);
+		const currentLabel = sessionItem.label ?? sessionId;
+		const newLabel = await vscode.window.showInputBox({
+			prompt: vscode.l10n.t('Rename Copilot CLI session'),
+			value: currentLabel,
+			ignoreFocusOut: true
+		});
+
+		const trimmed = newLabel?.trim();
+		if (!trimmed) {
+			return;
+		}
+
+		await copilotcliSessionItemProvider.setCustomLabel(sessionId, trimmed);
+		const modified: vscode.ChatSessionItem = {
+			...sessionItem,
+			label: trimmed
+		};
+		copilotcliSessionItemProvider.swap(sessionItem, modified);
+		await vscode.commands.executeCommand('vscode.open', sessionItem.resource);
+	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.replaySampleNative', async (sessionItem?: vscode.ChatSessionItem) => {
+		if (!sessionItem?.resource) {
+			return;
+		}
+
+		const sourceId = SessionIdForCLI.parse(sessionItem.resource);
+
+		// Open the source session in readonly mode and get its history
+		const sourceRef = await copilotCLISessionService.getSession(
+			sourceId,
+			{ model: undefined, workingDirectory: undefined, isolationEnabled: false, readonly: true, agent: undefined },
+			new vscode.CancellationTokenSource().token
+		);
+		if (!sourceRef) {
+			vscode.window.showWarningMessage(vscode.l10n.t('Source Copilot CLI session not found.'));
+			return;
+		}
+
+		try {
+			const sourceSession = sourceRef.object;
+			const sourceHistory = sourceSession.getChatHistory();
+			const sourceModelId = await sourceSession.getSelectedModelId();
+			const sourceOptions = sourceSession.options;
+
+			// Create a new session with similar options
+			const newRef = await copilotCLISessionService.createSession(
+				{
+					model: sourceModelId,
+					workingDirectory: sourceOptions.workingDirectory,
+					isolationEnabled: sourceOptions.isolationEnabled,
+					agent: undefined
+				},
+				new vscode.CancellationTokenSource().token
+			);
+
+			const newSession = newRef.object;
+
+			// Replay user/assistant turns into the new session as synthetic messages.
+			for (const turn of sourceHistory) {
+				if (turn instanceof vscode.ChatRequestTurn2) {
+					const text = turn.prompt || '';
+					if (text.trim().length) {
+						newSession.addUserMessage(text);
+					}
+				} else if (turn instanceof vscode.ChatResponseTurn2) {
+					const parts = turn.response ?? [];
+					const markdownParts = parts.filter(p => p instanceof vscode.ChatResponseMarkdownPart) as vscode.ChatResponseMarkdownPart[];
+					const text = markdownParts
+						.map(p => {
+							const raw: unknown = (p as vscode.ChatResponseMarkdownPart).value as unknown;
+							if (typeof raw === 'string') {
+								return raw;
+							}
+							const candidate = (raw as { value?: unknown })?.value;
+							return typeof candidate === 'string' ? candidate : '';
+						})
+						.filter(segment => segment.trim().length > 0)
+						.join('\n\n');
+					if (text.trim().length) {
+						newSession.addUserAssistantMessage(text);
+					}
+				}
+			}
+
+			// Give the replayed session a distinct, descriptive label so it is easy
+			// to distinguish from the source/session list entries.
+			const baseLabel = sessionItem.label ?? sourceId;
+			const shortId = newSession.sessionId.slice(-6);
+			const replayLabel = vscode.l10n.t('Replay sample · {0} · {1}', baseLabel, shortId);
+			await copilotcliSessionItemProvider.setCustomLabel(newSession.sessionId, replayLabel);
+
+			// Append a short demo explanation so the new session is self-describing.
+			newSession.addUserMessage('Explain what this Copilot CLI replay sample session is doing.');
+			newSession.addUserAssistantMessage(
+				[
+					'This Copilot CLI session was created from an existing session using the **Replay Session in New CLI Session (Sample)** command.',
+					'It replays the original user and assistant turns into a fresh CLI-native session without modifying the source session.',
+					'Any structured or non-text responses from the original run are rendered as `[non-text content]` so they do not appear as `[object Object]`.'
+				].join(' ')
+			);
+
+			// Refresh sessions so the new one appears, then open it.
+			copilotcliSessionItemProvider.notifySessionsChange();
+			const newResource = SessionIdForCLI.getResource(newSession.sessionId);
+			await vscode.commands.executeCommand('vscode.open', newResource);
+		} finally {
+			sourceRef.dispose();
+		}
+	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.liveRequestEditor.openInCopilotCLI', async (arg?: LiveRequestReplayKey | { sessionId: string; location: number }) => {
+		if (!arg) {
+			return;
+		}
+
+		// Support both replay keys (from existing snapshots) and raw session keys
+		// (from the Live Request Editor webview). For replay keys we prefer the
+		// existing snapshot; for session keys we build a fresh replay snapshot.
+		let snapshot = 'requestId' in arg
+			? liveRequestEditorService.getReplaySnapshot(arg)
+			: liveRequestEditorService.buildReplayForRequest({ sessionId: arg.sessionId, location: arg.location });
+
+		if (!snapshot && 'requestId' in arg) {
+			snapshot = liveRequestEditorService.buildReplayForRequest({ sessionId: arg.sessionId, location: arg.location });
+		}
+
+		if (!snapshot || !snapshot.payload || snapshot.payload.length === 0) {
+			vscode.window.showInformationMessage(vscode.l10n.t('Nothing to replay for this request.'));
+			return;
+		}
+
+		// Create a new Copilot CLI session seeded from the replay payload.
+		const cancellationSource = new vscode.CancellationTokenSource();
+		const newRef = await copilotCLISessionService.createSession(
+			{
+				model: snapshot.model,
+				workingDirectory: undefined,
+				isolationEnabled: false,
+				agent: undefined
+			},
+			cancellationSource.token
+		);
+
+		const newSession = newRef.object;
+
+		try {
+			for (const message of snapshot.payload ?? []) {
+				const text = renderReplayMessageText(message).trim();
+				if (!text) {
+					continue;
+				}
+				if (message.role === Raw.ChatRole.User) {
+					newSession.addUserMessage(text);
+				} else {
+					newSession.addUserAssistantMessage(text);
+				}
+			}
+
+			const shortId = newSession.sessionId.slice(-6);
+			const label = vscode.l10n.t('Replay from Live Request Editor · {0}', shortId);
+			await copilotcliSessionItemProvider.setCustomLabel(newSession.sessionId, label);
+
+			copilotcliSessionItemProvider.notifySessionsChange();
+			const newResource = SessionIdForCLI.getResource(newSession.sessionId);
+			await vscode.commands.executeCommand('vscode.open', newResource);
+		} finally {
+			newRef.dispose();
+		}
+	}));
+	disposableStore.add(vscode.commands.registerCommand('github.copilot.cli.sessions.createSampleNative', async () => {
+		// Create a brand new Copilot CLI session with a small, hard-coded history.
+		const newRef = await copilotCLISessionService.createSession(
+			{ model: undefined, workingDirectory: undefined, isolationEnabled: false, agent: undefined },
+			new vscode.CancellationTokenSource().token
+		);
+		const newSession = newRef.object;
+
+		try {
+			// Seed the session with a tiny, pre-made conversation so it can be used
+			// as a native CLI history demo without relying on any prior session.
+			newSession.addUserMessage('hi');
+			newSession.addUserAssistantMessage('Hello! This is a sample Copilot CLI session created by the VS Code extension.');
+
+			newSession.addUserMessage('What is this session showing?');
+			newSession.addUserAssistantMessage(
+				[
+					'This session was opened using the **Create Sample Copilot CLI Session** command.',
+					'The history you see here is generated entirely by the extension, using the same Copilot CLI session/event pipeline as a normal interactive run.',
+					'You can use it to verify how native CLI sessions render in the chat view and how history replay behaves.'
+				].join(' ')
+			);
+
+			// Apply a custom label so the sample session is clearly identified
+			// and does not get confused with other CLI sessions in the list.
+			const shortId = newSession.sessionId.slice(-6);
+			const sampleLabel = vscode.l10n.t('Sample CLI session · {0}', shortId);
+			await copilotcliSessionItemProvider.setCustomLabel(newSession.sessionId, sampleLabel);
+
+			// Refresh sessions so the new one appears, then open it.
+			copilotcliSessionItemProvider.notifySessionsChange();
+			const newResource = SessionIdForCLI.getResource(newSession.sessionId);
+			await vscode.commands.executeCommand('vscode.open', newResource);
+		} finally {
+			newRef.dispose();
 		}
 	}));
 	disposableStore.add(vscode.commands.registerCommand('agentSession.copilotcli.openChanges', async (sessionItemResource?: vscode.Uri) => {
@@ -1176,4 +1410,23 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.chat.applyCopilotCLIAgentSessionChanges', applyChanges));
 	disposableStore.add(vscode.commands.registerCommand('github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply', applyChanges));
 	return disposableStore;
+}
+
+function renderReplayMessageText(message: Raw.ChatMessage): string {
+	const pieces: string[] = [];
+	for (const part of message.content ?? []) {
+		const unknownPart = part as { text?: unknown; content?: unknown; type?: unknown; toolCallId?: unknown };
+		if (part.type === Raw.ChatCompletionContentPartKind.Text) {
+			pieces.push(part.text ?? '');
+		} else if ('text' in part && typeof part.text === 'string') {
+			pieces.push(part.text);
+		} else if (typeof unknownPart.content === 'string') {
+			pieces.push(unknownPart.content);
+		} else if (unknownPart.type === 'image_url') {
+			pieces.push('[image]');
+		} else if (unknownPart.toolCallId) {
+			pieces.push(`Tool call: ${unknownPart.toolCallId}`);
+		}
+	}
+	return pieces.join('\n');
 }

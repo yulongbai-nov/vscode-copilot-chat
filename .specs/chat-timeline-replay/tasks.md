@@ -1,13 +1,12 @@
 # Implementation Plan: Chat Timeline Replay
 
-- [ ] 0. Finalize scope and UX
-  - Decide read-only vs. forkable replay session.
-  - Confirm collapse defaults and “Edited” labeling.
-  - Set flag name (`github.copilot.chat.liveRequestEditor.timelineReplay.enabled`).
-  - Note dependency: persistence is optional. If chat-history-persistence (SQLite) is off, forks are in-memory only; if on, store replay metadata (parent IDs, hashes, version) so forks survive reloads.
-  - Default: replay starts read-only; user clicks “Start chatting from this replay” to enable input. Fork payload uses the trimmed messages that were/would be sent.
+- [x] 0. Finalize scope and UX
+  - Defaults locked: replay is read-only on entry; “Start chatting from this replay” enables input/focus for the fork. One fork per source turn (Option A replace + one-level restore buffer).
+  - Collapse long system/history/tool by default; edited/deleted chips; section cap 30 with “(N more)”; trimmed banner.
+  - Flag: `github.copilot.chat.liveRequestEditor.timelineReplay.enabled`.
+  - Persistence is optional: if chat-history-persistence (SQLite) is off, forks live in-memory; if on, persist replay metadata (parent IDs, hashes, version) so forks survive reloads. Fork payload seeds from the trimmed messages that were/would be sent.
 
-- [ ] 1. Build replay projection
+- [x] 1. Build replay projection
   - Map `EditableChatRequest.messages` → replay bubbles (system/history/tool/user).
   - Omit deleted sections; mark edited sections; collapse long system/history/tool by default.
   - Include tool call/result labels and trimmed-prompt warning when applicable.
@@ -15,11 +14,12 @@
   - Attach version/hash metadata to replay builds; emit with session scoping for consumers.
 
 - [ ] 2. Session creation and rendering
+  - Status: Service-level state machine + Option A (replace + restore buffer) implemented; command wired; chat provider renders replay sections with actions and gates input behind “Start chatting from this replay.” Needs polish on bubble styling, collapse/edited chips, stale/replacement affordances, and parity warnings. Continuation currently uses the replay participant; must hand off live chatting to the default Copilot participant.
   - Add replay session manager keyed to source session/location with optional `replay_parent_turn_id`.
   - Enforce Option A: one replay fork per source turn; replace prior fork if re-replayed.
   - Expose command `github.copilot.liveRequestEditor.replayPrompt` and surface in Live Request Editor UI.
   - Render bubbles via chat participant/content provider without model invocation.
-  - When continuing from replay, switch focus to the replay session and show breadcrumb/toast. Keep interception/auto-override off by default in the fork unless explicitly enabled.
+  - When continuing from replay, create/focus a fork session seeded with the replay payload/history. Current: custom scheme `copilot-live-replay-fork` using default agent id (attachments/model picker available) but still a custom session. Ideal (pending API): native Copilot chat session with injected history; replay view remains projection-only/read-only. Keep interception/auto-override off by default in the fork unless explicitly enabled.
   - Cap rendered sections (e.g., 30) and provide “View replayed prompt (N more)” affordance.
   - In replay view with interception off, disable edit/delete controls and auto-scroll to the latest section.
   - Handle stale/cleared states (canceled send/context switch) by marking replay stale; ignore stale updates (version/hash guard).
@@ -30,6 +30,8 @@
   - Handle empty/mapping failures gracefully (“Nothing to replay”).
 
 - [ ] 4. Tests and validation
+  - Initial unit coverage added for replay projection/state machine in `liveRequestEditorService.spec.ts`.
+  - Added provider coverage for replay chat content/read-only gating in `liveReplayChatProvider.spec.ts`.
   - Unit tests for projection (ordering, deletions/edits, tool labeling, trimming warnings).
   - Unit tests for version/hash scoping: stale updates ignored; replay_replace replaces prior fork; restore_previous buffer (if enabled) works.
   - Integration tests:

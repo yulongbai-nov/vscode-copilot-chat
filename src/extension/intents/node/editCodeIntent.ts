@@ -221,6 +221,7 @@ class EditIntentRequestHandler {
 			this.documentContext,
 			this.location,
 			this.chatTelemetry,
+			undefined,
 			this.handlerOptions,
 			this.onPaused,
 		);

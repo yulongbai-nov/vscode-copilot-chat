@@ -34,16 +34,17 @@ function createRenderResult(text: string): RenderPromptResult {
 	};
 }
 
-function createRenderResultWithMessages(texts: string[]): RenderPromptResult {
+function createRenderResultWithMessages(texts: string[], extraMessages: Raw.ChatMessage[] = []): RenderPromptResult {
+	const baseMessages: Raw.ChatMessage[] = texts.map((text, index) => ({
+		role: index === 0 ? Raw.ChatRole.System : Raw.ChatRole.User,
+		content: [{
+			type: Raw.ChatCompletionContentPartKind.Text,
+			text
+		}]
+	}));
 	return {
 		...nullRenderPromptResult(),
-		messages: texts.map((text, index) => ({
-			role: index === 0 ? Raw.ChatRole.System : Raw.ChatRole.User,
-			content: [{
-				type: Raw.ChatCompletionContentPartKind.Text,
-				text
-			}]
-		}))
+		messages: [...baseMessages, ...extraMessages]
 	};
 }
 
@@ -67,9 +68,11 @@ async function createService(extensionContext: IVSCodeExtensionContext = new Moc
 	const config = new InMemoryConfigurationService(defaults);
 	await config.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, true);
 	await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
+	await config.setConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled, true);
 	const telemetry = new SpyingTelemetryService();
 	const chatSessions = new TestChatSessionService();
-	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext);
+	const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
+	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log);
 	return { service, telemetry, chatSessions, extensionContext, config };
 }
 
@@ -135,6 +138,29 @@ describe('LiveRequestEditorService interception', () => {
 		expect(afterRestore.sections.find(s => s.id === target.id)?.deleted).toBeFalsy();
 		expect(afterRestore.messages).toHaveLength(2);
 		expect(afterRestore.isDirty).toBe(false);
+	});
+
+	test('getMessagesForSend builds payload after deletes and edits', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['sys', 'user1', 'user2']) });
+		const key = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+
+		const request = service.getRequest(key)!;
+		service.deleteSection(key, request.sections[1].id); // remove user1
+		service.updateSectionContent(key, request.sections[2].id, 'edited user2');
+
+		const sendResult = service.getMessagesForSend(key, request.originalMessages);
+		expect(sendResult.error).toBeUndefined();
+		expect(sendResult.messages).toHaveLength(2);
+		expect(sendResult.messages[0].role).toBe(Raw.ChatRole.System);
+		expect(getText(sendResult.messages[0].content[0])).toBe('sys');
+		expect(sendResult.messages[1].role).toBe(Raw.ChatRole.User);
+		expect(getText(sendResult.messages[1].content[0])).toBe('edited user2');
+
+		const mutatedRequest = service.getRequest(key)!;
+		expect(mutatedRequest.isDirty).toBe(true);
+		expect(mutatedRequest.messages).toHaveLength(2);
 	});
 
 	test('resetRequest restores original content and clears edits/deletes', async () => {
@@ -234,8 +260,12 @@ describe('LiveRequestEditorService interception', () => {
 		expect(events.length).toBeGreaterThan(0);
 		expect(events[events.length - 1]?.metadata?.sessionId).toBe(init.sessionId);
 
+		const eventCountBeforeDispose = events.length;
 		chatSessions.fireDidDispose(init.sessionId);
-		expect(events[events.length - 1]?.metadata).toBeUndefined();
+		// Requests are retained across session disposal for debugging/persistence, so
+		// disposing a chat session should not clear the metadata snapshot.
+		expect(events.length).toBe(eventCountBeforeDispose);
+		expect(events[events.length - 1]?.metadata?.sessionId).toBe(init.sessionId);
 	});
 
 	test('updateRequestOptions stores cloned payloads and emits change notifications', async () => {
@@ -339,8 +369,8 @@ describe('LiveRequestEditorService interception', () => {
 
 		const decision = await decisionPromise;
 		expect(decision).toEqual({ action: 'cancel', reason: 'sessionDisposed' });
-		expect(service.getRequest(key)).toBeUndefined();
-		expect(removedKeys).toEqual([key]);
+		expect(service.getRequest(key)).toBeDefined();
+		expect(removedKeys).toEqual([]);
 
 		const events = telemetry.getEvents().telemetryServiceEvents;
 		const hasReason = events.some(evt => {
@@ -515,6 +545,24 @@ describe('LiveRequestEditorService interception', () => {
 		expect(rehydratedRequest.sections[0].overrideState?.scope).toBe('workspace');
 	});
 
+	test('request cache persists across service instances', async () => {
+		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
+		const first = await createService(extensionContext);
+		const init = createServiceInit({ sessionId: 'persist-session', requestId: 'req-1', renderResult: createRenderResult('original text') });
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+
+		first.service.prepareRequest(init);
+		const request = first.service.getRequest(key)!;
+		first.service.updateSectionContent(key, request.sections[0].id, 'edited text');
+
+		await (first.service as any).persistRequestCache();
+
+		const second = await createService(extensionContext);
+		const restored = second.service.getRequest(key)!;
+		expect(getText(restored.messages[0].content[0])).toBe('edited text');
+		expect(restored.isDirty).toBe(true);
+	});
+
 	test('applyTraceData updates tokens and trace path metadata', async () => {
 		const { service } = await createService();
 		const renderResult: RenderPromptResult = {
@@ -548,6 +596,247 @@ describe('LiveRequestEditorService interception', () => {
 		expect(updated.sections[0].hoverTitle).toBe('root › system');
 		expect(updated.sections[0].metadata?.tracePath).toEqual(['root', 'system']);
 		expect(updated.sections[1].tokenCount).toBe(32);
+	});
+
+	test('buildReplayForRequest builds projection with edits and deletions', async () => {
+		const { service } = await createService();
+		const requestOptions: OptionalChatRequestParams = { temperature: 0.3 };
+		const init = createServiceInit({
+			renderResult: createRenderResultWithMessages(['system', 'first', 'second']),
+			requestOptions
+		});
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		service.updateSectionContent(key, request.sections[1].id, 'first edited');
+		service.deleteSection(key, request.sections[2].id);
+
+		const replay = service.buildReplayForRequest(key)!;
+		expect(replay.state).toBe('ready');
+		expect(replay.version).toBe(1);
+		expect(replay.payload).toHaveLength(2);
+		expect(getText(replay.payload[1].content[0])).toBe('first edited');
+		expect(replay.projection?.sections).toHaveLength(2);
+		expect(replay.projection?.editedCount).toBe(1);
+		expect(replay.projection?.deletedCount).toBe(1);
+		expect(replay.projection?.overflowCount).toBe(0);
+		expect(replay.projection?.requestOptions).toEqual(requestOptions);
+		if (replay.projection?.requestOptions) {
+			replay.projection.requestOptions.temperature = 0.9;
+		}
+		expect(request.metadata.requestOptions?.temperature).toBe(0.3);
+	});
+
+	test('edited sections preserve non-text content parts in replay payload', async () => {
+		const { service } = await createService();
+		// Build a render result that includes a user message with text + image_url parts.
+		const imageMessage: Raw.ChatMessage = {
+			role: Raw.ChatRole.User,
+			// Use a loosely-typed image_url part so renderReplayMessageText
+			// can recognize it without requiring full OpenAI schema fields.
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'describe this image' },
+				{ type: 'image_url' } as any,
+			]
+		};
+		const init = createServiceInit({
+			renderResult: createRenderResultWithMessages(['system'], [imageMessage])
+		});
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		// Edit the user section; this should update the text but keep the image part.
+		const userSection = request.sections.find(s => s.kind === 'user')!;
+		service.updateSectionContent(key, userSection.id, 'updated description');
+
+		const replay = service.buildReplayForRequest(key)!;
+		const userPayload = replay.payload[1];
+		expect(userPayload.role).toBe(Raw.ChatRole.User);
+		expect(Array.isArray(userPayload.content)).toBe(true);
+		// First part is the updated text.
+		expect(getText(userPayload.content![0])).toBe('updated description');
+		// Non-text parts (e.g. image_url) are preserved.
+		const hasImagePart = (userPayload.content ?? []).some(
+			part => (part as any).type === 'image_url' || (part as any).image_url
+		);
+		expect(hasImagePart).toBe(true);
+	});
+
+	test('edited multi-text-part messages collapse text and preserve interleaved non-text parts (legacy section editing)', async () => {
+		const { service } = await createService();
+		const imageMessage: Raw.ChatMessage = {
+			role: Raw.ChatRole.User,
+			content: [
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'aaa' },
+				{
+					type: Raw.ChatCompletionContentPartKind.Image,
+					imageUrl: { url: 'https://example.com/image.png' }
+				},
+				{ type: Raw.ChatCompletionContentPartKind.Text, text: 'bbb' },
+			]
+		};
+		const init = createServiceInit({
+			renderResult: createRenderResultWithMessages(['system'], [imageMessage])
+		});
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+
+		service.prepareRequest(init);
+		const request = service.getRequest(key)!;
+		const userSection = request.sections.find(s => s.kind === 'user')!;
+
+		// Legacy section-level editing collapses all text into a single Text part
+		// while preserving non-text parts (e.g. images).
+		const updatedText = 'updated aggregate text';
+		service.updateSectionContent(key, userSection.id, updatedText);
+
+		const replay = service.buildReplayForRequest(key)!;
+		const userPayload = replay.payload[1];
+		expect(userPayload.role).toBe(Raw.ChatRole.User);
+		expect(Array.isArray(userPayload.content)).toBe(true);
+		// One Text part (aggregate) + one Image part.
+		expect(userPayload.content).toHaveLength(2);
+
+		const firstText = getText(userPayload.content![0])!;
+		const imagePart = userPayload.content![1] as Raw.ChatCompletionContentPart;
+
+		expect(firstText).toBe(updatedText);
+		expect(imagePart.type).toBe(Raw.ChatCompletionContentPartKind.Image);
+		expect((imagePart as Raw.ChatCompletionContentPartImage).imageUrl.url).toBe('https://example.com/image.png');
+	});
+
+	test('replay replace keeps restore buffer and increments version', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'first']) });
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+
+		const first = service.buildReplayForRequest(key)!;
+		expect(first.version).toBe(1);
+
+		const request = service.getRequest(key)!;
+		service.updateSectionContent(key, request.sections[1].id, 'second');
+		const second = service.buildReplayForRequest(key)!;
+		expect(second.version).toBe(2);
+		expect(getText(second.payload[1].content[0])).toBe('second');
+
+		const restored = service.restorePreviousReplay({ ...key, requestId: init.requestId })!;
+		expect(restored.version).toBeGreaterThan(second.version);
+		expect(restored.restoreOfVersion).toBe(second.version);
+		expect(getText(restored.payload[1].content[0])).toBe('first');
+	});
+
+	test('markReplayStale marks snapshot stale and clears restore buffer', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		service.buildReplayForRequest(key);
+
+		service.markReplayStale(key, init.requestId, 'contextChanged:model');
+		const stale = service.getReplaySnapshot({ ...key, requestId: init.requestId })!;
+		expect(stale.state).toBe('stale');
+		expect(stale.staleReason).toBe('contextChanged:model');
+		expect(service.restorePreviousReplay({ ...key, requestId: init.requestId })).toBeUndefined();
+	});
+
+	test('markReplayForkActive moves replay into forkActive state', async () => {
+		const { service } = await createService();
+		const init = createServiceInit();
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		const ready = service.buildReplayForRequest(key)!;
+
+		const forked = service.markReplayForkActive({ ...key, requestId: init.requestId }, 'fork-session');
+		expect(forked?.state).toBe('forkActive');
+		expect(forked?.forkSessionId).toBe('fork-session');
+		expect((forked?.version ?? 0) > ready.version).toBe(true);
+	});
+
+	describe('LiveRequestEditorService leaf edits', () => {
+		test('updateLeafByPath edits only the targeted text part and preserves non-text parts', async () => {
+			const { service } = await createService();
+			const renderResult: RenderPromptResult = {
+				...nullRenderPromptResult(),
+				messages: [{
+					role: Raw.ChatRole.User,
+					content: [
+						{ type: Raw.ChatCompletionContentPartKind.Text, text: 'first' },
+						{ type: Raw.ChatCompletionContentPartKind.Image, imageUrl: { url: 'https://example.com/image.png' } },
+						{ type: Raw.ChatCompletionContentPartKind.Text, text: 'second' },
+					]
+				} as Raw.ChatMessage]
+			};
+			const init = createServiceInit({ renderResult });
+			const key = { sessionId: init.sessionId, location: init.location };
+			service.prepareRequest(init);
+
+			service.updateLeafByPath(key, 'messages[0].content[2].text', 'edited');
+
+			const request = service.getRequest(key)!;
+			expect(request.messages).toHaveLength(1);
+			expect(getText(request.messages[0].content[0])).toBe('first');
+			expect((request.messages[0].content[1] as any).type).toBe(Raw.ChatCompletionContentPartKind.Image);
+			expect((request.messages[0].content[1] as any).imageUrl?.url).toBe('https://example.com/image.png');
+			expect(getText(request.messages[0].content[2])).toBe('edited');
+
+			// Section projection updates so capture + replay can observe the edit.
+			expect(request.sections[0].content).toContain('edited');
+		});
+
+		test('updateLeafByPath edits tool call arguments only', async () => {
+			const { service } = await createService();
+			const renderResult: RenderPromptResult = {
+				...nullRenderPromptResult(),
+				messages: [{
+					role: Raw.ChatRole.Assistant,
+					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: '' }],
+					toolCalls: [{
+						id: 'call-1',
+						type: 'function',
+						function: { name: 'readFile', arguments: '{"path":"a.txt"}' }
+					}]
+				} as Raw.ChatMessage]
+			};
+			const init = createServiceInit({ renderResult });
+			const key = { sessionId: init.sessionId, location: init.location };
+			service.prepareRequest(init);
+
+			service.updateLeafByPath(key, 'messages[0].toolCalls[0].function.arguments', '{"path":"b.txt"}');
+
+			const request = service.getRequest(key)!;
+			const call = (request.messages[0] as any).toolCalls?.[0];
+			expect(call?.id).toBe('call-1');
+			expect(call?.function?.name).toBe('readFile');
+			expect(call?.function?.arguments).toBe('{"path":"b.txt"}');
+		});
+
+		test('undoLastEdit and redoLastEdit revert leaf edits', async () => {
+			const { service } = await createService();
+			const init = createServiceInit({ renderResult: createRenderResult('hello') });
+			const key = { sessionId: init.sessionId, location: init.location };
+			service.prepareRequest(init);
+
+			service.updateLeafByPath(key, 'messages[0].content[0].text', 'edited');
+			expect(getText(service.getRequest(key)!.messages[0].content[0])).toBe('edited');
+
+			service.undoLastEdit(key);
+			expect(getText(service.getRequest(key)!.messages[0].content[0])).toBe('hello');
+
+			service.redoLastEdit(key);
+			expect(getText(service.getRequest(key)!.messages[0].content[0])).toBe('edited');
+		});
+	});
+
+	test('buildReplayForRequest respects replay flag', async () => {
+		const { service, config } = await createService();
+		const init = createServiceInit();
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+		await config.setConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled, false);
+		expect(service.isReplayEnabled()).toBe(false);
+		const replay = service.buildReplayForRequest(key);
+		expect(replay).toBeUndefined();
 	});
 
 });
