@@ -93,7 +93,7 @@ function main() {
 	}
 
 	console.log(`fixChangedFiles: formatting ${files.length} file(s).`);
-	exec('npm', ['run', 'tsfmt', '--', ...files]);
+	exec('npx', ['tsfmt', '-r', '--', ...files]);
 
 	console.log('fixChangedFiles: applying eslint --fix.');
 	exec('node', ['--experimental-strip-types', './node_modules/eslint/bin/eslint.js', '--fix', '--max-warnings=0', '--no-warn-ignored', ...files]);
@@ -105,4 +105,3 @@ function main() {
 }
 
 main();
-

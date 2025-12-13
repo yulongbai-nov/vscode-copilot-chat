@@ -599,15 +599,17 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				</div>
 				<div className='section-toolbar' role='toolbar' aria-label={`Actions for ${section.label}`}>
 					{deleted ? (
-						<button
-							type='button'
-							className='section-toolbar-button'
-							onClick={handleToolbarAction(() => onRestore(section.id))}
-							title='Restore section'
-							aria-label='Restore section'
-						>
-							<SectionActionIcon type='restore' />
-						</button>
+						canEdit ? (
+							<button
+								type='button'
+								className='section-toolbar-button'
+								onClick={handleToolbarAction(() => onRestore(section.id))}
+								title='Restore section'
+								aria-label='Restore section'
+							>
+								<SectionActionIcon type='restore' />
+							</button>
+						) : null
 					) : (
 						<>
 							{section.editable && canEdit && (
@@ -622,7 +624,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 									<SectionActionIcon type={isEditing ? 'close' : 'edit'} />
 								</button>
 							)}
-							{section.deletable && (
+							{section.deletable && canEdit && (
 								<button
 									type='button'
 									className='section-toolbar-button'

@@ -177,7 +177,8 @@ The feature is intended as a sample / internal tool to explore “native-parity�
 4. WHEN the message card exits raw-structure edit mode, THEN the card SHALL return to the standard rendered preview.
 5. THE system SHALL NOT require switching to the dedicated Raw Payload view to perform these message edits (the dedicated view remains a read-only debug surface).
 6. WHEN the user changes the selected conversation (dropdown) or toggles Auto-follow, THEN the edit affordance SHALL remain correctly gated (available via hover/focus in editable modes; hidden in “Send normally”).
-7. WHEN the raw-structure tree re-renders (e.g. after Apply/Undo/Redo), THEN it SHALL NOT show `[circular]` for non-circular payloads.
+7. WHEN Prompt Interception is in “Send normally”, THEN destructive section actions (Delete/Restore) SHALL be hidden.
+8. WHEN the raw-structure tree re-renders (e.g. after Apply/Undo/Redo), THEN it SHALL NOT show `[circular]` for non-circular payloads.
 
 ### Requirement 15 – Surgical fidelity for message edits (one-to-one mapping)
 
