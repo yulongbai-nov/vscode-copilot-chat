@@ -111,6 +111,9 @@ export interface IEndpointBody {
 		type: 'enabled' | 'disabled';
 		budget_tokens?: number;
 	};
+
+	/** ChatCompletions API for Anthropic models */
+	thinking_budget?: number;
 }
 
 export interface IEndpointFetchOptions {
@@ -165,6 +168,8 @@ export interface IMakeChatRequestOptions {
 	enableRetryOnError?: boolean;
 	/** Which fetcher to use, overrides the default. */
 	useFetcher?: FetcherId;
+	/** Disable extended thinking for this request. Used when resuming from tool call errors where the original thinking blocks are not available. */
+	disableThinking?: boolean;
 }
 
 export type IChatRequestTelemetryProperties = {
@@ -175,7 +180,9 @@ export type IChatRequestTelemetryProperties = {
 	associatedRequestId?: string;
 	retryAfterErrorCategory?: string;
 	retryAfterError?: string;
+	retryAfterErrorGitHubRequestId?: string;
 	connectivityTestError?: string;
+	connectivityTestErrorGitHubRequestId?: string;
 	retryAfterFilterCategory?: string;
 }
 

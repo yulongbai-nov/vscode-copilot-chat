@@ -325,20 +325,20 @@ const SectionActionIcon: React.FC<{ type: SectionActionIconType }> = ({ type }) 
 	const icon = SECTION_ACTION_ICONS[type];
 	return (
 		<svg
-			className="section-action-icon"
-			viewBox="0 0 24 24"
-			role="presentation"
-			aria-hidden="true"
+			className='section-action-icon'
+			viewBox='0 0 24 24'
+			role='presentation'
+			aria-hidden='true'
 		>
 			{icon.paths.map((path, index) => (
 				<path
 					key={`${type}-${index}`}
 					d={path}
 					fill={icon.filled ? 'currentColor' : 'none'}
-					stroke="currentColor"
+					stroke='currentColor'
 					strokeWidth={1.6}
-					strokeLinecap="round"
-					strokeLinejoin="round"
+					strokeLinecap='round'
+					strokeLinejoin='round'
 				/>
 			))}
 		</svg>
@@ -346,7 +346,7 @@ const SectionActionIcon: React.FC<{ type: SectionActionIconType }> = ({ type }) 
 };
 
 const EmptyState: React.FC = () => (
-	<div className="empty-state">
+	<div className='empty-state'>
 		<p>
 			<strong>Live Request Editor</strong>
 		</p>
@@ -639,7 +639,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 	const renderedContent = React.useMemo(() => {
 		const value = (section.content ?? '').trim();
 		if (!value.length) {
-			return DOMPurify.sanitize('<p class="section-empty">No content provided.</p>');
+			return DOMPurify.sanitize('<p class=\"section-empty\">No content provided.</p>');
 		}
 		return DOMPurify.sanitize(markdown.render(section.content ?? ''));
 	}, [section.content]);
@@ -788,59 +788,59 @@ const SectionCard: React.FC<SectionCardProps> = ({
 			onDragEnd={handleDragEnd}
 		>
 			<div
-				className="section-header"
-				role="button"
+				className='section-header'
+				role='button'
 				tabIndex={0}
 				aria-expanded={!collapsed}
 				aria-controls={sectionBodyId}
 				onClick={() => onToggleCollapse(section.id)}
 				onKeyDown={handleHeaderKeyDown}
 			>
-				<div className="section-title">
-					<span className="icon" aria-hidden="true">{collapsed ? '\u25B6' : '\u25BC'}</span>
+				<div className='section-title'>
+					<span className='icon' aria-hidden='true'>{collapsed ? '\u25B6' : '\u25BC'}</span>
 					<span className={`section-kind ${section.kind}`}>{section.kind}</span>
-					<span className="section-label">{section.label}</span>
+					<span className='section-label'>{section.label}</span>
 					{sectionTokens > 0 && (
-						<span className="section-tokens">
+						<span className='section-tokens'>
 							{formatNumber(sectionTokens)} tokens
 							{totalTokens > 0 && (
-								<span className="section-percentage">{formatPercent(sectionTokens, totalTokens)}</span>
+								<span className='section-percentage'>{formatPercent(sectionTokens, totalTokens)}</span>
 							)}
 						</span>
 					)}
 					{isPinned && (
-						<span className="pinned-indicator" title="Pinned section" aria-label="Pinned section">
-							<span className="codicon codicon-pin" aria-hidden="true" />
+						<span className='pinned-indicator' title='Pinned section' aria-label='Pinned section'>
+							<span className='codicon codicon-pin' aria-hidden='true' />
 						</span>
 					)}
 					{section.overrideState ? (
 						<button
-							type="button"
-							className="override-chip"
+							type='button'
+							className='override-chip'
 							onClick={handleToolbarAction(() => onShowDiff?.(section))}
-							title="Show override diff"
+							title='Show override diff'
 						>
 							Override · Show diff
 						</button>
 					) : null}
 				</div>
-				<div className="section-toolbar" role="toolbar" aria-label={`Actions for ${section.label}`}>
+				<div className='section-toolbar' role='toolbar' aria-label={`Actions for ${section.label}`}>
 					{deleted ? (
 						<button
-							type="button"
-							className="section-toolbar-button"
+							type='button'
+							className='section-toolbar-button'
 							onClick={handleToolbarAction(() => onRestore(section.id))}
-							title="Restore section"
-							aria-label="Restore section"
+							title='Restore section'
+							aria-label='Restore section'
 						>
-							<SectionActionIcon type="restore" />
+							<SectionActionIcon type='restore' />
 						</button>
 					) : (
 						<>
 							{section.editable && canEdit && (
 								<button
-									type="button"
-									className="section-toolbar-button"
+									type='button'
+									className='section-toolbar-button'
 									onClick={handleToolbarAction(() => onEditToggle(section.id))}
 									title={isEditing ? 'Exit edit mode' : 'Edit section'}
 									aria-label={isEditing ? 'Exit edit mode' : 'Edit section'}
@@ -851,18 +851,18 @@ const SectionCard: React.FC<SectionCardProps> = ({
 							)}
 							{section.deletable && (
 								<button
-									type="button"
-									className="section-toolbar-button"
+									type='button'
+									className='section-toolbar-button'
 									onClick={handleToolbarAction(() => onDelete(section.id))}
-									title="Delete section"
-									aria-label="Delete section"
+									title='Delete section'
+									aria-label='Delete section'
 								>
-									<SectionActionIcon type="delete" />
+									<SectionActionIcon type='delete' />
 								</button>
 							)}
 							<button
-								type="button"
-								className="section-toolbar-button"
+								type='button'
+								className='section-toolbar-button'
 								onClick={handleToolbarAction(() => onTogglePinned(section.id))}
 								title={isPinned ? 'Unpin section' : 'Pin section'}
 								aria-label={isPinned ? 'Unpin section' : 'Pin section'}
@@ -875,7 +875,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				</div>
 			</div>
 			<div
-				className="section-content"
+				className='section-content'
 				id={sectionBodyId}
 				aria-hidden={collapsed && !isEditing}
 			>
@@ -910,7 +910,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 							<span className="tool-label">Tool call</span>
 							<span className="tool-name">{toolInvocation.name ?? 'Unknown tool'}</span>
 							{toolInvocation.id ? (
-								<span className="tool-id">#{toolInvocation.id}</span>
+								<span className='tool-id'>#{toolInvocation.id}</span>
 							) : null}
 						</div>
 						<div className="tool-args tool-args-empty">Tool response content shown below.</div>
@@ -928,11 +928,11 @@ const SectionCard: React.FC<SectionCardProps> = ({
 						onRedoLeafEdit={onRedoLeafEdit}
 					/>
 				) : (
-					<div className="section-rendered" dangerouslySetInnerHTML={{ __html: renderedContent }} />
+					<div className='section-rendered' dangerouslySetInnerHTML={{ __html: renderedContent }} />
 				)}
 				{totalTokens > 0 && sectionTokens > 0 && (
-					<div className="token-meter">
-						<div className="token-meter-fill" style={{ width: formatPercent(sectionTokens, totalTokens) }} />
+					<div className='token-meter'>
+						<div className='token-meter-fill' style={{ width: formatPercent(sectionTokens, totalTokens) }} />
 					</div>
 				)}
 			</div>
@@ -970,27 +970,27 @@ const CollapsiblePanel: React.FC<CollapsiblePanelProps> = ({
 	return (
 		<div className={['section', 'section-kind-extra', isCollapsed ? 'collapsed' : ''].filter(Boolean).join(' ')} data-section-id={id}>
 			<div
-				className="section-header"
-				role="button"
+				className='section-header'
+				role='button'
 				tabIndex={0}
 				aria-expanded={!isCollapsed}
 				aria-controls={bodyId}
 				onClick={() => onToggleCollapse(id)}
 				onKeyDown={handleKeyDown}
 			>
-				<div className="section-title">
-					<span className="icon" aria-hidden="true">{isCollapsed ? '\u25B6' : '\u25BC'}</span>
-					<span className="section-kind extra">extra</span>
-					<span className="section-label">{title}</span>
+				<div className='section-title'>
+					<span className='icon' aria-hidden='true'>{isCollapsed ? '\u25B6' : '\u25BC'}</span>
+					<span className='section-kind extra'>extra</span>
+					<span className='section-label'>{title}</span>
 				</div>
 				{actions ? (
-					<div className="section-toolbar section-toolbar-static" role="toolbar" aria-label={`${title} actions`}>
+					<div className='section-toolbar section-toolbar-static' role='toolbar' aria-label={`${title} actions`}>
 						{actions}
 					</div>
 				) : null}
 			</div>
-			<div className="section-content" id={bodyId} aria-hidden={isCollapsed}>
-				{description ? <p className="inspector-panel-description">{description}</p> : null}
+			<div className='section-content' id={bodyId} aria-hidden={isCollapsed}>
+				{description ? <p className='inspector-panel-description'>{description}</p> : null}
 				{children}
 			</div>
 		</div>
@@ -1027,13 +1027,13 @@ const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ panelId, metadata, isCo
 	return (
 		<CollapsiblePanel
 			id={panelId}
-			title="Telemetry"
-			description="Metadata recorded for parity checks and endpoint diagnostics."
+			title='Telemetry'
+			description='Metadata recorded for parity checks and endpoint diagnostics.'
 			isCollapsed={isCollapsed}
 			onToggleCollapse={onToggleCollapse}
 		>
 			{hasData ? (
-				<dl className="telemetry-grid">
+				<dl className='telemetry-grid'>
 					{rows.map(row => (
 						<React.Fragment key={row.label}>
 							<dt>{row.label}</dt>
@@ -1042,7 +1042,7 @@ const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ panelId, metadata, isCo
 					))}
 				</dl>
 			) : (
-				<div className="inspector-panel-empty">No telemetry metadata available.</div>
+				<div className='inspector-panel-empty'>No telemetry metadata available.</div>
 			)}
 		</CollapsiblePanel>
 	);
@@ -1599,8 +1599,8 @@ const App: React.FC = () => {
 					<div className="header-left">
 						<h2>Live Request Editor</h2>
 						{sessions.length > 0 && (
-							<div className="session-selector" role="group" aria-label="Conversation selector">
-								<label className="session-selector-label" htmlFor="live-request-session-dropdown">
+							<div className='session-selector' role='group' aria-label='Conversation selector'>
+								<label className='session-selector-label' htmlFor='live-request-session-dropdown'>
 									Conversation
 								</label>
 								<div className="session-selector-row">
@@ -1648,15 +1648,15 @@ const App: React.FC = () => {
 							</div>
 						)}
 					</div>
-					<div className="header-actions">
-						<div className="mode-toggle" role="group" aria-label="Prompt Inspector mode">
+					<div className='header-actions'>
+						<div className='mode-toggle' role='group' aria-label='Prompt Inspector mode'>
 							{MODE_OPTIONS.map(option => {
 								const disabled = option.mode === 'autoOverride' && !autoOverride?.enabled;
 								const active = displayMode === option.mode;
 								return (
 									<button
 										key={option.mode}
-										type="button"
+										type='button'
 										className={`mode-toggle-button${active ? ' active' : ''}`}
 										onClick={() => handleModeSelect(option.mode)}
 										disabled={disabled}
@@ -1669,57 +1669,57 @@ const App: React.FC = () => {
 						</div>
 						{request.isDirty && (
 							<>
-								<span className="dirty-badge" role="status" aria-live="polite">Modified</span>
-								<vscode-button appearance="secondary" onClick={handleResetRequest}>
+								<span className='dirty-badge' role='status' aria-live='polite'>Modified</span>
+								<vscode-button appearance='secondary' onClick={handleResetRequest}>
 									Reset
 								</vscode-button>
 							</>
 						)}
 					</div>
 				</div>
-				<div className="metadata">
-					<div className="metadata-row">
-						<div className="metadata-item">
-							<span className="metadata-label">Model:</span>
+				<div className='metadata'>
+					<div className='metadata-row'>
+						<div className='metadata-item'>
+							<span className='metadata-label'>Model:</span>
 							<span>{request.model}</span>
 						</div>
-						<div className="metadata-item">
-							<span className="metadata-label">Location:</span>
+						<div className='metadata-item'>
+							<span className='metadata-label'>Location:</span>
 							<span>{describeLocation(request.location)}</span>
 						</div>
-						<div className="metadata-item">
-							<span className="metadata-label">Prompt Budget:</span>
+						<div className='metadata-item'>
+							<span className='metadata-label'>Prompt Budget:</span>
 							<span>{promptText}</span>
 						</div>
-						<div className="metadata-item">
-							<span className="metadata-label">Sections:</span>
+						<div className='metadata-item'>
+							<span className='metadata-label'>Sections:</span>
 							<span>{request.sections.length}</span>
 						</div>
 					</div>
 					{(request.debugName || request.metadata?.requestId || request.sessionId) ? (
-						<div className="metadata-row metadata-row-subtle">
+						<div className='metadata-row metadata-row-subtle'>
 							{request.debugName ? (
-								<div className="metadata-item">
-									<span className="metadata-label">Conversation:</span>
+								<div className='metadata-item'>
+									<span className='metadata-label'>Conversation:</span>
 									<span>{request.debugName}</span>
 								</div>
 							) : null}
 							{request.metadata?.requestId ? (
-								<div className="metadata-item">
-									<span className="metadata-label">Request ID:</span>
-									<span className="metadata-mono">{request.metadata.requestId}</span>
+								<div className='metadata-item'>
+									<span className='metadata-label'>Request ID:</span>
+									<span className='metadata-mono'>{request.metadata.requestId}</span>
 								</div>
 							) : null}
-							<div className="metadata-item">
-								<span className="metadata-label">Session ID:</span>
-								<span className="metadata-mono">{request.sessionId}</span>
+							<div className='metadata-item'>
+								<span className='metadata-label'>Session ID:</span>
+								<span className='metadata-mono'>{request.sessionId}</span>
 							</div>
 						</div>
 					) : null}
 					{totalTokens > 0 && request.metadata?.maxPromptTokens ? (
-						<div className="status-meter">
-							<div className="status-meter-fill" style={{ width: formatPercent(totalTokens, request.metadata.maxPromptTokens) }} />
-							<span className="status-meter-label">{formatPercent(totalTokens, request.metadata.maxPromptTokens)}</span>
+						<div className='status-meter'>
+							<div className='status-meter-fill' style={{ width: formatPercent(totalTokens, request.metadata.maxPromptTokens) }} />
+							<span className='status-meter-label'>{formatPercent(totalTokens, request.metadata.maxPromptTokens)}</span>
 						</div>
 					) : null}
 					{replayEnabled ? (
@@ -1785,10 +1785,10 @@ const App: React.FC = () => {
 				</div>
 
 				{request && extraSections.length > 0 ? (
-					<div className="inspector-extra-panels">
+					<div className='inspector-extra-panels'>
 						{extraSections.includes('telemetry') ? (
 							<TelemetryPanel
-								panelId="extra:telemetry"
+								panelId='extra:telemetry'
 								metadata={request.metadata}
 								isCollapsed={collapsedIdSet.has('extra:telemetry')}
 								onToggleCollapse={handleToggleCollapse}
@@ -1799,7 +1799,7 @@ const App: React.FC = () => {
 
 				{mode === 'autoOverride' && autoOverride?.enabled ? (
 					<div className={`auto-override-banner ${captureActive ? 'capturing' : autoOverride.hasOverrides ? 'active' : 'idle'}`}>
-						<div className="auto-override-text">
+						<div className='auto-override-text'>
 							<strong>Auto-apply edits · {describeOverrideScope(autoOverride.scope)}</strong>
 							<span>
 								{captureActive
@@ -1809,22 +1809,22 @@ const App: React.FC = () => {
 										: `No saved edits yet · next turn will pause to capture`}
 							</span>
 						</div>
-						<div className="auto-override-actions">
-							<vscode-button appearance="primary" onClick={handleBeginAutoOverrideCapture}>
+						<div className='auto-override-actions'>
+							<vscode-button appearance='primary' onClick={handleBeginAutoOverrideCapture}>
 								Capture new edits{captureActive ? ' (armed)' : ''}
 							</vscode-button>
 							{!captureActive ? (
-								<vscode-button appearance="secondary" onClick={() => handleModeSelect('interceptOnce')}>
+								<vscode-button appearance='secondary' onClick={() => handleModeSelect('interceptOnce')}>
 									Pause next turn
 								</vscode-button>
 							) : null}
-							<vscode-button appearance="secondary" onClick={handleClearOverrides}>
+							<vscode-button appearance='secondary' onClick={handleClearOverrides}>
 								Remove saved edits{autoOverride.hasOverrides ? '' : ' (none)'}
 							</vscode-button>
-							<vscode-button appearance="secondary" onClick={handleChangeScope}>
+							<vscode-button appearance='secondary' onClick={handleChangeScope}>
 								Where to save edits
 							</vscode-button>
-							<vscode-button appearance="secondary" onClick={handleConfigurePreviewLimit}>
+							<vscode-button appearance='secondary' onClick={handleConfigurePreviewLimit}>
 								Sections to capture
 							</vscode-button>
 						</div>
@@ -1832,19 +1832,19 @@ const App: React.FC = () => {
 				) : null}
 
 				{captureActive && hiddenSectionCount > 0 ? (
-					<div className="auto-override-note">
+					<div className='auto-override-note'>
 						Only the first {previewLimit} sections are shown while editing overrides.
 					</div>
 				) : null}
 
 				{validationMessage ? (
-					<div className="validation-banner" role="alert" aria-live="polite">
-						<div className="validation-text">
+					<div className='validation-banner' role='alert' aria-live='polite'>
+						<div className='validation-text'>
 							<strong>Send blocked.</strong> {validationMessage}
 						</div>
 						{request.isDirty ? (
-							<div className="validation-actions">
-								<vscode-button appearance="secondary" onClick={handleResetRequest}>
+							<div className='validation-actions'>
+								<vscode-button appearance='secondary' onClick={handleResetRequest}>
 									Reset prompt
 								</vscode-button>
 							</div>
@@ -1854,21 +1854,21 @@ const App: React.FC = () => {
 
 				{interception?.pending ? (
 					<div className={`interception-banner pending ${bannerPulse ? 'pulse' : ''}`}>
-						<div className="interception-text">
+						<div className='interception-text'>
 							Request intercepted{interception.pending.debugName ? ` - ${interception.pending.debugName}` : ''}. Review updates and choose an action.
 						</div>
-						<div className="interception-actions">
-							<vscode-button appearance="primary" onClick={handleResumeSend}>
+						<div className='interception-actions'>
+							<vscode-button appearance='primary' onClick={handleResumeSend}>
 								Resume Send
 							</vscode-button>
-							<vscode-button appearance="secondary" onClick={handleCancelIntercept}>
+							<vscode-button appearance='secondary' onClick={handleCancelIntercept}>
 								Cancel
 							</vscode-button>
 						</div>
 					</div>
 				) : (interception?.enabled && mode !== 'autoOverride') ? (
-					<div className="interception-banner ready">
-						<div className="interception-text">
+					<div className='interception-banner ready'>
+						<div className='interception-text'>
 							{mode === 'interceptOnce'
 								? 'Next request will pause here for review.'
 								: 'Prompt Interception Mode is on. Requests pause here before sending.'}
@@ -1877,9 +1877,9 @@ const App: React.FC = () => {
 				) : null}
 
 				{pinnedSections.length > 0 && (
-					<div className="pinned-container">
+					<div className='pinned-container'>
 						<h3>Pinned Sections</h3>
-						<div className="pinned-summary">
+						<div className='pinned-summary'>
 							{totalTokens
 								? `${formatNumber(pinnedTokenTotal)} tokens (${formatPercent(pinnedTokenTotal, totalTokens)})`
 								: `${formatNumber(pinnedTokenTotal)} tokens`}
@@ -1914,7 +1914,7 @@ const App: React.FC = () => {
 				)}
 			</div>
 
-			<div className="sections-wrapper">
+			<div className='sections-wrapper'>
 				{unpinnedSections.map(section => (
 					<SectionCard
 						key={section.id}

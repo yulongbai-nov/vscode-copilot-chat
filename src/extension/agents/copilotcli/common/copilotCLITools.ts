@@ -12,6 +12,7 @@ import { URI } from '../../../../util/vs/base/common/uri';
 import { ChatRequestTurn2, ChatResponseCodeblockUriPart, ChatResponseMarkdownPart, ChatResponsePullRequestPart, ChatResponseTextEditPart, ChatResponseThinkingProgressPart, ChatResponseTurn2, ChatToolInvocationPart, MarkdownString, Uri } from '../../../../vscodeTypes';
 import { formatUriForFileWidget } from '../../../tools/common/toolUtils';
 import { extractChatPromptReferences, getFolderAttachmentPath } from './copilotCLIPrompt';
+import { IChatDelegationSummaryService } from './delegationSummaryService';
 
 
 interface CreateTool {
@@ -244,6 +245,7 @@ export function stripReminders(text: string): string {
 		.replace(/<context>[\s\S]*?<\/context>\s*/g, '')
 		.replace(/<current_datetime>[\s\S]*?<\/current_datetime>\s*/g, '')
 		.replace(/<pr_metadata[^>]*\/?>\s*/g, '')
+		.replace(/<user_query[^>]*\/?>\s*/g, '')
 		.trim();
 }
 
@@ -258,7 +260,7 @@ function extractPRMetadata(content: string): { cleanedContent: string; prPart?: 
 		const [fullMatch, uri, title, description, author, linkTag] = match;
 		// Unescape XML entities
 		const unescapeXml = (text: string) => text
-			.replace(/&apos;/g, "'")
+			.replace(/&apos;/g, `'`)
 			.replace(/&quot;/g, '"')
 			.replace(/&gt;/g, '>')
 			.replace(/&lt;/g, '<')
@@ -283,14 +285,15 @@ function extractPRMetadata(content: string): { cleanedContent: string; prPart?: 
  * Build chat history from SDK events for VS Code chat session
  * Converts SDKEvents into ChatRequestTurn2 and ChatResponseTurn2 objects
  */
-export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getVSCodeRequestId?: (sdkRequestId: string) => { requestId: string; toolIdEditMap: Record<string, string> } | undefined): (ChatRequestTurn2 | ChatResponseTurn2)[] {
+export function buildChatHistoryFromEvents(sessionId: string, events: readonly SessionEvent[], getVSCodeRequestId: (sdkRequestId: string) => { requestId: string; toolIdEditMap: Record<string, string> } | undefined, delegationSummaryService: IChatDelegationSummaryService): (ChatRequestTurn2 | ChatResponseTurn2)[] {
 	const turns: (ChatRequestTurn2 | ChatResponseTurn2)[] = [];
 	let currentResponseParts: ExtendedChatResponsePart[] = [];
 	const pendingToolInvocations = new Map<string, [ChatToolInvocationPart, toolData: ToolCall]>();
 
 	let details: { requestId: string; toolIdEditMap: Record<string, string> } | undefined;
+	let isFirstUserMessage = true;
 	for (const event of events) {
-		details = getVSCodeRequestId?.(event.id) ?? details;
+		details = getVSCodeRequestId(event.id) ?? details;
 		switch (event.type) {
 			case 'user.message': {
 				const rawContent = event.data.content;
@@ -303,7 +306,7 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 				// TODO @DonJayamanne Temporary work around until we get the zod types.
 				type Attachment = {
 					path: string;
-					type: "file" | "directory";
+					type: 'file' | 'directory';
 					displayName: string;
 				};
 				// Filter out vscode instruction files from references when building session history
@@ -341,7 +344,15 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 							range
 						});
 					});
-				turns.push(new ChatRequestTurn2(stripReminders(content || ''), undefined, references, '', [], undefined, details?.requestId));
+
+				let prompt = stripReminders(event.data.content || '');
+				const info = isFirstUserMessage ? delegationSummaryService.extractPrompt(sessionId, prompt) : undefined;
+				if (info) {
+					prompt = info.prompt;
+					references.push(info.reference);
+				}
+				isFirstUserMessage = false;
+				turns.push(new ChatRequestTurn2(prompt, undefined, references, '', [], undefined, details?.requestId));
 				break;
 			}
 			case 'assistant.message': {
@@ -382,12 +393,14 @@ export function buildChatHistoryFromEvents(events: readonly SessionEvent[], getV
 					const editId = details?.toolIdEditMap ? details.toolIdEditMap[toolCall.toolCallId] : undefined;
 					const editedUris = getAffectedUrisForEditTool(toolCall);
 					if (isCopilotCliEditToolCall(toolCall) && editId && editedUris.length > 0) {
+						responsePart.presentation = 'hidden';
+						currentResponseParts.push(responsePart);
 						for (const uri of editedUris) {
 							currentResponseParts.push(new ChatResponseMarkdownPart('\n````\n'));
 							currentResponseParts.push(new ChatResponseCodeblockUriPart(uri, true, editId));
-							currentResponseParts.push(new ChatResponseMarkdownPart('\n````\n'));
 							currentResponseParts.push(new ChatResponseTextEditPart(uri, []));
 							currentResponseParts.push(new ChatResponseTextEditPart(uri, true));
+							currentResponseParts.push(new ChatResponseMarkdownPart('\n````\n'));
 						}
 					} else {
 						currentResponseParts.push(responsePart);

@@ -41,11 +41,7 @@ Raw Request Payload
 - Idle state: “Live Request Editor idle — send a chat request to populate metadata.”
 - When `sessionMetadata.fields` is empty, the metadata section hides but the token node/placeholder remains.
 - Outline nodes truncate after a safety budget and surface “... entries truncated ...” markers.
-<<<<<<< HEAD
 - Models that reject sampling controls (e.g., `o1`, `o1-mini`, any `gpt-5.1*` including codex / codex-max / mini) have `temperature` / `top_p` / `n` stripped before send, so the Request Options node omits them.
-=======
-- Models that reject sampling controls (e.g., `o1`, `o1-mini`, any `gpt-5.1*` including codex / codex-max / mini) have `temperature` / `top_p` / `n` stripped before send, so the Request Options node omits them.
->>>>>>> 2f92728c (Strip sampling for all gpt-5.1 variants and document)
 
 ## Modes
 - **Send normally**: Sends immediately; editor is view-only.
