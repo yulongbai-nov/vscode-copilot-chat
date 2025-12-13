@@ -758,15 +758,15 @@ Downstream consumers (ChatML fetcher, Request Logger, replay, CLI fork) still se
 
 ## Chat Timeline Replay (Future Scope)
 
-See `.kiro/specs/chat-timeline-replay` for the detailed design/requirements/tasks of the replay concept (display-only chat projection of edited prompts).
+See `.specs/chat-timeline-replay` for the detailed design/requirements/tasks of the replay concept (display-only chat projection of edited prompts).
 
 ## Chat History Persistence (Future Scope)
 
-See `.kiro/specs/chat-history-persistence` for the detailed design/requirements/tasks of the SQLite persistence concept (opt-in local history store).
+See `.specs/chat-history-persistence` for the detailed design/requirements/tasks of the SQLite persistence concept (opt-in local history store).
 
 ## Graphiti Memory Layer Integration (Future Scope)
 
-See `.kiro/specs/graphiti-memory-integration` for the detailed design/requirements/tasks of the optional Graphiti ingestion concept (feature-gated network sync).
+See `.specs/graphiti-memory-integration` for the detailed design/requirements/tasks of the optional Graphiti ingestion concept (feature-gated network sync).
 
 ## UI Simplification Opportunities (Forward-Looking)
 

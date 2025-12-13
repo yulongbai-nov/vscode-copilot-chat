@@ -101,13 +101,13 @@
 - [x] 10.10 Update telemetry and status/banners to use simplified copy (“Auto-apply edits · <scope> · Applying/Capturing”), ensure one-shot “Pause next turn” does not alter persisted mode, and refresh docs accordingly. _Requirements: 11.5, 11.8_  
 
 - [ ] 11. Chat timeline prompt replay (moved)  
-  - Tracked in `.kiro/specs/chat-timeline-replay/tasks.md`.  
+  - Tracked in `.specs/chat-timeline-replay/tasks.md`.  
 
 - [ ] 12. Chat history persistence (moved)  
-  - Tracked in `.kiro/specs/chat-history-persistence/tasks.md`.  
+  - Tracked in `.specs/chat-history-persistence/tasks.md`.  
 
 - [ ] 13. Graphiti memory layer (moved)  
-  - Tracked in `.kiro/specs/graphiti-memory-integration/tasks.md`.  
+  - Tracked in `.specs/graphiti-memory-integration/tasks.md`.  
 
 ## Implementation Notes
 

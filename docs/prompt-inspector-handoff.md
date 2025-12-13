@@ -2,13 +2,12 @@
 
   ### Branch / Scope
   - Branch: `feature/prompt-interception-mode`
-  - Focus: Prompt Inspector extras + chat-surface metadata (Tasks 5.5 & 9.x in `.kiro/specs/request-logger-prompt-
-  editor/tasks.md`)
+  - Focus: Prompt Inspector extras + chat-surface metadata (Tasks 5.5 & 9.x in `.specs/request-logger-prompt-editor/tasks.md`)
 
   ### Spec Source of Truth
-  - `.kiro/specs/request-logger-prompt-editor/design.md` — captures the architecture for the Live Request Editor, metadata tree, and Auto Override workflows; update this first if we pivot on UX, data flow, or telemetry.
-  - `.kiro/specs/request-logger-prompt-editor/requirements.md` — canonical user stories / acceptance criteria for Tasks 1–11; reference the numbered requirements when adding tests or scope.
-  - `.kiro/specs/request-logger-prompt-editor/tasks.md` — active implementation checklist (current phase: **implementation** with open work in Tasks 2.4, 6.x, 7.x). Per `agent-prompt.md`, no coding should happen outside this plan; if new scope appears, switch back to design and revise the spec before touching code.
+  - `.specs/request-logger-prompt-editor/design.md` — captures the architecture for the Live Request Editor, metadata tree, and Auto Override workflows; update this first if we pivot on UX, data flow, or telemetry.
+  - `.specs/request-logger-prompt-editor/requirements.md` — canonical user stories / acceptance criteria for Tasks 1–11; reference the numbered requirements when adding tests or scope.
+  - `.specs/request-logger-prompt-editor/tasks.md` — active implementation checklist (current phase: **implementation** with open work in Tasks 2.4, 6.x, 7.x). Per `agent-prompt.md`, no coding should happen outside this plan; if new scope appears, switch back to design and revise the spec before touching code.
 
   ### Latest Work
   1. **Metadata stream**
@@ -62,6 +61,6 @@
   `sessionMetadata.fields` is empty, but the metadata view still shows the token meter placeholder for clarity.
   - Known console noise: similarity-matching warnings in tool tests and SQLite experimental warnings (documented above).
   - If the “Live Request Metadata” view looks blank, make sure the feature flag is on and the view is not collapsed; the tree only updates while the containing view is visible.
-  - Spec-first workflow alignment: when ambiguity appears, pause implementation, update `.kiro/specs/request-logger-prompt-editor/{design,requirements,tasks}.md`, and only resume coding once those documents reflect the new intent and tasks.
+  - Spec-first workflow alignment: when ambiguity appears, pause implementation, update `.specs/request-logger-prompt-editor/{design,requirements,tasks}.md`, and only resume coding once those documents reflect the new intent and tasks.
 
   Ping me if you need a quick demo snippet or want the footer indicator to appear by default (e.g., we could auto-open/pin it the first time the feature is enabled).

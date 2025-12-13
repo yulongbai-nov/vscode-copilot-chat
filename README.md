@@ -43,10 +43,10 @@ Note: older settings under `github.copilot.chat.advanced.*` are migrated automat
   - State machine: [`docs/live-request-editor-state-machine.md`](docs/live-request-editor-state-machine.md)
   - Content kinds: [`docs/live-request-editor-content-kinds.md`](docs/live-request-editor-content-kinds.md)
   - Interception consistency: [`docs/live-request-editor-interception-consistency.md`](docs/live-request-editor-interception-consistency.md)
-  - Spec source of truth: [`.kiro/specs/request-logger-prompt-editor/design.md`](.kiro/specs/request-logger-prompt-editor/design.md)
+  - Spec source of truth: [`.specs/request-logger-prompt-editor/design.md`](.specs/request-logger-prompt-editor/design.md)
 - **CLI replay / session rename**
   - Handoff: [`docs/cli-history-replay-handoff.md`](docs/cli-history-replay-handoff.md)
-  - Specs: [`.kiro/specs/cli-history-replay/design.md`](.kiro/specs/cli-history-replay/design.md)
+  - Specs: [`.specs/cli-history-replay/design.md`](.specs/cli-history-replay/design.md)
 - **Chat view APIs reference (core vs proposed)**
   - [`docs/copilot-chat-view-apis.md`](docs/copilot-chat-view-apis.md)
 - **Tooling walkthroughs**
@@ -54,7 +54,7 @@ Note: older settings under `github.copilot.chat.advanced.*` are migrated automat
   - Run subagent tool: [`docs/run-subagent-tool-walkthrough.md`](docs/run-subagent-tool-walkthrough.md)
   - Tools overview: [`docs/tools.md`](docs/tools.md)
 - **Specs index**
-  - [`.kiro/specs/README.md`](.kiro/specs/README.md)
+  - [`.specs/README.md`](.specs/README.md)
 
 ## Development (build/run/verify)
 
@@ -75,7 +75,7 @@ Run in VS Code:
 3. Enable the settings above and open the Prompt Inspector via the “View Prompt” affordance or `Copilot: Show Prompt Inspector`
 
 Spec-first workflow:
-- See `agent-prompt.md` and `.kiro/specs/` for the current design/requirements/tasks.
+- See `agent-prompt.md` and `.specs/` for the current design/requirements/tasks.
 
 ## Installing and getting updates (VSIX / intranet)
 

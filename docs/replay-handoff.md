@@ -4,7 +4,7 @@ Branch: `feature/replay-ui-integration` (code + docs in tree)
 
 ## Source of Truth
 - This doc; code in `src/extension/prompt/node/liveRequestEditorService.ts`, `src/extension/prompt/vscode-node/liveReplayChatProvider.ts`, `package.json` chatSessions entry.
-- The older `.kiro/specs/...` references are superseded by this reality snapshot.
+- Specs now live under `.specs/` (this handoff reflects the current reality).
 
 ## Implementation Status (reality)
 - Service plumbing: replay builder/state machine implemented (option A: one fork per turn, one-level restore buffer). Projections seeded from trimmed messages; hashes/versions tracked; stale on context change/cancel. `getOriginalRequestMessages` API added to recover pre-edit history.

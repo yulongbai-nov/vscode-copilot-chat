@@ -205,15 +205,15 @@ As an advanced Copilot user, I want to intercept the first turn of a chat sessio
 
 ### Requirement 12 – Chat Timeline Replay (Moved)
 
-Tracked in `.kiro/specs/chat-timeline-replay`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
+Tracked in `.specs/chat-timeline-replay`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
 
 ### Requirement 13 – Chat History Persistence (Moved)
 
-Tracked in `.kiro/specs/chat-history-persistence`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
+Tracked in `.specs/chat-history-persistence`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
 
 ### Requirement 14 – Graphiti Memory Integration (Moved)
 
-Tracked in `.kiro/specs/graphiti-memory-integration`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
+Tracked in `.specs/graphiti-memory-integration`. This document keeps the requirement number reserved but does not duplicate acceptance criteria here.
 
 ### Requirement 15 – Surgical Payload Editing Fidelity
 

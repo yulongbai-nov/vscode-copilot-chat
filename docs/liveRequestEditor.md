@@ -2,7 +2,7 @@
 
 This document explains how the Live Chat Request Editor fits into the existing Copilot Chat pipeline, what the “real” request JSON looks like, how edits flow into it, and how this works when there are multiple chat sessions or panels.
 
-It is aimed at humans working on the feature and complements the more formal specs under `.kiro/specs/request-logger-prompt-editor/`.
+It is aimed at humans working on the feature and complements the more formal specs under `.specs/request-logger-prompt-editor/`.
 
 ---
 

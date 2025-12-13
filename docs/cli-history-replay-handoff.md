@@ -9,14 +9,14 @@ All links are relative and clickable in VS Code.
 ## 1. Specs and Requirements
 
 - CLI history replay + rename design:
-  - `.kiro/specs/cli-history-replay/design.md`  
-    `.kiro/specs/cli-history-replay/design.md#L1`
+  - `.specs/cli-history-replay/design.md`  
+    `.specs/cli-history-replay/design.md#L1`
 - Requirements (including manual title rename):
-  - `.kiro/specs/cli-history-replay/requirements.md`  
-    `.kiro/specs/cli-history-replay/requirements.md#L1`
+  - `.specs/cli-history-replay/requirements.md`  
+    `.specs/cli-history-replay/requirements.md#L1`
 - Implementation tasks:
-  - `.kiro/specs/cli-history-replay/tasks.md`  
-    `.kiro/specs/cli-history-replay/tasks.md#L1`
+  - `.specs/cli-history-replay/tasks.md`  
+    `.specs/cli-history-replay/tasks.md#L1`
 
 These specs define:
 
@@ -85,7 +85,7 @@ Known limitation: agent vs CLI session parity
 - As a result:
   - The CLI replay sample will faithfully replay what is in the CLI JSONL (e.g. greetings, prompt inspector output, replay explanations).
   - It cannot yet include agent-only turns like the C++ joke, because there is no established mapping from the agent session id back to the corresponding CLI session id, nor a hook that mirrors the agent’s final assistant text into the CLI session via `addUserAssistantMessage(...)`.
-- Requirement 7 in `.kiro/specs/cli-history-replay/requirements.md` tracks this as future work; implementing it will require new cross-session wiring between the agent pipeline and `CopilotCLISession`.
+- Requirement 7 in `.specs/cli-history-replay/requirements.md` tracks this as future work; implementing it will require new cross-session wiring between the agent pipeline and `CopilotCLISession`.
 
 ---
 
@@ -170,11 +170,11 @@ This section documents the new path that lets you **fork** from an edited prompt
 ### 4.1 Specs and requirements
 
 - Requirement 8 – Replay edited prompt into new CLI session from Live Request Editor:  
-  `.kiro/specs/cli-history-replay/requirements.md#L93`
+  `.specs/cli-history-replay/requirements.md#L93`
 - Tasks for the implementation (command, wiring, tests):  
-  `.kiro/specs/cli-history-replay/tasks.md#L38`
+  `.specs/cli-history-replay/tasks.md#L38`
 - High-level design note under “Future Enhancements”:  
-  `.kiro/specs/cli-history-replay/design.md#L152`
+  `.specs/cli-history-replay/design.md#L152`
 
 Key design decisions:
 
@@ -426,11 +426,11 @@ This completes the “fork from edited prompt into a native Copilot CLI session�
 While this handoff focuses on CLI history replay and CLI forks, the Live Request Editor’s editing semantics directly affect what gets replayed into CLI sessions. This section summarises the **per-leaf editing** design so future work on replay and persistence can assume a stable Raw payload model.
 
 - Requirements:
-  - `.kiro/specs/request-logger-prompt-editor/requirements.md#L246` (Requirement 15 – Surgical Payload Editing Fidelity)
+  - `.specs/request-logger-prompt-editor/requirements.md#L246` (Requirement 15 – Surgical Payload Editing Fidelity)
 - Detailed viewmodel:
-  - `.kiro/specs/request-logger-prompt-editor/design.md#L639` (Editing Model and Undo/Redo)
+  - `.specs/request-logger-prompt-editor/design.md#L639` (Editing Model and Undo/Redo)
 - Raw schema + behaviour:
-  - `.kiro/specs/cli-history-replay/Live-Request-Editor-Raw-Payload-Schema.md#L1`
+  - `.specs/cli-history-replay/Live-Request-Editor-Raw-Payload-Schema.md#L1`
 
 ### 5.1 Leaf edits vs Raw payload
 

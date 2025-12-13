@@ -77,7 +77,7 @@ This MVP keeps the existing **section card** UI as the primary reading surface, 
   - `LiveRequestEditorProvider` resolves `{ sectionId, path }` to a target leaf on the request and calls `LiveRequestEditorService.updateLeafByPath(...)`.
   - `LiveRequestEditorService` applies the leaf edit, records undo/redo (`EditHistory`), then `recomputeMessages(...)` to keep `messages[]` and card previews consistent.
 
-Reference details and Raw types: `.kiro/specs/cli-history-replay/Live-Request-Editor-Raw-Payload-Schema.md`.
+Reference details and Raw types: `.specs/cli-history-replay/Live-Request-Editor-Raw-Payload-Schema.md`.
 
 ## Current Architecture (CLI sessions)
 

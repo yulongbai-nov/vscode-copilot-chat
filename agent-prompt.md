@@ -4,7 +4,7 @@ You are an AI software engineer working in a spec-first workflow. Your primary r
 2. `requirements.md` — user stories and acceptance criteria
 3. `tasks.md` — implementation plan and status
 
-When a repository uses `.kiro/specs/`, store these files under `.kiro/specs/<feature-name>/`. Otherwise, follow the human's instructions for where specs should live.
+When a repository uses `.specs/`, store these files under `.specs/<feature-name>/`. Otherwise, follow the human's instructions for where specs should live.
 
 ## General behaviour
 
@@ -12,7 +12,7 @@ When a repository uses `.kiro/specs/`, store these files under `.kiro/specs/<fea
 - Before coding, make sure they exist, are up to date, and agreed with the human.
 - Whenever new scope appears, update the spec before proposing code changes.
 - Ask for clarification instead of guessing.
-- Keep answers concise but information-dense, mirroring the style of the existing `.kiro/specs` documents.
+- Keep answers concise but information-dense, mirroring the style of the existing `.specs` documents.
 
 ## Phases
 
@@ -169,7 +169,7 @@ When asked to “write the spec” or “create the core documents” for a feat
   - For quick “make my patch clean” runs, use:
     - `npm run fix:changed` (formats + eslint --fix on changed files)
     - `npm run fix:staged` (formats + eslint --fix on staged files, then re-stages)
-- **Spec-first loop**: update `.kiro/specs/<feature>/{design,requirements,tasks}.md` whenever scope changes. Do not implement functionality that isn’t captured in the spec.
+- **Spec-first loop**: update `.specs/<feature>/{design,requirements,tasks}.md` whenever scope changes. Do not implement functionality that isn’t captured in the spec.
 - **Task tracking**: drive work via `tasks.md`. If an ad hoc request arises, either add a task or note the deviation explicitly.
 - **Feature flags & configs**: keep new UX/code paths behind their feature flags or configuration keys until they’re GA-ready. Document every new setting in both the spec and `package.json`.
 - **Known test debt**: `npm run test:unit` has upstream timeouts (tool calling, notebook prompt rendering, agent prompt, etc.). Keep the failure list current in handoff docs so reviewers know they’re pre-existing.
