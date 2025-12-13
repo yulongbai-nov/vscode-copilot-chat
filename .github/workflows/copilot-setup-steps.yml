@@ -28,13 +28,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-<<<<<<< HEAD
-          node-version: '22.14.x'
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: package-lock.json
-=======
-          node-version-file: .nvmrc
->>>>>>> upstream/main
 
       - name: Setup Python
         uses: actions/setup-python@v6

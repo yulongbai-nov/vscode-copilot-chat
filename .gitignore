@@ -32,7 +32,6 @@ coverage/
 # Base cache database (GC mode)
 test/simulation/cache/_base.sqlite
 
-<<<<<<< HEAD
 # Simulation cache content is hydrated from upstream as needed
 test/simulation/cache/base.sqlite
 test/simulation/cache/layers/
@@ -46,9 +45,6 @@ src/extension/completions-core
 # Ignore git worktrees metadata
 .worktree
 .worktrees
-=======
-test/aml/out
 
-# Ignore files in huksy (else we always end up with files when creating worktrees)
+# Ignore files in husky (else we always end up with files when creating worktrees)
 .husky/_/
->>>>>>> upstream/main

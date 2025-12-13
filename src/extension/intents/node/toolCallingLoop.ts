@@ -445,7 +445,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 			});
 		}
 
-		if (buildPromptResult.messages.length === 0) {
+		if (messagesForRequest.length === 0) {
 			// /fixTestFailure relies on this check running after processResponse
 			fetchStreamSource?.resolve();
 			await processResponsePromise;
@@ -457,7 +457,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		const toolCalls: IToolCall[] = [];
 		let thinkingItem: ThinkingDataItem | undefined;
 		const endpoint = await this._endpointProvider.getChatEndpoint(this.options.request);
-		const disableThinking = isContinuation && isAnthropicFamily(endpoint) && !ToolCallingLoop.messagesContainThinking(buildPromptResult.messages);
+		const disableThinking = isContinuation && isAnthropicFamily(endpoint) && !ToolCallingLoop.messagesContainThinking(messagesForRequest);
 		const fetchResult = await this.fetch({
 			messages: this.applyMessagePostProcessing(messagesForRequest),
 			finishedCb: async (text, index, delta) => {
@@ -478,23 +478,9 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 
 				return stopEarly ? text.length : undefined;
 			},
-<<<<<<< HEAD
 			requestOptions,
-			userInitiatedRequest: iterationNumber === 0 && !isContinuation && !this.options.request.isSubagent
-=======
-			requestOptions: {
-				tools: promptContextTools?.map(tool => ({
-					function: {
-						name: tool.name,
-						description: tool.description,
-						parameters: tool.parameters && Object.keys(tool.parameters).length ? tool.parameters : undefined
-					},
-					type: 'function',
-				})),
-			},
 			userInitiatedRequest: iterationNumber === 0 && !isContinuation && !this.options.request.isSubagent,
 			disableThinking,
->>>>>>> upstream/main
 		}, token);
 
 		fetchStreamSource?.resolve();

@@ -1746,7 +1746,6 @@
 				"view": "debug",
 				"when": "github.copilot-chat.activated",
 				"contents": "%github.copilot.viewsWelcome.debug%"
-<<<<<<< HEAD
 			},
 			{
 				"view": "codex-placeholder",
@@ -1796,8 +1795,6 @@
 				"view": "github.copilot.subagentPromptMonitor",
 				"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"contents": "Subagent prompts from TODO/Plan runs will appear here."
-=======
->>>>>>> upstream/main
 			}
 		],
 		"chatViewsWelcome": [
@@ -4426,7 +4423,6 @@
 					"command": "github.copilot.debug.showChatLogView",
 					"when": "view == workbench.panel.chat.view.copilot",
 					"group": "3_show"
-<<<<<<< HEAD
 				},
 				{
 					"command": "github.copilot.liveRequestEditor.toggle",
@@ -4448,8 +4444,6 @@
 					"command": "github.copilot.subagentPromptMonitor.clear",
 					"when": "view == github.copilot.subagentPromptMonitor",
 					"group": "navigation@9"
-=======
->>>>>>> upstream/main
 				}
 			],
 			"view/item/context": [
@@ -4864,7 +4858,6 @@
 					"icon": "$(inspect)",
 					"when": "github.copilot.chat.showContextInspectorView"
 				}
-<<<<<<< HEAD
 			],
 			"agentSessions": [
 				{
@@ -4900,8 +4893,6 @@
 					"icon": "assets/live-request-editor.svg",
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				}
-=======
->>>>>>> upstream/main
 			]
 		},
 		"viewsContainers": {
