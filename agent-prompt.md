@@ -161,20 +161,26 @@ When asked to “write the spec” or “create the core documents” for a feat
   - Keep commits small, reference the relevant tasks/requirements, and separate spec edits from code when practical. Mention both in the commit message when they ship together.
   - **Scope drift protocol** (when a new, unrelated scope appears mid-branch):
     1. STOP adding more changes in the new scope.
-    2. Stash the unrelated work (include untracked files): `git stash push -u -m "wip: <new-scope>"`
-       - If only part of your working tree is unrelated, use `git stash push -p` to stash selected hunks.
+    2. Prefer isolating scopes with **`git worktree`** (so you can continue the current PR while starting a clean branch for the new scope):
+       - If you have not started the new work yet:
+         - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
+       - If you already have WIP changes for the new scope in the current worktree:
+         - Stash only the unrelated hunks (include untracked): `git stash push -p -u -m "wip: <new-scope>"`
+         - Create the worktree branch and apply the stash there:
+           - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
+           - `cd ../<repo>-<name> && git stash pop`
+       - If the new-scope changes are already committed, prefer `git cherry-pick` those commits onto the new branch/worktree (or split with `git rebase -i` if needed).
     3. Finish the current scope first:
        - Split into logical commits (spec vs code when practical).
        - Run the “quad” verification before committing/pushing.
        - Push and open/update the PR for the current scope.
-    4. Start the new scope on a new branch:
-       - Prefer branching from fresh `origin/main` (`git fetch origin && git checkout -b <type>/<name> origin/main`).
-       - Apply the stash (`git stash pop`) and continue.
+    4. Continue the new scope on the new branch/worktree:
        - If the new work *depends* on unmerged changes from the first branch, branch from that feature branch instead and note the dependency in the PR description.
-    5. If the current branch name no longer matches the delivered scope:
+    5. (Optional) When you are done with the parallel worktree: `git worktree remove ../<repo>-<name>`
+    6. If the current branch name no longer matches the delivered scope:
        - If no PR exists yet, rename locally + remote (`git branch -m ...`, push the new branch, delete the old remote branch).
        - If a PR already exists, avoid renaming the remote head branch; prefer a follow-up PR/branch with the correct name.
-    6. Update `.specs/<feature>/...` before implementing additional scope (spec-first).
+    7. Update `.specs/<feature>/...` before implementing additional scope (spec-first).
 - **Verification Before Every Commit/Push** (“quadruple check” + simulation):
   1. `npm run lint`
   2. `npm run typecheck`
