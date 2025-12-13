@@ -158,6 +158,14 @@ When asked to “write the spec” or “create the core documents” for a feat
   4. Targeted unit tests (`npx vitest run …` for suites touched)
   5. `npm run test:unit` (accept known upstream failures but log them in handoffs)
   6. `npm run simulate -- --scenario-test debugCommandToConfig.stest.ts --grep "node test"`
+- **Formatting & Auto-fix**
+  - Prefer formatting first when lint fails on indentation/style:
+    - Apply: `npx tsfmt -r -- <files...>`
+    - Verify-only: `npm run tsfmt -- <files...>`
+  - If ESLint has fixable issues, run: `npm run lint -- --fix`.
+  - If invoking ESLint directly (e.g. on specific files), use the repo’s Node wrapper so the local TS plugin can load:
+    - `node --experimental-strip-types ./node_modules/eslint/bin/eslint.js --max-warnings=0 <files...>`
+  - When pre-commit fails, reproduce locally with: `npx lint-staged --debug`.
 - **Spec-first loop**: update `.kiro/specs/<feature>/{design,requirements,tasks}.md` whenever scope changes. Do not implement functionality that isn’t captured in the spec.
 - **Task tracking**: drive work via `tasks.md`. If an ad hoc request arises, either add a task or note the deviation explicitly.
 - **Feature flags & configs**: keep new UX/code paths behind their feature flags or configuration keys until they’re GA-ready. Document every new setting in both the spec and `package.json`.
