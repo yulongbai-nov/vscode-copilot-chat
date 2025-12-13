@@ -72,11 +72,7 @@ The request that is ultimately sent to the LLM is built in several steps:
        - `temperature`, `top_p`, `n`
        - `tools`, `tool_choice`
        - `prediction`, `reasoning`, `intent`, `state`, `snippy`, etc.
-<<<<<<< HEAD
      - For models that reject sampling controls (e.g., `o1`/`o1-mini`, the entire `gpt-5.1*` family including codex/codex-max/mini), the request builder strips `temperature`, `top_p`, and `n` to avoid `invalid_request_body` errors. The metadata view will omit those keys for such models.
-=======
-     - For models that reject sampling controls (e.g., `o1`/`o1-mini`, the entire `gpt-5.1*` family including codex/codex-max/mini), the request builder strips `temperature`, `top_p`, and `n` to avoid `invalid_request_body` errors. The metadata view will omit those keys for such models.
->>>>>>> 2f92728c (Strip sampling for all gpt-5.1 variants and document)
 
 4. **Network layer**
    - `networkRequest` / `postRequest` attach headers and send `IEndpointBody` as `request.json`.

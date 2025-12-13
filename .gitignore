@@ -45,3 +45,6 @@ src/extension/completions-core
 # Ignore git worktrees metadata
 .worktree
 .worktrees
+
+# Ignore files in husky (else we always end up with files when creating worktrees)
+.husky/_/

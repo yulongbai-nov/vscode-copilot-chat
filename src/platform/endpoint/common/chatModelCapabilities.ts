@@ -28,7 +28,8 @@ const VSC_MODEL_HASHES_A = [
 
 const HIDDEN_MODEL_B_HASHES = [
 	'31a2d5282683edb3a22c565f199aa96fb9ffb3107af35aad92ee1cd567cfc25d',
-	'dd832404e8eeb90793f0369b96ed1702e0e22487a58eb4c1f285a4af5c4f6f21'
+	'dd832404e8eeb90793f0369b96ed1702e0e22487a58eb4c1f285a4af5c4f6f21',
+	'131e2083b68bde4fe879efc38ed9651b1623f8735eeb42157fa3b63ef943fdc6'
 ];
 
 // Currently empty, will be used in future for a different set of VSC models
@@ -43,6 +44,10 @@ const VSC_MODEL_HASHES_SUBSET_C = [
 
 const HIDDEN_MODEL_E_HASHES: string[] = [
 	'6013de0381f648b7f21518885c02b40b7583adfb33c6d9b64d3aed52c3934798'
+];
+
+const HIDDEN_MODEL_F_HASHES: string[] = [
+	'ab45e8474269b026f668d49860b36850122e18a50d5ea38f3fefdae08261865c'
 ];
 
 function getModelId(model: LanguageModelChat | IChatEndpoint): string {
@@ -62,6 +67,11 @@ export function isHiddenModelB(modelFamily: string) {
 export function isHiddenModelE(model: LanguageModelChat | IChatEndpoint) {
 	const h = getCachedSha256Hash(model.family);
 	return HIDDEN_MODEL_E_HASHES.includes(h);
+}
+
+export function isHiddenModelF(model: LanguageModelChat | IChatEndpoint) {
+	const h = getCachedSha256Hash(model.family);
+	return HIDDEN_MODEL_F_HASHES.includes(h);
 }
 
 export function isVSCModelA(model: LanguageModelChat | IChatEndpoint) {
@@ -103,6 +113,10 @@ export function modelPrefersInstructionsAfterHistory(modelFamily: string) {
  * Model supports apply_patch as an edit tool.
  */
 export function modelSupportsApplyPatch(model: LanguageModelChat | IChatEndpoint): boolean {
+	// only using replace string as edit tool, disable apply_patch for VSC Model C
+	if (isVSCModelC(model)) {
+		return false;
+	}
 	return (model.family.startsWith('gpt') && !model.family.includes('gpt-4o')) || model.family === 'o4-mini' || model.family === 'arctic-fox' || isVSCModelA(model) || isVSCModelB(model) || isHiddenModelB(model.family);
 }
 
@@ -117,14 +131,14 @@ export function modelPrefersJsonNotebookRepresentation(model: LanguageModelChat 
  * Model supports replace_string_in_file as an edit tool.
  */
 export function modelSupportsReplaceString(model: LanguageModelChat | IChatEndpoint): boolean {
-	return model.family.includes('gemini') || model.family.includes('grok-code') || modelSupportsMultiReplaceString(model);
+	return model.family.toLowerCase().includes('gemini') || model.family.includes('grok-code') || modelSupportsMultiReplaceString(model) || isHiddenModelF(model);
 }
 
 /**
  * Model supports multi_replace_string_in_file as an edit tool.
  */
 export function modelSupportsMultiReplaceString(model: LanguageModelChat | IChatEndpoint): boolean {
-	return model.family.startsWith('claude') || model.family.startsWith('Anthropic') || isHiddenModelE(model) || isVSCModelC(model);
+	return isAnthropicFamily(model) || isHiddenModelE(model) || isVSCModelC(model);
 }
 
 /**
@@ -132,7 +146,7 @@ export function modelSupportsMultiReplaceString(model: LanguageModelChat | IChat
  * without needing insert_edit_into_file.
  */
 export function modelCanUseReplaceStringExclusively(model: LanguageModelChat | IChatEndpoint): boolean {
-	return model.family.startsWith('claude') || model.family.startsWith('Anthropic') || model.family.includes('grok-code') || isHiddenModelE(model) || model.family.includes('gemini-3') || isVSCModelC(model);
+	return isAnthropicFamily(model) || model.family.includes('grok-code') || isHiddenModelE(model) || model.family.toLowerCase().includes('gemini-3') || isVSCModelC(model) || isHiddenModelF(model);
 }
 
 /**
@@ -147,14 +161,14 @@ export function modelShouldUseReplaceStringHealing(model: LanguageModelChat | IC
  * The model can accept image urls as the `image_url` parameter in mcp tool results.
  */
 export function modelCanUseMcpResultImageURL(model: LanguageModelChat | IChatEndpoint): boolean {
-	return !model.family.startsWith('claude') && !model.family.startsWith('Anthropic') && !model.family.startsWith('gemini') && !isHiddenModelE(model);
+	return !isAnthropicFamily(model) && !model.family.toLowerCase().startsWith('gemini') && !isHiddenModelE(model) && !isHiddenModelF(model);
 }
 
 /**
  * The model can accept image urls as the `image_url` parameter in requests.
  */
 export function modelCanUseImageURL(model: LanguageModelChat | IChatEndpoint): boolean {
-	return !model.family.startsWith('gemini');
+	return !model.family.toLowerCase().startsWith('gemini') && !isHiddenModelF(model);
 }
 
 /**
@@ -162,6 +176,10 @@ export function modelCanUseImageURL(model: LanguageModelChat | IChatEndpoint): b
  * without needing insert_edit_into_file.
  */
 export function modelCanUseApplyPatchExclusively(model: LanguageModelChat | IChatEndpoint): boolean {
+	// only using replace string as edit tool, disable apply_patch for VSC Model C
+	if (isVSCModelC(model)) {
+		return false;
+	}
 	return isGpt5PlusFamily(model) || isVSCModelA(model) || isVSCModelB(model);
 }
 
@@ -171,7 +189,7 @@ export function modelCanUseApplyPatchExclusively(model: LanguageModelChat | ICha
  * replace_string.
  */
 export function modelNeedsStrongReplaceStringHint(model: LanguageModelChat | IChatEndpoint): boolean {
-	return model.family.toLowerCase().includes('gemini');
+	return model.family.toLowerCase().includes('gemini') || isHiddenModelF(model);
 }
 
 /**
@@ -179,6 +197,10 @@ export function modelNeedsStrongReplaceStringHint(model: LanguageModelChat | ICh
  */
 export function modelSupportsSimplifiedApplyPatchInstructions(model: LanguageModelChat | IChatEndpoint): boolean {
 	return isGpt5PlusFamily(model) || isVSCModelA(model) || isVSCModelB(model);
+}
+
+export function isAnthropicFamily(model: LanguageModelChat | IChatEndpoint): boolean {
+	return model.family.startsWith('claude') || model.family.startsWith('Anthropic');
 }
 
 export function isGpt5PlusFamily(model: LanguageModelChat | IChatEndpoint | string | undefined): boolean {

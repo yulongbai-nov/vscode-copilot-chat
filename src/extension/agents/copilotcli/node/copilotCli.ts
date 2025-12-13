@@ -49,7 +49,7 @@ export class CopilotCLISessionOptions {
 		this.requestPermissionRejected = async (permission: PermissionRequest): ReturnType<NonNullable<SessionOptions['requestPermission']>> => {
 			logger.info(`[CopilotCLISession] Permission request denied for permission as no handler was set: ${permission.kind}`);
 			return {
-				kind: "denied-interactively-by-user"
+				kind: 'denied-interactively-by-user'
 			};
 		};
 		this.requestPermissionHandler = this.requestPermissionRejected;
@@ -166,6 +166,7 @@ export const ICopilotCLIAgents = createServiceIdentifier<ICopilotCLIAgents>('ICo
 export class CopilotCLIAgents implements ICopilotCLIAgents {
 	declare _serviceBrand: undefined;
 	private sessionAgents: Record<string, { agentId?: string; createdDateTime: number }> = {};
+	private _agents?: Readonly<SweCustomAgent>[];
 	constructor(
 		@ICopilotCLISDK private readonly copilotCLISDK: ICopilotCLISDK,
 		@IVSCodeExtensionContext private readonly extensionContext: IVSCodeExtensionContext,
@@ -223,6 +224,20 @@ export class CopilotCLIAgents implements ICopilotCLIAgents {
 	}
 
 	async getAgents(): Promise<Readonly<SweCustomAgent>[]> {
+		// Fetching agents from the SDK can be slow, cache the result while allowing background refreshes.
+		const agents = this._agents;
+		const promise = this.getAgentsImpl();
+
+		promise.then(fetchedAgents => {
+			this._agents = fetchedAgents;
+		}).catch((error) => {
+			this.logService.error('[CopilotCLISession] Failed to fetch custom agents', error);
+		});
+
+		return agents ?? promise;
+	}
+
+	async getAgentsImpl(): Promise<Readonly<SweCustomAgent>[]> {
 		if (!this.configurationService.getConfig(ConfigKey.Advanced.CLICustomAgentsEnabled)) {
 			return [];
 		}
