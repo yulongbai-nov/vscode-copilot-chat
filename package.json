@@ -20,7 +20,7 @@
 		"url": "https://github.com/microsoft/vscode/issues"
 	},
 	"qna": "https://github.com/github-community/community/discussions/categories/copilot",
-	"icon": "assets/copilot.png",
+	"icon": "assets/icon-strong-octocat.svg",
 	"pricing": "Trial",
 	"engines": {
 		"vscode": "^1.108.0",
@@ -4847,7 +4847,7 @@
 				{
 					"id": "copilot-chat",
 					"name": "Chat Debug",
-					"icon": "assets/debug-icon.svg",
+					"icon": "assets/icon-chat-debug.svg",
 					"when": "github.copilot.chat.showLogView"
 				}
 			],
@@ -4855,7 +4855,7 @@
 				{
 					"id": "context-inspector",
 					"name": "Language Context Inspector",
-					"icon": "$(inspect)",
+					"icon": "assets/icon-context-inspector.svg",
 					"when": "github.copilot.chat.showContextInspectorView"
 				}
 			],
@@ -4877,20 +4877,20 @@
 				{
 					"id": "github.copilot.liveRequestMetadata",
 					"name": "Live Request Metadata",
-					"icon": "assets/live-request-editor.svg",
+					"icon": "assets/icon-live-request-metadata.svg",
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				},
 				{
 					"id": "github.copilot.liveRequestEditor",
 					"name": "Live Request Editor",
 					"type": "webview",
-					"icon": "assets/live-request-editor.svg",
+					"icon": "assets/icon-live-request-editor.svg",
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				},
 				{
 					"id": "github.copilot.subagentPromptMonitor",
 					"name": "Subagent Prompt Monitor",
-					"icon": "assets/live-request-editor.svg",
+					"icon": "assets/icon-subagent-monitor.svg",
 					"when": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled"
 				}
 			]
