@@ -653,40 +653,40 @@ const SectionCard: React.FC<SectionCardProps> = ({
 				aria-hidden={collapsed && !isEditing}
 			>
 				{assistantToolCalls ? (
-					<div className="section-tool-details">
-						<div className="tool-name-row">
-							<span className="tool-label">Tool calls</span>
+					<div className='section-tool-details'>
+						<div className='tool-name-row'>
+							<span className='tool-label'>Tool calls</span>
 						</div>
 						{assistantToolCalls.map((call, index) => (
-							<div className="tool-call-block" key={call.id ?? `${section.id}-toolcall-${index}`}>
-								<div className="tool-name-row">
-									<span className="tool-name">{call.name ?? 'Unknown tool'}</span>
-									{call.id ? <span className="tool-id">#{call.id}</span> : null}
+							<div className='tool-call-block' key={call.id ?? `${section.id}-toolcall-${index}`}>
+								<div className='tool-name-row'>
+									<span className='tool-name'>{call.name ?? 'Unknown tool'}</span>
+									{call.id ? <span className='tool-id'>#{call.id}</span> : null}
 								</div>
 								{call.arguments ? (
-									<div className="tool-args">
-										<div className="tool-label">Arguments</div>
-										<pre className="tool-args-block">
+									<div className='tool-args'>
+										<div className='tool-label'>Arguments</div>
+										<pre className='tool-args-block'>
 											<code>{call.arguments}</code>
 										</pre>
 									</div>
 								) : (
-									<div className="tool-args tool-args-empty">No invocation arguments provided.</div>
+									<div className='tool-args tool-args-empty'>No invocation arguments provided.</div>
 								)}
 							</div>
 						))}
 					</div>
 				) : null}
 				{!assistantToolCalls && toolInvocation ? (
-					<div className="section-tool-details">
-						<div className="tool-name-row">
-							<span className="tool-label">Tool call</span>
-							<span className="tool-name">{toolInvocation.name ?? 'Unknown tool'}</span>
+					<div className='section-tool-details'>
+						<div className='tool-name-row'>
+							<span className='tool-label'>Tool call</span>
+							<span className='tool-name'>{toolInvocation.name ?? 'Unknown tool'}</span>
 							{toolInvocation.id ? (
 								<span className='tool-id'>#{toolInvocation.id}</span>
 							) : null}
 						</div>
-						<div className="tool-args tool-args-empty">Tool response content shown below.</div>
+						<div className='tool-args tool-args-empty'>Tool response content shown below.</div>
 					</div>
 				) : null}
 				{isEditing && typeof payloadIndex === 'number' ? (
@@ -1366,19 +1366,19 @@ const App: React.FC = () => {
 
 	return (
 		<div className={`app-root${sessionFlash ? ' session-flash' : ''}`}>
-			<div className="status-banner">
-				<div className="header">
-					<div className="header-left">
+			<div className='status-banner'>
+				<div className='header'>
+					<div className='header-left'>
 						<h2>Live Request Editor</h2>
 						{sessions.length > 0 && (
 							<div className='session-selector' role='group' aria-label='Conversation selector'>
 								<label className='session-selector-label' htmlFor='live-request-session-dropdown'>
 									Conversation
 								</label>
-								<div className="session-selector-row">
+								<div className='session-selector-row'>
 									<vscode-dropdown
-										id="live-request-session-dropdown"
-										className="session-selector-dropdown"
+										id='live-request-session-dropdown'
+										className='session-selector-dropdown'
 										ref={sessionDropdownRef}
 										value={activeSessionKey ?? ''}
 									>
@@ -1395,7 +1395,7 @@ const App: React.FC = () => {
 										))}
 									</vscode-dropdown>
 									<vscode-button
-										appearance="secondary"
+										appearance='secondary'
 										onClick={handleOpenInChat}
 										title={request?.metadata?.chatSessionResource
 											? 'Open the selected conversation in the chat session editor'
@@ -1404,17 +1404,17 @@ const App: React.FC = () => {
 										Open in chat
 									</vscode-button>
 								</div>
-								<div className="follow-toggle">
-									<span className="follow-toggle-label">Auto-follow latest</span>
-									<label className="toggle-switch" title="When on, automatically switch to the newest intercepted request">
+								<div className='follow-toggle'>
+									<span className='follow-toggle-label'>Auto-follow latest</span>
+									<label className='toggle-switch' title='When on, automatically switch to the newest intercepted request'>
 										<input
-											type="checkbox"
-											role="switch"
+											type='checkbox'
+											role='switch'
 											checked={followLatest}
 											onChange={handleToggleFollowLatest}
-											aria-label="Auto-follow latest"
+											aria-label='Auto-follow latest'
 										/>
-										<span className="toggle-switch-slider" aria-hidden="true" />
+										<span className='toggle-switch-slider' aria-hidden='true' />
 									</label>
 								</div>
 							</div>
@@ -1495,58 +1495,58 @@ const App: React.FC = () => {
 						</div>
 					) : null}
 					{replayEnabled ? (
-						<div className="metadata-row replay-row">
-							<div className="replay-row-main">
-								<div className="metadata-item">
-									<span className="metadata-label">Replay:</span>
+						<div className='metadata-row replay-row'>
+							<div className='replay-row-main'>
+								<div className='metadata-item'>
+									<span className='metadata-label'>Replay:</span>
 									<span>{replay ? (replay.state === 'ready' || replay.state === 'forkActive' ? 'Built' : replay.state) : 'Not built yet'}</span>
 								</div>
-								<div className="metadata-item">
-									<span className="metadata-label">View:</span>
+								<div className='metadata-item'>
+									<span className='metadata-label'>View:</span>
 									<span>{replayView === 'payload' ? 'Native' : 'Projection debug'}</span>
 								</div>
 								{replaySummary ? (
 									<>
-										<div className="metadata-item">
-											<span className="metadata-label">Sections:</span>
+										<div className='metadata-item'>
+											<span className='metadata-label'>Sections:</span>
 											<span>{replaySummary.totalSections}{replaySummary.overflowCount > 0 ? ` (+${replaySummary.overflowCount} more)` : ''}</span>
 										</div>
-										<div className="metadata-item">
-											<span className="metadata-label">Edited:</span>
+										<div className='metadata-item'>
+											<span className='metadata-label'>Edited:</span>
 											<span>{replaySummary.editedCount} · Deleted: {replaySummary.deletedCount}</span>
 										</div>
 										{replaySummary.trimmed ? (
-											<div className="metadata-item">
-												<span className="metadata-label">Trimmed:</span>
+											<div className='metadata-item'>
+												<span className='metadata-label'>Trimmed:</span>
 												<span>Yes</span>
 											</div>
 										) : null}
 									</>
 								) : (
-									<div className="metadata-item">
-										<span className="metadata-label">Sections:</span>
+									<div className='metadata-item'>
+										<span className='metadata-label'>Sections:</span>
 										<span>—</span>
 									</div>
 								)}
-								<div className="metadata-item">
-									<span className="metadata-label">Updated:</span>
+								<div className='metadata-item'>
+									<span className='metadata-label'>Updated:</span>
 									<span>{replay?.updatedAt ? new Date(replay.updatedAt).toLocaleTimeString() : '—'}</span>
 								</div>
 							</div>
-							<div className="replay-row-action">
-								<vscode-button appearance="secondary" onClick={handleReplay}>
+							<div className='replay-row-action'>
+								<vscode-button appearance='secondary' onClick={handleReplay}>
 									Replay edited prompt
 								</vscode-button>
-								<vscode-button appearance="secondary" onClick={handleReplayInCli}>
+								<vscode-button appearance='secondary' onClick={handleReplayInCli}>
 									Replay edited prompt in CLI session
 								</vscode-button>
-								<vscode-button appearance="secondary" onClick={handleShowPayloadDiff}>
+								<vscode-button appearance='secondary' onClick={handleShowPayloadDiff}>
 									Show payload diff
 								</vscode-button>
 								<vscode-button
-									appearance="secondary"
+									appearance='secondary'
 									onClick={handleToggleReplayView}
-									title="Switch between native payload view and projection debug view"
+									title='Switch between native payload view and projection debug view'
 									disabled={!replayUri && !lastReplayUri}
 								>
 									{replayView === 'payload' ? 'Switch to projection' : 'Switch to native'}

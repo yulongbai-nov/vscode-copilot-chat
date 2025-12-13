@@ -58,10 +58,10 @@ interface RawTreeNodeProps {
 	sectionId: string;
 	canEdit: boolean;
 	onEditLeaf: (sectionId: string, path: string, value: unknown) => void;
-	seen: WeakSet<object>;
+	ancestors: readonly object[];
 }
 
-const RawTreeNode: React.FC<RawTreeNodeProps> = ({ label, value, path, displayPath, depth, sectionId, canEdit, onEditLeaf, seen }) => {
+const RawTreeNode: React.FC<RawTreeNodeProps> = ({ label, value, path, displayPath, depth, sectionId, canEdit, onEditLeaf, ancestors }) => {
 	const isArray = Array.isArray(value);
 	const isObject = isPlainObject(value);
 	const isEditableLeaf = canEdit && isLeafValue(value) && isSupportedRawPath(path);
@@ -74,8 +74,10 @@ const RawTreeNode: React.FC<RawTreeNodeProps> = ({ label, value, path, displayPa
 	}, [value]);
 
 	if (isArray || isObject) {
+		let nextAncestors = ancestors;
 		if (typeof value === 'object' && value !== null) {
-			if (seen.has(value)) {
+			const objectValue = value as object;
+			if (ancestors.includes(objectValue)) {
 				return React.createElement(
 					'div',
 					{ className: 'raw-node raw-node-leaf', style: { marginLeft: depth * 10 } },
@@ -88,7 +90,7 @@ const RawTreeNode: React.FC<RawTreeNodeProps> = ({ label, value, path, displayPa
 					React.createElement('div', { className: 'raw-leaf-value raw-leaf-value-readonly' }, '[circular]'),
 				);
 			}
-			seen.add(value);
+			nextAncestors = [...ancestors, objectValue];
 		}
 
 		const entries = isArray
@@ -146,7 +148,7 @@ const RawTreeNode: React.FC<RawTreeNodeProps> = ({ label, value, path, displayPa
 								sectionId,
 								canEdit,
 								onEditLeaf,
-								seen,
+								ancestors: nextAncestors,
 							}))
 						: React.createElement('div', { className: 'raw-empty' }, 'Empty'),
 				),
@@ -210,9 +212,7 @@ export interface RawStructureEditorProps {
 export const RawStructureEditor: React.FC<RawStructureEditorProps> = ({ section, payloadIndex, canEdit, canUndo, canRedo, onEditLeaf, onUndoLeafEdit, onRedoLeafEdit }) => {
 	const message = section.message;
 	const rootPath = `messages[${payloadIndex}]`;
-	// Use a fresh cycle-detection set per render so repeated renders never mark
-	// stable JSON graphs as "[circular]".
-	const seen = new WeakSet<object>();
+	const rootAncestors = message && typeof message === 'object' ? [message as object] : [];
 
 	if (!message || typeof message !== 'object') {
 		return React.createElement('div', { className: 'raw-structure-missing' }, 'Raw message unavailable for this section.');
@@ -251,10 +251,9 @@ export const RawStructureEditor: React.FC<RawStructureEditorProps> = ({ section,
 						sectionId: section.id,
 						canEdit,
 						onEditLeaf,
-						seen,
+						ancestors: rootAncestors,
 					}))
 				: React.createElement('div', { className: 'raw-empty' }, 'No fields'),
 		),
 	);
 };
-

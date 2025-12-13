@@ -52,5 +52,40 @@ describe('RawStructureEditor', () => {
 		});
 		expect(collectText(renderer.toJSON())).not.toContain('[circular]');
 	});
-});
 
+	it('does not render stable JSON as circular after expanding/collapsing nodes', () => {
+		const message = {
+			role: 'assistant',
+			content: [{ type: 1, text: 'hello' }],
+			toolCalls: [{ id: 'call_1', function: { name: 'readFile', arguments: '{}' } }],
+		};
+		const section = { id: 'assistant-0', message };
+		const props = {
+			section,
+			payloadIndex: 0,
+			canEdit: false,
+			canUndo: false,
+			canRedo: false,
+			onEditLeaf: () => { /* no-op */ },
+			onUndoLeafEdit: () => { /* no-op */ },
+			onRedoLeafEdit: () => { /* no-op */ },
+		};
+
+		const renderer = TestRenderer.create(React.createElement(RawStructureEditor, props));
+		expect(collectText(renderer.toJSON())).not.toContain('[circular]');
+
+		const headers = renderer.root.findAll(node => node.type === 'div' && node.props.className === 'raw-group-header');
+		expect(headers.length).toBeGreaterThan(0);
+		const header = headers[0];
+
+		TestRenderer.act(() => {
+			header.props.onClick();
+		});
+		expect(collectText(renderer.toJSON())).not.toContain('[circular]');
+
+		TestRenderer.act(() => {
+			header.props.onClick();
+		});
+		expect(collectText(renderer.toJSON())).not.toContain('[circular]');
+	});
+});
