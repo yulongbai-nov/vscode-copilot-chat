@@ -1,0 +1,173 @@
+# Design Document: Workflow Coach (Agent Reminder Script)
+
+## Overview
+
+The repo’s workflow rules live primarily in `agent-prompt.md` (spec-first, branch hygiene, “quad verification”, etc.). As the rules grow, it becomes easy for an agent (or a human driving the agent) to forget a step, mix scopes, or commit/push in the wrong order.
+
+This feature adds a lightweight **Workflow Coach** script that:
+
+- Reads the **current repo state** (git status, branch, staged/unstaged, upstream, PR presence).
+- Accepts the **current user request** (query) and optional “context events” as inputs.
+- Emits a **next-step reminder** and an explicit **recommended next state** (what to do next and why).
+
+The intent is to move the operational checklist out of prose and into an executable “advisor” so the agent can re-run it at decision points (before changing scope, before committing, before pushing, before opening a PR).
+
+### Goals
+
+- Provide a single command that summarizes “where we are” and what to do next.
+- Make “quad verification” and spec-first steps harder to forget (reminders, not enforcement).
+- Detect common failure modes: committing on `main`, unpushed commits, missing PR, mixed scopes (docs + code + CI), and stale branch base.
+- Support both **human-readable** and **machine-readable** output.
+
+### Non-goals
+
+- No automatic execution of git/CI commands (only recommendations).
+- No perfect semantic classification of “feature vs fix” from diffs.
+- No network dependency; GitHub PR discovery is best-effort and optional.
+
+## Current Architecture
+
+- Workflow guidance is documented in `agent-prompt.md`.
+- Enforcement is mostly manual:
+  - Humans or the agent remember to run lint/typecheck/compile/tests.
+  - Humans or the agent decide when to split commits and when to open PRs.
+  - Scope drift is handled ad hoc (stash/rebase/cherry-pick).
+
+## Proposed Architecture
+
+### CLI surface
+
+- Node script: `script/workflowCoach.mjs`
+- NPM entrypoints (examples):
+  - `npm run workflow:coach -- --query "<user request>"`
+  - `npm run workflow:coach -- --query "<...>" --json`
+
+### Components
+
+1. **Context collector**
+   - `git`:
+     - current branch
+     - staged / unstaged / untracked counts
+     - ahead/behind vs upstream
+     - changed file list (for coarse scope heuristics)
+   - optional `gh`:
+     - open PR for current branch (if authenticated)
+
+2. **Request classifier (lightweight)**
+   - Uses the input query to infer a probable scope type (`fix`, `feature`, `docs`, `ci`, `chore`) when possible.
+   - Always allows explicit override (`--type fix`, etc.).
+
+3. **Rule engine**
+   - A deterministic set of rules that produces:
+     - `warnings[]` (must-read issues, e.g. “dirty main”)
+     - `recommendations[]` (ordered next actions with concrete commands)
+     - `suggestedNextState` (what “good” looks like next)
+
+4. **Renderer**
+   - Text output for interactive use.
+   - JSON output for tooling/future automation.
+
+### State model (conceptual)
+
+```ts
+type WorkflowContext = {
+  query?: string;
+  phase?: 'design' | 'implementation';
+  repo: {
+    root: string;
+  };
+  git: {
+    branch: string;
+    isMainBranch: boolean;
+    stagedFiles: number;
+    unstagedFiles: number;
+    untrackedFiles: number;
+    ahead: number;
+    behind: number;
+    changedPaths: string[];
+  };
+  gh?: {
+    hasAuth: boolean;
+    prNumber?: number;
+    prUrl?: string;
+  };
+};
+```
+
+### Recommendation model (conceptual)
+
+```ts
+type Recommendation = {
+  id: string;
+  title: string;
+  why: string;
+  commands?: string[];
+  severity: 'info' | 'warn';
+};
+
+type CoachResult = {
+  detectedState: string;
+  suggestedNextState: string;
+  warnings: Recommendation[];
+  nextActions: Recommendation[];
+};
+```
+
+## Data & Control Flow
+
+```mermaid
+flowchart TD
+  A[User request + repo state] --> B[workflowCoach.mjs]
+  B --> C[Collect git state]
+  B --> D[Optional: collect PR state via gh]
+  B --> E[Classify scope from query/diff]
+  C --> F[Rule engine]
+  D --> F
+  E --> F
+  F --> G[Render text]
+  F --> H[Render JSON]
+```
+
+## Rule Examples (MVP)
+
+- **Dirty main**
+  - If `branch == main` and there are changes: warn and suggest creating a new branch.
+- **Uncommitted staged changes**
+  - If staged changes exist: remind “quad verification” before commit (or before push if already committed).
+- **Ahead of upstream**
+  - If commits are not pushed: recommend `git push`.
+- **No PR for branch**
+  - If on non-main branch and `gh` finds no open PR: recommend creating one.
+- **Scope drift heuristic**
+  - If changed paths span multiple “zones” (e.g. `src/` + `.github/workflows/` + `docs/`): warn and recommend splitting via `git worktree` (preferred) or stash/cherry-pick.
+
+## Integration Points
+
+- `package.json` scripts to run the coach quickly.
+- `agent-prompt.md` can be shortened to “run the coach at decision points” plus the spec-first requirements.
+- Optional (future): `husky` pre-push hook that prints the coach summary, without blocking.
+
+## Migration / Rollout Strategy
+
+- Land as opt-in tooling (no enforcement).
+- Document recommended usage in `agent-prompt.md`.
+- Iterate rule set as new workflow pain points appear.
+
+## Performance / Reliability / Security / UX Considerations
+
+- Keep runtime < ~500ms in typical repos (avoid deep git history walks).
+- Operate offline; `gh` integration should be best-effort (skip if unauthenticated).
+- Do not print secrets; only show safe repo metadata (branch names, counts, paths).
+
+## Risks and Mitigations
+
+- **Noisy rules**: keep warnings limited; allow `--quiet` / `--no-gh` toggles.
+- **Heuristic misclassification**: always treat scope/type inference as advisory; allow explicit override.
+- **Cross-platform path handling**: normalize paths; avoid bash-specific parsing in the script itself.
+
+## Future Enhancements
+
+- Interactive mode that can generate a suggested branch name from the query.
+- “Plan-mode” integration: emit a suggested `update_plan` skeleton for the agent.
+- Optional enforcement hooks (pre-push) once the rule set stabilizes.
+
