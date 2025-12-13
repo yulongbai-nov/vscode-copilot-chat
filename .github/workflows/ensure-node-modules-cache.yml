@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           lfs: false
           fetch-depth: 0  # Need full history for merge-base with upstream
@@ -26,9 +26,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
+<<<<<<< HEAD
           node-version: '22.14.x'
           cache: 'npm'
           cache-dependency-path: package-lock.json
+=======
+          node-version-file: .nvmrc
+>>>>>>> upstream/main
 
       - name: Restore build cache
         uses: actions/cache@v4
@@ -55,7 +59,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           lfs: false
           fetch-depth: 0  # Need full history for merge-base with upstream
@@ -67,9 +71,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
+<<<<<<< HEAD
           node-version: '22.14.x'
           cache: 'npm'
           cache-dependency-path: package-lock.json
+=======
+          node-version: '22.20.x'
+>>>>>>> upstream/main
 
       - name: Setup Python
         uses: actions/setup-python@v6

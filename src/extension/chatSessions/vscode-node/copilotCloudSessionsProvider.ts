@@ -381,6 +381,20 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 			const prResults = await Promise.all(prFetches);
 			const prMap = new Map(prResults.filter(r => r.pr).map(r => [r.globalId, r.pr!]));
 
+			const validateISOTimestamp = (date: string | undefined): number | undefined => {
+				try {
+					if (!date) {
+						return;
+					}
+					const time = new Date(date)?.getTime();
+					if (time > 0) {
+						return time;
+					}
+				} catch { }
+			};
+
+			const createdAt = sessions.length > 0 ? validateISOTimestamp(sessions[0].created_at) : undefined;
+
 			// Create session items from latest sessions
 			const sessionItems = await Promise.all(Array.from(latestSessionsMap.values()).map(async sessionItem => {
 				const pr = prMap.get(sessionItem.resource_global_id);
@@ -392,12 +406,14 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 					resource: vscode.Uri.from({ scheme: CopilotCloudSessionsProvider.TYPE, path: '/' + pr.number }),
 					label: pr.title,
 					status: this.getSessionStatusFromSession(sessionItem),
-					description: this.getPullRequestDescription(pr),
+					badge: this.getPullRequestBadge(pr),
 					tooltip: this.createPullRequestTooltip(pr),
-					timing: {
-						startTime: new Date(sessionItem.created_at).getTime(),
-						endTime: sessionItem.completed_at ? new Date(sessionItem.completed_at).getTime() : undefined
-					},
+					...(createdAt ? {
+						timing: {
+							startTime: createdAt,
+							endTime: validateISOTimestamp(sessionItem.completed_at),
+						}
+					} : {}),
 					changes: {
 						files: pr.files.totalCount,
 						insertions: pr.additions,
@@ -667,26 +683,26 @@ export class CopilotCloudSessionsProvider extends Disposable implements vscode.C
 		}
 	}
 
-	private getPullRequestDescription(pr: PullRequestSearchItem): vscode.MarkdownString {
-		let descriptionText: string;
+	private getPullRequestBadge(pr: PullRequestSearchItem): vscode.MarkdownString {
+		let badgeText: string;
 		switch (pr.state) {
 			case 'failed':
-				descriptionText = vscode.l10n.t('$(git-pull-request) Failed in {0}', `#${pr.number}`);
+				badgeText = vscode.l10n.t('$(git-pull-request) Failed in {0}', `#${pr.number}`);
 				break;
 			case 'in_progress':
-				descriptionText = vscode.l10n.t('$(git-pull-request) In progress in {0}', `#${pr.number}`);
+				badgeText = vscode.l10n.t('$(git-pull-request) Running in {0}', `#${pr.number}`);
 				break;
 			case 'queued':
-				descriptionText = vscode.l10n.t('$(git-pull-request) Queued in {0}', `#${pr.number}`);
+				badgeText = vscode.l10n.t('$(git-pull-request) Queued in {0}', `#${pr.number}`);
 				break;
 			default:
-				descriptionText = vscode.l10n.t('$(git-pull-request) {0}', `#${pr.number}`);
+				badgeText = vscode.l10n.t('$(git-pull-request) {0}', `#${pr.number}`);
 				break;
 		}
 
-		const description = new vscode.MarkdownString(descriptionText);
-		description.supportThemeIcons = true;
-		return description;
+		const badge = new vscode.MarkdownString(badgeText);
+		badge.supportThemeIcons = true;
+		return badge;
 	}
 
 	private createPullRequestTooltip(pr: PullRequestSearchItem): vscode.MarkdownString {

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           lfs: false
           fetch-depth: 0  # Need full history for merge-base with upstream
@@ -30,9 +30,13 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
+<<<<<<< HEAD
           node-version: '22.14.x'
           cache: 'npm'
           cache-dependency-path: package-lock.json
+=======
+          node-version-file: .nvmrc
+>>>>>>> upstream/main
 
       - name: Restore build cache
         uses: actions/cache/restore@v4
@@ -65,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           lfs: false
           fetch-depth: 0  # Need full history for merge-base with upstream
@@ -75,9 +79,13 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
+<<<<<<< HEAD
           node-version: '22.14.x'
           cache: 'npm'
           cache-dependency-path: package-lock.json
+=======
+          node-version: '22.20.x'
+>>>>>>> upstream/main
 
       - name: Validate telemetry events
         run: npx --package=@vscode/telemetry-extractor --yes vscode-telemetry-extractor -s . > /dev/null
@@ -87,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           lfs: false
           fetch-depth: 0  # Need full history for merge-base with upstream
@@ -98,9 +106,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
+<<<<<<< HEAD
           node-version: '22.14.x'
           cache: 'npm'
           cache-dependency-path: package-lock.json
+=======
+          node-version: '22.20.x'
+>>>>>>> upstream/main
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -187,7 +199,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           lfs: false
           fetch-depth: 0  # Need full history for merge-base with upstream
@@ -199,9 +211,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
+<<<<<<< HEAD
           node-version: '22.14.x'
           cache: 'npm'
           cache-dependency-path: package-lock.json
+=======
+          node-version: '22.20.x'
+>>>>>>> upstream/main
 
       - name: Setup Python
         uses: actions/setup-python@v6

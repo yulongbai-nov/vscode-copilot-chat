@@ -115,7 +115,7 @@ suite('OrganizationAndEnterpriseAgentProvider', () => {
 			mockOctoKitService,
 			accessor.get(ILogService),
 			mockExtensionContext as any,
-			mockFileSystem
+			mockFileSystem,
 		);
 		disposables.add(provider);
 		return provider;
@@ -225,6 +225,8 @@ Test prompt content`;
 		const mockDetails: CustomAgentDetails = {
 			...mockAgent,
 			prompt: 'Detailed prompt content',
+			model: 'gpt-4',
+			infer: true,
 		};
 		mockOctoKitService.setAgentDetails('full_agent', mockDetails);
 
@@ -246,6 +248,8 @@ tools:
   - tool2
 argument-hint: Provide context
 target: vscode
+model: gpt-4
+infer: true
 ---
 Detailed prompt content
 `;
@@ -650,6 +654,8 @@ Agent 1 prompt`;
 		assert.ok(!content.includes('tools:'));
 		assert.ok(!content.includes('argument-hint:'));
 		assert.ok(!content.includes('target:'));
+		assert.ok(!content.includes('model:'));
+		assert.ok(!content.includes('infer:'));
 	});
 
 	test('excludes tools field when array contains only wildcard', async () => {
@@ -791,7 +797,7 @@ You are a world-class computer scientist.
 		const provider = createProvider();
 
 		// Agent with description containing YAML special characters that need proper handling
-		const descriptionWithSpecialChars = "Agent with \"double quotes\", 'single quotes', colons:, and #comments in the description";
+		const descriptionWithSpecialChars = `Agent with "double quotes", 'single quotes', colons:, and #comments in the description`;
 		const mockAgent: CustomAgentListItem = {
 			name: 'special_chars_agent',
 			repo_owner_id: 1,
@@ -872,5 +878,31 @@ Test prompt
 `;
 
 		assert.equal(content, expectedContent);
+	});
+
+	test('aborts fetch if user signs out during process', async () => {
+		const provider = createProvider();
+
+		// Setup multiple organizations to ensure we have multiple steps
+		mockOctoKitService.setUserOrganizations(['org1', 'org2']);
+		mockOctoKitService.getOrganizationRepositories = async (org) => ['repo'];
+
+		// Mock getCustomAgents to simulate sign out after first org
+		let callCount = 0;
+		const originalGetCustomAgents = mockOctoKitService.getCustomAgents;
+		mockOctoKitService.getCustomAgents = async (owner, repo, options) => {
+			callCount++;
+			if (callCount === 1) {
+				// Sign out user after first call
+				mockOctoKitService.getCurrentAuthedUser = async () => undefined as any;
+			}
+			return originalGetCustomAgents.call(mockOctoKitService, owner, repo, options);
+		};
+
+		await provider.provideCustomAgents({}, {} as any);
+		await new Promise(resolve => setTimeout(resolve, 100));
+
+		// Should have aborted after first org, so second org shouldn't be processed
+		assert.equal(callCount, 1);
 	});
 });
