@@ -345,7 +345,7 @@ export function buildChatHistoryFromEvents(sessionId: string, events: readonly S
 						});
 					});
 
-				let prompt = stripReminders(event.data.content || '');
+				let prompt = stripReminders(content || '');
 				const info = isFirstUserMessage ? delegationSummaryService.extractPrompt(sessionId, prompt) : undefined;
 				if (info) {
 					prompt = info.prompt;
