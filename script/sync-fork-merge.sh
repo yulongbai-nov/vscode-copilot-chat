@@ -76,7 +76,12 @@ upstream_remote="${UPSTREAM_REMOTE:-upstream}"
 upstream_repo="${UPSTREAM_REPO:-microsoft/vscode-copilot-chat}"
 upstream_branch="${UPSTREAM_BRANCH:-main}"
 fork_repo_slug="${FORK_REPO_SLUG:-}"
-pr_title="${PR_TITLE:-Nightly upstream merge sync}"
+sync_date_utc="$(date -u +%Y-%m-%d)"
+if [[ -z "${PR_TITLE+x}" ]]; then
+	pr_title="Nightly upstream merge sync (${sync_date_utc})"
+else
+	pr_title="${PR_TITLE}"
+fi
 pr_body_header="${PR_BODY:-Automated nightly merge of upstream main into fork main.}"
 pr_reviewer="${PR_REVIEWER:-github-copilot}"
 cleanup_branch="${CLEANUP_BRANCH_ON_MERGE:-1}"

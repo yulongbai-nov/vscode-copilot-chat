@@ -148,9 +148,43 @@ When asked to “write the spec” or “create the core documents” for a feat
 ## Working Agreement & Workflow
 
 - **Branches & Commits**
-  - Default to feature branches named `feature/<short-feature-name>` (kebab-case).
+  - Default to branches named `<type>/<short-scope-name>` (kebab-case), for example:
+    - `feature/...` (new user-facing capability)
+    - `fix/...` (bug fix)
+    - `docs/...` (documentation only)
+    - `ci/...` (workflows/automation)
+    - `chore/...` (maintenance, build tooling, dependency bumps)
+    - `refactor/...` (internal restructure with no behavior change)
+    - `test/...` (test-only changes)
+    - `perf/...` (performance-only changes)
   - When a new feature starts, create a fresh branch from the latest `main` (or the agreed integration branch). If multiple features run in parallel, keep each on its own branch to avoid entanglement.
   - Keep commits small, reference the relevant tasks/requirements, and separate spec edits from code when practical. Mention both in the commit message when they ship together.
+  - **Scope drift protocol** (when a new, unrelated scope appears mid-branch):
+    1. STOP adding more changes in the new scope.
+    2. Prefer isolating scopes with **`git worktree`** (so you can continue the current PR while starting a clean branch for the new scope):
+       - Worktree path convention (consistent across machines):
+         - Use a sibling directory: `../<repo>.worktrees/<branchSlug>`
+         - Example: `../vscode-copilot-chat.worktrees/fix-amend-merged-pr-commit-messages`
+         - Where `branchSlug` is the branch name with `/` replaced by `-`.
+       - If you have not started the new work yet:
+         - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
+       - If you already have WIP changes for the new scope in the current worktree:
+         - Stash only the unrelated hunks (include untracked): `git stash push -p -u -m "wip: <new-scope>"`
+         - Create the worktree branch and apply the stash there:
+           - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
+           - `cd ../<repo>-<name> && git stash pop`
+       - If the new-scope changes are already committed, prefer `git cherry-pick` those commits onto the new branch/worktree (or split with `git rebase -i` if needed).
+    3. Finish the current scope first:
+       - Split into logical commits (spec vs code when practical).
+       - Run the “quad” verification before committing/pushing.
+       - Push and open/update the PR for the current scope.
+    4. Continue the new scope on the new branch/worktree:
+       - If the new work *depends* on unmerged changes from the first branch, branch from that feature branch instead and note the dependency in the PR description.
+    5. (Optional) When you are done with the parallel worktree: `git worktree remove ../<repo>-<name>`
+    6. If the current branch name no longer matches the delivered scope:
+       - If no PR exists yet, rename locally + remote (`git branch -m ...`, push the new branch, delete the old remote branch).
+       - If a PR already exists, avoid renaming the remote head branch; prefer a follow-up PR/branch with the correct name.
+    7. Update `.specs/<feature>/...` before implementing additional scope (spec-first).
 - **Verification Before Every Commit/Push** (“quadruple check” + simulation):
   1. `npm run lint`
   2. `npm run typecheck`
