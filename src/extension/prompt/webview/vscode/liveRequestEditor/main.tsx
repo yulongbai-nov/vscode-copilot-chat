@@ -70,7 +70,14 @@ interface RawChatMessageContentPart {
 interface RawChatMessage {
 	role?: string;
 	content?: RawChatMessageContentPart[];
+	name?: string;
+	toolCallId?: string;
 	[key: string]: unknown;
+}
+
+interface EditHistory {
+	undoStack: unknown[];
+	redoStack: unknown[];
 }
 
 interface EditableChatRequest {
@@ -83,6 +90,7 @@ interface EditableChatRequest {
 	messages?: RawChatMessage[];
 	sections: LiveRequestSection[];
 	metadata?: EditableChatRequestMetadata;
+	editHistory?: EditHistory;
 }
 
 interface ToolInvocationMetadata {
@@ -103,6 +111,8 @@ interface LiveRequestSection {
 	label: string;
 	kind: string;
 	content?: string;
+	message?: RawChatMessage;
+	sourceMessageIndex?: number;
 	tokenCount?: number;
 	collapsed?: boolean;
 	editable?: boolean;
@@ -347,16 +357,21 @@ const EmptyState: React.FC = () => (
 
 interface SectionCardProps {
 	section: LiveRequestSection;
+	payloadIndex?: number;
 	totalTokens: number;
 	isPinned: boolean;
 	isEditing: boolean;
 	isCollapsed: boolean;
 	isFlashing: boolean;
+	canEdit: boolean;
+	canUndo: boolean;
+	canRedo: boolean;
 	onToggleCollapse: (sectionId: string) => void;
 	onTogglePinned: (sectionId: string) => void;
 	onEditToggle: (sectionId: string) => void;
-	onCancelEdit: () => void;
-	onSaveEdit: (sectionId: string, content: string) => void;
+	onEditLeaf: (sectionId: string, path: string, value: unknown) => void;
+	onUndoLeafEdit: () => void;
+	onRedoLeafEdit: () => void;
 	onDelete: (sectionId: string) => void;
 	onRestore: (sectionId: string) => void;
 	onShowDiff?: (section: LiveRequestSection) => void;
@@ -364,25 +379,257 @@ interface SectionCardProps {
 	onReorderPinned: (sourceId: string, targetId: string, placeAfter: boolean) => void;
 }
 
+function isSupportedRawPath(path: string): boolean {
+	if (!path.length) {
+		return false;
+	}
+	const segments = path.split('.').filter(Boolean);
+	if (!segments.length) {
+		return false;
+	}
+	return segments.every(segment => /^([a-zA-Z0-9_]+)(?:\[(\d+)\])?$/.test(segment));
+}
+
+function formatLeafValue(value: unknown): string {
+	if (value === null) {
+		return 'null';
+	}
+	if (value === undefined) {
+		return 'undefined';
+	}
+	if (typeof value === 'string') {
+		return value;
+	}
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return String(value);
+	}
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value);
+	}
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isLeafValue(value: unknown): boolean {
+	return value === null || value === undefined || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+interface RawTreeNodeProps {
+	label: string;
+	value: unknown;
+	path: string;
+	displayPath: string;
+	depth: number;
+	sectionId: string;
+	canEdit: boolean;
+	onEditLeaf: (sectionId: string, path: string, value: unknown) => void;
+	seen: WeakSet<object>;
+}
+
+const RawTreeNode: React.FC<RawTreeNodeProps> = ({ label, value, path, displayPath, depth, sectionId, canEdit, onEditLeaf, seen }) => {
+	const isArray = Array.isArray(value);
+	const isObject = isPlainObject(value);
+	const isEditableLeaf = canEdit && isLeafValue(value) && isSupportedRawPath(path);
+
+	const [collapsed, setCollapsed] = React.useState(() => depth >= 2);
+	const [draft, setDraft] = React.useState(() => formatLeafValue(value));
+
+	React.useEffect(() => {
+		setDraft(formatLeafValue(value));
+	}, [value]);
+
+	if (isArray || isObject) {
+		if (typeof value === 'object' && value !== null) {
+			if (seen.has(value)) {
+				return (
+					<div className="raw-node raw-node-leaf" style={{ marginLeft: depth * 10 }}>
+						<div className="raw-leaf-header">
+							<span className="raw-key">{label}</span>
+							<span className="raw-path">{displayPath}</span>
+						</div>
+						<div className="raw-leaf-value raw-leaf-value-readonly">[circular]</div>
+					</div>
+				);
+			}
+			seen.add(value);
+		}
+
+		const entries = isArray
+			? (value as unknown[]).map((entry, index) => ({
+				childLabel: `${label}[${index}]`,
+				childPath: `${path}[${index}]`,
+				childDisplayPath: `${displayPath}[${index}]`,
+				childValue: entry
+			}))
+			: Object.keys(value as Record<string, unknown>).map(key => ({
+				childLabel: key,
+				childPath: `${path}.${key}`,
+				childDisplayPath: `${displayPath}.${key}`,
+				childValue: (value as Record<string, unknown>)[key]
+			}));
+
+		const summary = isArray ? `(${(value as unknown[]).length})` : `(${Object.keys(value as Record<string, unknown>).length})`;
+
+		return (
+			<div className="raw-node raw-node-group" style={{ marginLeft: depth * 10 }}>
+				<div className="raw-group-header" role="button" tabIndex={0} onClick={() => setCollapsed(prev => !prev)} onKeyDown={event => {
+					if (event.key === 'Enter' || event.key === ' ') {
+						event.preventDefault();
+						setCollapsed(prev => !prev);
+					}
+				}}>
+					<span className="raw-caret" aria-hidden="true">{collapsed ? '\u25B6' : '\u25BC'}</span>
+					<span className="raw-key">{label}</span>
+					<span className="raw-summary">{summary}</span>
+					<span className="raw-path">{displayPath}</span>
+				</div>
+				{collapsed ? null : (
+					<div className="raw-group-body">
+						{entries.length ? entries.map(entry => (
+							<RawTreeNode
+								key={entry.childPath}
+								label={entry.childLabel}
+								value={entry.childValue}
+								path={entry.childPath}
+								displayPath={entry.childDisplayPath}
+								depth={depth + 1}
+								sectionId={sectionId}
+								canEdit={canEdit}
+								onEditLeaf={onEditLeaf}
+								seen={seen}
+							/>
+						)) : (
+							<div className="raw-empty">Empty</div>
+						)}
+					</div>
+				)}
+			</div>
+		);
+	}
+
+	const isDirty = draft !== formatLeafValue(value);
+	const useTextarea = typeof value === 'string' && (value.includes('\n') || value.length > 80);
+
+	return (
+		<div className="raw-node raw-node-leaf" style={{ marginLeft: depth * 10 }}>
+			<div className="raw-leaf-header">
+				<span className="raw-key">{label}</span>
+				<span className="raw-path">{displayPath}</span>
+			</div>
+			{isEditableLeaf ? (
+				<div className="raw-leaf-editor">
+					{useTextarea ? (
+						<textarea
+							className="raw-leaf-input raw-leaf-textarea"
+							value={draft}
+							onChange={event => setDraft(event.target.value)}
+						/>
+					) : (
+						<input
+							className="raw-leaf-input"
+							value={draft}
+							onChange={event => setDraft(event.target.value)}
+						/>
+					)}
+					<button
+						type="button"
+						className="raw-apply-button"
+						disabled={!isDirty}
+						onClick={() => onEditLeaf(sectionId, path, draft)}
+						title="Apply leaf edit"
+					>
+						Apply
+					</button>
+				</div>
+			) : (
+				<div className="raw-leaf-value raw-leaf-value-readonly">{formatLeafValue(value)}</div>
+			)}
+		</div>
+	);
+};
+
+interface RawStructureEditorProps {
+	section: LiveRequestSection;
+	payloadIndex: number;
+	canEdit: boolean;
+	canUndo: boolean;
+	canRedo: boolean;
+	onEditLeaf: (sectionId: string, path: string, value: unknown) => void;
+	onUndoLeafEdit: () => void;
+	onRedoLeafEdit: () => void;
+}
+
+const RawStructureEditor: React.FC<RawStructureEditorProps> = ({ section, payloadIndex, canEdit, canUndo, canRedo, onEditLeaf, onUndoLeafEdit, onRedoLeafEdit }) => {
+	const message = section.message;
+	const rootPath = `messages[${payloadIndex}]`;
+	const seen = React.useMemo(() => new WeakSet<object>(), [section.id, payloadIndex]);
+
+	if (!message || typeof message !== 'object') {
+		return <div className="raw-structure-missing">Raw message unavailable for this section.</div>;
+	}
+
+	const keys = Object.keys(message);
+	keys.sort((a, b) => (a === 'role' ? -1 : b === 'role' ? 1 : a.localeCompare(b)));
+
+	return (
+		<div className="raw-structure">
+			<div className="raw-structure-toolbar">
+				<div className="raw-structure-title">Raw structure</div>
+				<div className="raw-structure-actions">
+					<button type="button" className="raw-toolbar-button" disabled={!canUndo} onClick={onUndoLeafEdit} title="Undo last leaf edit">Undo</button>
+					<button type="button" className="raw-toolbar-button" disabled={!canRedo} onClick={onRedoLeafEdit} title="Redo last leaf edit">Redo</button>
+				</div>
+			</div>
+			<div className="raw-structure-root">{rootPath}</div>
+			<div className="raw-structure-body">
+				{keys.length ? keys.map(key => (
+					<RawTreeNode
+						key={key}
+						label={key}
+						value={(message as Record<string, unknown>)[key]}
+						path={key}
+						displayPath={`${rootPath}.${key}`}
+						depth={0}
+						sectionId={section.id}
+						canEdit={canEdit}
+						onEditLeaf={onEditLeaf}
+						seen={seen}
+					/>
+				)) : (
+					<div className="raw-empty">No fields</div>
+				)}
+			</div>
+		</div>
+	);
+};
+
 const SectionCard: React.FC<SectionCardProps> = ({
 	section,
+	payloadIndex,
 	totalTokens,
 	isPinned,
 	isEditing,
 	isCollapsed,
 	isFlashing,
+	canEdit,
+	canUndo,
+	canRedo,
 	onToggleCollapse,
 	onTogglePinned,
 	onEditToggle,
-	onCancelEdit,
-	onSaveEdit,
+	onEditLeaf,
+	onUndoLeafEdit,
+	onRedoLeafEdit,
 	onDelete,
 	onRestore,
 	onShowDiff,
 	draggingRef,
 	onReorderPinned,
 }) => {
-	const [draftContent, setDraftContent] = React.useState(section.content ?? '');
 	const [dragPosition, setDragPosition] = React.useState<'none' | 'above' | 'below'>('none');
 	const collapsed = isCollapsed && !isEditing;
 	const deleted = !!section.deleted;
@@ -400,12 +647,39 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		if (section.kind !== 'assistant') {
 			return undefined;
 		}
-		const calls = section.metadata?.toolCalls;
-		if (!Array.isArray(calls) || !calls.length) {
+		const formatArgs = (value: unknown): string | undefined => {
+			if (value === undefined || value === null) {
+				return undefined;
+			}
+			if (typeof value === 'string') {
+				return value;
+			}
+			try {
+				return JSON.stringify(value, null, 2);
+			} catch {
+				return String(value);
+			}
+		};
+
+		const messageCalls = (section.message as { toolCalls?: unknown } | undefined)?.toolCalls;
+		if (Array.isArray(messageCalls) && messageCalls.length) {
+			return messageCalls.map(call => {
+				const record = call as Record<string, unknown>;
+				const fn = (record['function'] as Record<string, unknown> | undefined) ?? undefined;
+				return {
+					id: typeof record['id'] === 'string' ? record['id'] : undefined,
+					name: typeof fn?.['name'] === 'string' ? fn['name'] as string : undefined,
+					arguments: formatArgs(fn?.['arguments'])
+				};
+			});
+		}
+
+		const metaCalls = section.metadata?.toolCalls;
+		if (!Array.isArray(metaCalls) || !metaCalls.length) {
 			return undefined;
 		}
-		return calls as Array<{ id?: string; name?: string; arguments?: string }>;
-	}, [section]);
+		return metaCalls as Array<{ id?: string; name?: string; arguments?: string }>;
+	}, [section.kind, section.message, section.metadata]);
 
 	const toolInvocation = React.useMemo(() => {
 		if (section.kind !== 'tool') {
@@ -419,12 +693,6 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		}
 		return undefined;
 	}, [section]);
-
-	React.useEffect(() => {
-		if (isEditing) {
-			setDraftContent(section.content ?? '');
-		}
-	}, [isEditing, section.content]);
 
 	const className = [
 		'section',
@@ -495,10 +763,6 @@ const SectionCard: React.FC<SectionCardProps> = ({
 		draggingRef.current = null;
 		setDragPosition('none');
 	}, [draggingRef]);
-
-	const handleSaveClick = React.useCallback(() => {
-		onSaveEdit(section.id, draftContent);
-	}, [section.id, draftContent, onSaveEdit]);
 
 	const handleHeaderKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
 		if (event.key === 'Enter' || event.key === ' ') {
@@ -573,7 +837,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
 						</button>
 					) : (
 						<>
-							{section.editable && (
+							{section.editable && canEdit && (
 								<button
 									type="button"
 									className="section-toolbar-button"
@@ -652,23 +916,17 @@ const SectionCard: React.FC<SectionCardProps> = ({
 						<div className="tool-args tool-args-empty">Tool response content shown below.</div>
 					</div>
 				) : null}
-				{isEditing ? (
-					<>
-						<textarea
-							className="section-editor"
-							value={draftContent}
-							onChange={event => setDraftContent(event.target.value)}
-							data-section={section.id}
-						/>
-						<div className="editor-actions">
-							<vscode-button appearance="secondary" onClick={onCancelEdit}>
-								Cancel
-							</vscode-button>
-							<vscode-button appearance="primary" onClick={handleSaveClick}>
-								Save
-							</vscode-button>
-						</div>
-					</>
+				{isEditing && typeof payloadIndex === 'number' ? (
+					<RawStructureEditor
+						section={section}
+						payloadIndex={payloadIndex}
+						canEdit={canEdit}
+						canUndo={canUndo}
+						canRedo={canRedo}
+						onEditLeaf={onEditLeaf}
+						onUndoLeafEdit={onUndoLeafEdit}
+						onRedoLeafEdit={onRedoLeafEdit}
+					/>
 				) : (
 					<div className="section-rendered" dangerouslySetInnerHTML={{ __html: renderedContent }} />
 				)}
@@ -828,6 +1086,8 @@ const App: React.FC = () => {
 	const captureActive = mode === 'autoOverride' && autoOverride?.capturing;
 	const displayMode: LiveRequestEditorMode = mode === 'interceptOnce' ? 'interceptAlways' : mode;
 	const previewLimit = autoOverride?.previewLimit ?? 3;
+	const canEditSections = displayMode !== 'off'
+		&& (displayMode !== 'autoOverride' || captureActive || !!interception?.paused);
 
 	const updatePersistedState = React.useCallback((updater: (prev: PersistedState) => PersistedState) => {
 		setPersistedState(prev => {
@@ -971,6 +1231,12 @@ const App: React.FC = () => {
 	React.useEffect(() => {
 		setEditingSectionId(null);
 	}, [activeSessionKey]);
+
+	React.useEffect(() => {
+		if (!canEditSections) {
+			setEditingSectionId(null);
+		}
+	}, [canEditSections]);
 
 	React.useEffect(() => {
 		prevSectionsLengthRef.current = request?.sections?.length ?? 0;
@@ -1146,16 +1412,22 @@ const App: React.FC = () => {
 	}, [setCollapsedForActiveSession]);
 
 	const handleEditToggle = React.useCallback((sectionId: string) => {
+		if (!canEditSections) {
+			return;
+		}
 		setEditingSectionId(current => (current === sectionId ? null : sectionId));
-	}, []);
+	}, [canEditSections]);
 
-	const handleCancelEdit = React.useCallback(() => {
-		setEditingSectionId(null);
-	}, []);
+	const handleEditLeaf = React.useCallback((sectionId: string, path: string, value: unknown) => {
+		sendMessage('editLeaf', { sectionId, path, value });
+	}, [sendMessage]);
 
-	const handleSaveEdit = React.useCallback((sectionId: string, content: string) => {
-		sendMessage('editSection', { sectionId, content });
-		setEditingSectionId(null);
+	const handleUndoLeafEdit = React.useCallback(() => {
+		sendMessage('undoLeafEdit', {});
+	}, [sendMessage]);
+
+	const handleRedoLeafEdit = React.useCallback(() => {
+		sendMessage('redoLeafEdit', {});
 	}, [sendMessage]);
 
 	const handleDelete = React.useCallback((sectionId: string) => {
@@ -1309,6 +1581,16 @@ const App: React.FC = () => {
 		? `${formatNumber(totalTokens)} / ${formatNumber(request.metadata.maxPromptTokens)} (${formatPercent(totalTokens, request.metadata.maxPromptTokens)})`
 		: `${formatNumber(totalTokens)} tokens`;
 	const replaySummary = replay?.projection;
+	const canUndo = (request.editHistory?.undoStack?.length ?? 0) > 0;
+	const canRedo = (request.editHistory?.redoStack?.length ?? 0) > 0;
+	const payloadIndexBySectionId = new Map<string, number>();
+	let nextPayloadIndex = 0;
+	for (const section of request.sections) {
+		if (!section.deleted) {
+			payloadIndexBySectionId.set(section.id, nextPayloadIndex);
+			nextPayloadIndex += 1;
+		}
+	}
 
 	return (
 		<div className={`app-root${sessionFlash ? ' session-flash' : ''}`}>
@@ -1606,16 +1888,21 @@ const App: React.FC = () => {
 							<SectionCard
 								key={section.id}
 								section={section}
+								payloadIndex={payloadIndexBySectionId.get(section.id)}
 								totalTokens={totalTokens}
 								isPinned
 								isEditing={editingSectionId === section.id}
 								isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
 								isFlashing={flashSections.has(section.id)}
+								canEdit={canEditSections}
+								canUndo={canUndo}
+								canRedo={canRedo}
 								onToggleCollapse={handleToggleCollapse}
 								onTogglePinned={handleTogglePinned}
 								onEditToggle={handleEditToggle}
-								onCancelEdit={handleCancelEdit}
-								onSaveEdit={handleSaveEdit}
+								onEditLeaf={handleEditLeaf}
+								onUndoLeafEdit={handleUndoLeafEdit}
+								onRedoLeafEdit={handleRedoLeafEdit}
 								onDelete={handleDelete}
 								onRestore={handleRestore}
 								onShowDiff={handleShowDiff}
@@ -1632,16 +1919,21 @@ const App: React.FC = () => {
 					<SectionCard
 						key={section.id}
 						section={section}
+						payloadIndex={payloadIndexBySectionId.get(section.id)}
 						totalTokens={totalTokens}
 						isPinned={false}
 						isEditing={editingSectionId === section.id}
 						isCollapsed={collapsedIdSet.has(section.id) || (!hasCollapsedState && !!section.collapsed)}
 						isFlashing={flashSections.has(section.id)}
+						canEdit={canEditSections}
+						canUndo={canUndo}
+						canRedo={canRedo}
 						onToggleCollapse={handleToggleCollapse}
 						onTogglePinned={handleTogglePinned}
 						onEditToggle={handleEditToggle}
-						onCancelEdit={handleCancelEdit}
-						onSaveEdit={handleSaveEdit}
+						onEditLeaf={handleEditLeaf}
+						onUndoLeafEdit={handleUndoLeafEdit}
+						onRedoLeafEdit={handleRedoLeafEdit}
 						onDelete={handleDelete}
 						onRestore={handleRestore}
 						onShowDiff={handleShowDiff}

@@ -753,6 +753,81 @@ describe('LiveRequestEditorService interception', () => {
 		expect((forked?.version ?? 0) > ready.version).toBe(true);
 	});
 
+	describe('LiveRequestEditorService leaf edits', () => {
+		test('updateLeafByPath edits only the targeted text part and preserves non-text parts', async () => {
+			const { service } = await createService();
+			const renderResult: RenderPromptResult = {
+				...nullRenderPromptResult(),
+				messages: [{
+					role: Raw.ChatRole.User,
+					content: [
+						{ type: Raw.ChatCompletionContentPartKind.Text, text: 'first' },
+						{ type: Raw.ChatCompletionContentPartKind.Image, imageUrl: { url: 'https://example.com/image.png' } },
+						{ type: Raw.ChatCompletionContentPartKind.Text, text: 'second' },
+					]
+				} as Raw.ChatMessage]
+			};
+			const init = createServiceInit({ renderResult });
+			const key = { sessionId: init.sessionId, location: init.location };
+			service.prepareRequest(init);
+
+			service.updateLeafByPath(key, 'messages[0].content[2].text', 'edited');
+
+			const request = service.getRequest(key)!;
+			expect(request.messages).toHaveLength(1);
+			expect(getText(request.messages[0].content[0])).toBe('first');
+			expect((request.messages[0].content[1] as any).type).toBe(Raw.ChatCompletionContentPartKind.Image);
+			expect((request.messages[0].content[1] as any).imageUrl?.url).toBe('https://example.com/image.png');
+			expect(getText(request.messages[0].content[2])).toBe('edited');
+
+			// Section projection updates so capture + replay can observe the edit.
+			expect(request.sections[0].content).toContain('edited');
+		});
+
+		test('updateLeafByPath edits tool call arguments only', async () => {
+			const { service } = await createService();
+			const renderResult: RenderPromptResult = {
+				...nullRenderPromptResult(),
+				messages: [{
+					role: Raw.ChatRole.Assistant,
+					content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: '' }],
+					toolCalls: [{
+						id: 'call-1',
+						type: 'function',
+						function: { name: 'readFile', arguments: '{"path":"a.txt"}' }
+					}]
+				} as Raw.ChatMessage]
+			};
+			const init = createServiceInit({ renderResult });
+			const key = { sessionId: init.sessionId, location: init.location };
+			service.prepareRequest(init);
+
+			service.updateLeafByPath(key, 'messages[0].toolCalls[0].function.arguments', '{"path":"b.txt"}');
+
+			const request = service.getRequest(key)!;
+			const call = (request.messages[0] as any).toolCalls?.[0];
+			expect(call?.id).toBe('call-1');
+			expect(call?.function?.name).toBe('readFile');
+			expect(call?.function?.arguments).toBe('{"path":"b.txt"}');
+		});
+
+		test('undoLastEdit and redoLastEdit revert leaf edits', async () => {
+			const { service } = await createService();
+			const init = createServiceInit({ renderResult: createRenderResult('hello') });
+			const key = { sessionId: init.sessionId, location: init.location };
+			service.prepareRequest(init);
+
+			service.updateLeafByPath(key, 'messages[0].content[0].text', 'edited');
+			expect(getText(service.getRequest(key)!.messages[0].content[0])).toBe('edited');
+
+			service.undoLastEdit(key);
+			expect(getText(service.getRequest(key)!.messages[0].content[0])).toBe('hello');
+
+			service.redoLastEdit(key);
+			expect(getText(service.getRequest(key)!.messages[0].content[0])).toBe('edited');
+		});
+	});
+
 	test('buildReplayForRequest respects replay flag', async () => {
 		const { service, config } = await createService();
 		const init = createServiceInit();

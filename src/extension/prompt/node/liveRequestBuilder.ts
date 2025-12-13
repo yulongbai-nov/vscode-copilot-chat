@@ -414,7 +414,7 @@ function buildLabel(kind: LiveRequestSectionKind, message: Raw.ChatMessage, inde
 	return `${baseLabel} #${index + 1}`;
 }
 
-function renderMessageContent(message: Raw.ChatMessage): string {
+export function renderMessageContent(message: Raw.ChatMessage): string {
 	const parts = message.content.map(part => {
 		const kind = part.type;
 		switch (kind) {

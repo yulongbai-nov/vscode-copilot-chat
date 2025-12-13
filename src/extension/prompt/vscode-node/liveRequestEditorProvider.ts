@@ -19,6 +19,9 @@ type WebviewMessage =
 	| { type: 'beginAutoOverrideCapture' }
 	| { type: 'clearAutoOverrides'; scope?: LiveRequestOverrideScope }
 	| { type: 'editSection'; sectionId: string; content: string }
+	| { type: 'editLeaf'; sectionId: string; path: string; value: unknown }
+	| { type: 'undoLeafEdit' }
+	| { type: 'redoLeafEdit' }
 	| { type: 'deleteSection'; sectionId: string }
 	| { type: 'restoreSection'; sectionId: string }
 	| { type: 'resetRequest' }
@@ -258,6 +261,44 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 							{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location },
 							payload.sectionId,
 							payload.content
+						);
+					}
+					break;
+				case 'editLeaf': {
+					if (!this._currentRequest) {
+						break;
+					}
+					const message = payload as { sectionId?: unknown; path?: unknown; value?: unknown };
+					if (typeof message.sectionId !== 'string' || typeof message.path !== 'string') {
+						break;
+					}
+					const section = this._currentRequest.sections.find(candidate => candidate.id === message.sectionId);
+					if (!section || section.deleted) {
+						break;
+					}
+					const normalizedPath = message.path.trim().replace(/^\.+/, '');
+					if (!normalizedPath.length) {
+						break;
+					}
+					const targetPath = `messages[${section.sourceMessageIndex}].${normalizedPath}`;
+					this._liveRequestEditorService.updateLeafByPath(
+						{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location },
+						targetPath,
+						message.value
+					);
+					break;
+				}
+				case 'undoLeafEdit':
+					if (this._currentRequest) {
+						this._liveRequestEditorService.undoLastEdit(
+							{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
+						);
+					}
+					break;
+				case 'redoLeafEdit':
+					if (this._currentRequest) {
+						this._liveRequestEditorService.redoLastEdit(
+							{ sessionId: this._currentRequest.sessionId, location: this._currentRequest.location }
 						);
 					}
 					break;

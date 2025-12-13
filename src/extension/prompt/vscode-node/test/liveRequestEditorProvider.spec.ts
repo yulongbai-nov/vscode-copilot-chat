@@ -113,6 +113,47 @@ describe('LiveRequestEditorProvider', () => {
 		);
 	});
 
+	test('forwards leaf edits to LiveRequestEditorService.updateLeafByPath', async () => {
+		const { provider, service } = createProvider(logService);
+		const request = createRequest('leaf-session');
+		request.sections = [{
+			id: 'user-2',
+			kind: 'user',
+			label: 'User',
+			content: 'original',
+			originalContent: 'original',
+			collapsed: false,
+			editable: true,
+			deletable: true,
+			sourceMessageIndex: 2,
+		}];
+		(provider as any)._currentRequest = request;
+
+		await (provider as any)._handleWebviewMessage({
+			type: 'editLeaf',
+			sectionId: 'user-2',
+			path: 'content[0].text',
+			value: 'edited'
+		});
+
+		expect(service.updateLeafByPath).toHaveBeenCalledWith(
+			{ sessionId: 'leaf-session', location: ChatLocation.Panel },
+			'messages[2].content[0].text',
+			'edited'
+		);
+	});
+
+	test('forwards leaf undo/redo to LiveRequestEditorService', async () => {
+		const { provider, service } = createProvider(logService);
+		(provider as any)._currentRequest = createRequest('undo-session');
+
+		await (provider as any)._handleWebviewMessage({ type: 'undoLeafEdit' });
+		expect(service.undoLastEdit).toHaveBeenCalledWith({ sessionId: 'undo-session', location: ChatLocation.Panel });
+
+		await (provider as any)._handleWebviewMessage({ type: 'redoLeafEdit' });
+		expect(service.redoLastEdit).toHaveBeenCalledWith({ sessionId: 'undo-session', location: ChatLocation.Panel });
+	});
+
 	test('includes telemetry extra section when posting state', () => {
 		mockExtraSectionsValue.push('telemetry');
 		const { provider } = createProvider(logService);
@@ -164,9 +205,9 @@ describe('LiveRequestEditorProvider', () => {
 			getRequest: () => undefined,
 			getAllRequests: () => [],
 			updateSectionContent: () => undefined,
-			updateLeafByPath: () => undefined,
-			undoLastEdit: () => undefined,
-			redoLastEdit: () => undefined,
+			updateLeafByPath: vi.fn(),
+			undoLastEdit: vi.fn(),
+			redoLastEdit: vi.fn(),
 			deleteSection: () => undefined,
 			restoreSection: () => undefined,
 			resetRequest: () => undefined,
