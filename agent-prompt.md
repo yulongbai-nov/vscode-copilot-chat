@@ -162,6 +162,10 @@ When asked to “write the spec” or “create the core documents” for a feat
   - **Scope drift protocol** (when a new, unrelated scope appears mid-branch):
     1. STOP adding more changes in the new scope.
     2. Prefer isolating scopes with **`git worktree`** (so you can continue the current PR while starting a clean branch for the new scope):
+       - Worktree path convention (consistent across machines):
+         - Use a sibling directory: `../<repo>.worktrees/<branchSlug>`
+         - Example: `../vscode-copilot-chat.worktrees/fix-amend-merged-pr-commit-messages`
+         - Where `branchSlug` is the branch name with `/` replaced by `-`.
        - If you have not started the new work yet:
          - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
        - If you already have WIP changes for the new scope in the current worktree:
