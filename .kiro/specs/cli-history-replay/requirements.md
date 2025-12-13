@@ -119,7 +119,7 @@ The feature is intended as a sample / internal tool to explore “native-parity�
    - Use `LiveRequestEditorService` to obtain the current edited payload (the same payload that `buildReplayForRequest(...)` would produce for send/CLI fork), and  
    - Rebuild the original payload from `EditableChatRequest.originalMessages` (or equivalent source of truth), ensuring both sides use the same serialization shape (for example, pretty-printed JSON with stable key ordering).  
 3. THE diff view SHALL:
-   - Use in-memory, untitled documents (no workspace files),  
+   - Use in-memory, virtual documents (no workspace files),  
    - Label the left side clearly as “Original payload” and the right side as “Edited payload”, and  
    - Use a stable, descriptive title (for example, `Live Request Editor · Payload diff · <shortId>`).  
 4. THE Live Request Editor webview replay metadata row SHALL surface a **“Show payload diff”** button adjacent to the existing replay actions (for example, next to “Replay edited prompt in CLI session”), which invokes the diff command for the currently selected request/replay.  
@@ -164,3 +164,27 @@ The feature is intended as a sample / internal tool to explore “native-parity�
 
 1. THE system SHALL declare chat participants that are created dynamically via `vscode.chat.createChatParticipant(...)` in `package.json` `contributes.chatParticipants`.
 2. WHEN the extension activates, THEN it SHALL NOT emit “Unknown agent: …” errors for these participants.
+
+### Requirement 14 – Message-card raw structure editor (messages[])
+
+**User Story:** As a Copilot engineer editing an intercepted request, I want to inspect and edit the exact `messages[]` structure on-demand from the existing section cards so that I can make precise changes without losing the original payload shape.
+
+#### Acceptance Criteria
+
+1. WHEN Prompt Interception is in an editable mode (Pause & review / Auto-apply capture), THE system SHALL surface an edit affordance on message cards that toggles an “advanced” raw-structure editor for that single card.
+2. WHEN the raw-structure editor is active for a message card, THE system SHALL render a nested, expandable tree view of the underlying `Raw.ChatMessage` object for that message (keys as headers, objects/arrays as groups).
+3. WHEN a node is a scalar leaf value (string/number/boolean/null), THE system SHALL allow editing that value and applying it back to the underlying request.
+4. WHEN the message card exits raw-structure edit mode, THEN the card SHALL return to the standard rendered preview.
+5. THE system SHALL NOT require switching to the dedicated Raw Payload view to perform these message edits (the dedicated view remains a read-only debug surface).
+
+### Requirement 15 – Surgical fidelity for message edits (one-to-one mapping)
+
+**User Story:** As a Copilot engineer, I want edits to map one-to-one to the original `messages[]` payload so that changing a single field does not collapse or rewrite unrelated structure (e.g. multiple text parts, images, toolCalls).
+
+#### Acceptance Criteria
+
+1. WHEN a leaf value is edited (e.g. `messages[i].content[j].text`), THE system SHALL update only that targeted leaf and SHALL preserve all other fields and array entries for that message.
+2. WHEN a message contains multiple `content[]` parts, THEN leaf edits SHALL NOT aggregate or collapse them into a single text part.
+3. WHEN a message includes assistant `toolCalls[]`, THEN leaf edits SHALL allow updating nested fields such as `toolCalls[k].function.arguments` without rewriting the rest of the tool call.
+4. THE system SHALL maintain per-request undo/redo history for leaf edits, allowing the user to revert/reapply the most recent leaf operations.
+5. THE system SHALL keep the sections view and any derived projections (e.g. rendered card preview) consistent with the current edited `messages[]` after each leaf edit and after undo/redo.

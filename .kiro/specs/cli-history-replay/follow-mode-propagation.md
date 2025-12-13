@@ -14,7 +14,7 @@ sequenceDiagram
   participant PayloadUI as Raw Payload view (webview)
 
   rect rgb(230, 240, 255)
-    note over Webview,Provider: Follow OFF (stick to selection)
+    note over Webview,Provider: Auto-follow OFF (manual selection)
     User->>Webview: Change conversation dropdown
     Webview->>Provider: postMessage(selectSession)
     Provider->>Provider: set activeSessionKey + currentRequest
@@ -24,7 +24,7 @@ sequenceDiagram
   end
 
   rect rgb(255, 245, 220)
-    note over Webview,Provider: Follow ON (newest intercepted wins)
+    note over Webview,Provider: Auto-follow ON (newest intercepted wins)
     Provider-->>Provider: onDidChange(request) from service
     Provider->>Provider: if followLatest: activate latest request
     Provider->>Payload: executeCommand(setActiveSession)
@@ -35,22 +35,20 @@ sequenceDiagram
 
 ## Mode Semantics
 
-- **Follow ON (Auto-follow)**  
+- **Auto-follow ON**  
   - Source of change: the newest intercepted request.  
   - Provider auto-activates the latest request (`lastUpdated`/`createdAt`) and posts `stateUpdate` (active session + payload) to the Live Request Editor webview.  
   - Provider also notifies the payload provider to render the same active session. Dropdown reflects the active session; payload flashes on change.
 
-- **Follow OFF (Stick)**  
+- **Auto-follow OFF**  
   - Source of change: user selection in the dropdown.  
   - Webview sends `selectSession` to the provider and `payload.setActiveSession` to the payload provider; followLatest is set `false`.  
   - Provider activates only the selected session and posts `stateUpdate` with `followLatest=false`. Payload provider locks to that session. Newer requests do not pre-empt until the user re-selects or re-enables follow.
 
-## Notes / Follow-ups
+## Notes / Decisions
 
 - Provider-owned propagation is the simplest: webview emits only `selectSession` / `setFollowMode`, and the provider always forwards the active session to the payload view.  
 - Checkbox text: “Auto-follow latest” (checked = follow on).  
 - Visual cues: container flash on session change (when follow on); payload view flashes on payload content change.
-
-Questions for review:
-- Should “stick to selection” also prevent the payload view from auto-selecting unless the LRE is open (today it follows LRE/provider selection when available)?
-- Is workspace-scoped persistence the right default, or do you want optional global persistence?
+- “Stick mode” is equivalent to Auto-follow OFF (no separate mode/button).
+- Persistence is workspace-scoped for this MVP.

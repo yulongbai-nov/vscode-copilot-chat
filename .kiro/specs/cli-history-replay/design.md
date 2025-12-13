@@ -56,6 +56,27 @@ This MVP also improves the **Live Request Editor (LRE)** so it can act as a reli
 - Follow latest enabled:
   - New intercepted requests can pre-empt the active session; views flash to indicate the change.
 
+### Addendum: LRE raw-structure editing (messages[] fidelity)
+
+This MVP keeps the existing **section card** UI as the primary reading surface, but adds an on-demand “raw-structure” editor per card to enable **surgical**, one-to-one edits of the underlying `Raw.ChatMessage` object.
+
+**Key idea:** store and recompute from the real `Raw.ChatMessage` structures, not from aggregate card text.
+
+- Storage:
+  - `EditableChatRequest.originalMessages`: immutable baseline for diff/reset.
+  - `EditableChatRequest.sections[*].message`: the current message object for that section (deep-cloned as edits apply).
+  - `EditableChatRequest.messages`: recomputed send payload derived from non-deleted `sections[*].message`.
+- Webview:
+  - Each `SectionCard` toggles between:
+    - Preview mode: rendered Markdown + lightweight tool-call summary.
+    - Edit mode: `RawStructureEditor` tree for that message (keys/arrays/objects, leaf editing).
+  - Leaf edits post `{ sectionId, path, value }` to the provider.
+- Provider + service:
+  - `LiveRequestEditorProvider` resolves `{ sectionId, path }` to a target leaf on the request and calls `LiveRequestEditorService.updateLeafByPath(...)`.
+  - `LiveRequestEditorService` applies the leaf edit, records undo/redo (`EditHistory`), then `recomputeMessages(...)` to keep `messages[]` and card previews consistent.
+
+Reference details and Raw types: `.kiro/specs/cli-history-replay/Live-Request-Editor-Raw-Payload-Schema.md`.
+
 ## Current Architecture (CLI sessions)
 
 Key components involved in Copilot CLI chat sessions:

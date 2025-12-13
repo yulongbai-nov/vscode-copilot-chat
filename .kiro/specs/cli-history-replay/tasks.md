@@ -46,14 +46,14 @@
   - [x] 8.4 Apply a distinct label (e.g. `Replay from Live Request Editor · <shortId>`) via `CopilotCLIChatSessionItemProvider.setCustomLabel(...)`, refresh the CLI sessions list, and open the new CLI session in the chat editor.  
   - [x] 8.5 Add unit coverage to validate that the Live Request Editor webview issues the correct command id, and that the CLI replay-from-replay path correctly renders simple system/user/assistant payload messages into seeded CLI history for both replay-key and session-key invocations.  
 
-- [ ] 9. Payload diff helper for Live Request Editor replay  
-  - [ ] 9.1 Add a new command id (e.g. `github.copilot.liveRequestEditor.showReplayPayloadDiff`) in `package.json` that is not directly visible in menus, but is invokable from the Live Request Editor webview with a `LiveRequestReplayKey` or `{ sessionId, location }` argument.  
-  - [ ] 9.2 Implement a helper in `src/extension/prompt/vscode-node/liveRequestEditorProvider.ts` (or a small dedicated module) that, given the current `EditableChatRequest` and/or `LiveRequestReplaySnapshot`, constructs:
+- [x] 9. Payload diff helper for Live Request Editor replay  
+  - [x] 9.1 Add a new command id (e.g. `github.copilot.liveRequestEditor.showReplayPayloadDiff`) in `package.json` that is not directly visible in menus, but is invokable from the Live Request Editor webview with a `LiveRequestReplayKey` or `{ sessionId, location }` argument.  
+  - [x] 9.2 Implement a helper in `src/extension/prompt/vscode-node/liveRequestEditorProvider.ts` (or a small dedicated module) that, given the current `EditableChatRequest` and/or `LiveRequestReplaySnapshot`, constructs:
     - A “before” payload document by serializing `originalMessages` (or equivalent Raw source) to pretty-printed JSON, and  
     - An “after” payload document by serializing the edited payload used for replay (the same `sendResult.messages` that `buildReplayForRequest(...)` relies on), using stable key ordering and indentation.  
-  - [ ] 9.3 Wire the new command to open a VS Code diff editor over two untitled, read-only text documents labelled “Original payload” and “Edited payload”, with a descriptive diff title (e.g. `Live Request Editor · Payload diff · <shortId>`).  
-  - [ ] 9.4 Extend the Live Request Editor webview replay metadata row in `src/extension/prompt/webview/vscode/liveRequestEditor/main.tsx` with a “Show payload diff” button next to “Replay edited prompt in CLI session”, which posts a message back to the provider to invoke the diff command for the current request/replay.  
-  - [ ] 9.5 Add targeted unit tests (or lightweight integration tests) that:
+  - [x] 9.3 Wire the new command to open a VS Code diff editor over two virtual, read-only text documents labelled “Original payload” and “Edited payload”, with a descriptive diff title (e.g. `Live Request Editor · Payload diff · <shortId>`).  
+  - [x] 9.4 Extend the Live Request Editor webview replay metadata row in `src/extension/prompt/webview/vscode/liveRequestEditor/main.tsx` with a “Show payload diff” button next to “Replay edited prompt in CLI session”, which posts a message back to the provider to invoke the diff command for the current request/replay.  
+  - [x] 9.5 Add targeted unit tests (or lightweight integration tests) that:
     - Verify the diff command builds the expected JSON strings for a simple request with one or two edited messages, and  
     - Assert that the “before” payload matches `originalMessages` while the “after” payload reflects edited `messages`, without mutating any underlying state.  
 
@@ -61,15 +61,21 @@
   - [x] 10.1 Add a draggable webview view `github.copilot.liveRequestPayload` that renders the active request `messages[]` as pretty JSON and supports copy/open-in-editor.
   - [x] 10.2 Wire the Live Request Editor provider to notify the payload view when the active session changes.
 
-- [ ] 11. LRE follow-mode binding + persistence  _Requirements: 10.1–10.4, 11.1–11.3_
+- [x] 11. LRE follow-mode binding + persistence  _Requirements: 10.1–10.4, 11.1–11.3_
   - [x] 11.1 Add follow-mode semantics (manual selection disables follow; follow enables newest-wins) and visual flash cues.
   - [x] 11.2 Fix webview event wiring so the dropdown selection reliably propagates to provider state (no stale sections/payload).
   - [x] 11.3 Persist follow-mode + last manual selection in the LRE webview state (`acquireVsCodeApi().setState`) and restore on reload.
   - [x] 11.4 Persist intercepted sessions across restart in `LiveRequestEditorService` (`workspaceState`) and rehydrate on activation.
 
-- [ ] 12. Open selected conversation in chat  _Requirements: 12.1–12.3_
+- [x] 12. Open selected conversation in chat  _Requirements: 12.1–12.3_
   - [x] 12.1 Capture `ChatContext.chatSessionContext.chatSessionItem.resource` when available and store it on `EditableChatRequestMetadata`.
   - [x] 12.2 Add “Open in chat” button next to the LRE conversation dropdown that opens the stored session resource, or shows a fallback message.
 
-- [ ] 13. Declare session participants in package.json  _Requirements: 13.1–13.2_
+- [x] 13. Declare session participants in package.json  _Requirements: 13.1–13.2_
   - [x] 13.1 Add `contributes.chatParticipants` entries for session-backed participants created at runtime (e.g. `copilotcli`, `copilot-cloud-agent`, `claude-code`, `copilot-live-replay`, `copilot-live-replay-fork`).
+
+- [x] 14. LRE raw-structure leaf editor (messages[])  _Requirements: 14.1–14.5, 15.1–15.5_
+  - [x] 14.1 Add a per-card raw-structure tree editor in `src/extension/prompt/webview/vscode/liveRequestEditor/main.tsx`.
+  - [x] 14.2 Wire leaf-edit messages (`editLeaf`, `undoLeafEdit`, `redoLeafEdit`) through `src/extension/prompt/vscode-node/liveRequestEditorProvider.ts`.
+  - [x] 14.3 Implement leaf editing + undo/redo history in `src/extension/prompt/node/liveRequestEditorService.ts`.
+  - [x] 14.4 Add unit coverage for leaf edits in `src/extension/prompt/node/test/liveRequestEditorService.spec.ts`.
