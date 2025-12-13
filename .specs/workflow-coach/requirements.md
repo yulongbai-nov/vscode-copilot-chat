@@ -21,6 +21,7 @@ This feature introduces a **Workflow Coach** command that inspects the repo’s 
 1.1 WHEN invoked from a git worktree, THE Workflow_Coach SHALL print the current branch and change counts (staged/unstaged/untracked).  
 1.2 THE Workflow_Coach SHALL print a Detected State and Suggested Next State.  
 1.3 THE Workflow_Coach SHALL exit with code `0` for normal operation and non-zero only for operational failures (e.g. not a git repo).  
+1.4 THE Workflow_Coach SHALL be advisory-only and SHALL NOT modify the repository state (no commits, no pushes, no branch changes).  
 
 ### Requirement 2 — Accept user request input
 
@@ -40,6 +41,7 @@ This feature introduces a **Workflow Coach** command that inspects the repo’s 
 
 3.1 WHEN `gh` is installed and authenticated, THE Workflow_Coach SHOULD detect whether the current branch has an open PR and print the PR URL if present.  
 3.2 WHEN `gh` is missing or unauthenticated, THE Workflow_Coach SHALL continue and SHALL not fail the run.  
+3.3 THE Workflow_Coach SHALL support a `--no-gh` option that disables PR lookups for faster/offline runs.  
 
 ### Requirement 4 — Recommend actions (commands)
 
@@ -52,6 +54,7 @@ This feature introduces a **Workflow Coach** command that inspects the repo’s 
 4.3 WHEN commits are ahead of upstream, THE Workflow_Coach SHALL recommend pushing.  
 4.4 WHEN on a non-main branch without an open PR (best-effort), THE Workflow_Coach SHOULD recommend opening a PR.  
 4.5 WHEN the diff spans multiple coarse scopes (e.g. code + docs + CI), THE Workflow_Coach SHOULD recommend splitting work using `git worktree` (preferred) or stash/cherry-pick.  
+4.6 THE Workflow_Coach SHOULD remind the recommended branch naming format (`<type>/<scope>`) and commit subject format (`<area>: <summary>`) when suggesting next actions.  
 
 ### Requirement 5 — Machine-readable output
 
@@ -60,4 +63,3 @@ This feature introduces a **Workflow Coach** command that inspects the repo’s 
 #### Acceptance Criteria
 
 5.1 THE Workflow_Coach SHALL support `--json` to output a JSON object containing detected state, suggested next state, warnings, and next actions.  
-

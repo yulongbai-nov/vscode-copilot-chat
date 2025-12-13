@@ -18,10 +18,12 @@ The intent is to move the operational checklist out of prose and into an executa
 - Make “quad verification” and spec-first steps harder to forget (reminders, not enforcement).
 - Detect common failure modes: committing on `main`, unpushed commits, missing PR, mixed scopes (docs + code + CI), and stale branch base.
 - Support both **human-readable** and **machine-readable** output.
+- Keep the MVP fast enough to run at workflow checkpoints (not every turn).
 
 ### Non-goals
 
 - No automatic execution of git/CI commands (only recommendations).
+- No enforcement/blocking (workflow issues never cause non-zero exits).
 - No perfect semantic classification of “feature vs fix” from diffs.
 - No network dependency; GitHub PR discovery is best-effort and optional.
 
@@ -34,6 +36,20 @@ The intent is to move the operational checklist out of prose and into an executa
   - Scope drift is handled ad hoc (stash/rebase/cherry-pick).
 
 ## Proposed Architecture
+
+### How it fits into the “meta workflow”
+
+- **Source of truth remains**: system/developer/user instructions + `agent-prompt.md` + `.specs/...`.
+- **Workflow Coach is advisory**: it helps confirm the next step you *already intend* to take is consistent with the workflow.
+- **When to run (to avoid slowing work down)**:
+  - Recommended checkpoints (high value / low frequency):
+    - before committing
+    - before pushing
+    - before opening a PR
+    - when switching scope or renaming branches
+    - after rebases/merges that may affect PR state
+  - Avoid running on every edit/turn; it is intended as a “pre-flight checklist”.
+  - Provide a `--no-gh` / offline mode so PR checks can be skipped when speed matters.
 
 ### CLI surface
 
@@ -56,6 +72,7 @@ The intent is to move the operational checklist out of prose and into an executa
 2. **Request classifier (lightweight)**
    - Uses the input query to infer a probable scope type (`fix`, `feature`, `docs`, `ci`, `chore`) when possible.
    - Always allows explicit override (`--type fix`, etc.).
+   - MVP expectation: inference is best-effort and primarily used to print **naming reminders**, not to auto-drive decisions.
 
 3. **Rule engine**
    - A deterministic set of rules that produces:
@@ -170,4 +187,3 @@ flowchart TD
 - Interactive mode that can generate a suggested branch name from the query.
 - “Plan-mode” integration: emit a suggested `update_plan` skeleton for the agent.
 - Optional enforcement hooks (pre-push) once the rule set stabilizes.
-
