@@ -70,6 +70,8 @@ This MVP keeps the existing **section card** UI as the primary reading surface, 
   - Each `SectionCard` toggles between:
     - Preview mode: rendered Markdown + lightweight tool-call summary.
     - Edit mode: `RawStructureEditor` tree for that message (keys/arrays/objects, leaf editing).
+  - Edit affordance lives in the card action toolbar (hover/focus), and is only available when Prompt Interception is in an editable mode.
+  - The raw tree uses a fresh cycle-detection set per render so stable JSON graphs never degrade to `[circular]` after Apply/Undo/Redo.
   - Leaf edits post `{ sectionId, path, value }` to the provider.
 - Provider + service:
   - `LiveRequestEditorProvider` resolves `{ sectionId, path }` to a target leaf on the request and calls `LiveRequestEditorService.updateLeafByPath(...)`.

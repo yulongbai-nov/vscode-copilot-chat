@@ -171,11 +171,13 @@ The feature is intended as a sample / internal tool to explore “native-parity�
 
 #### Acceptance Criteria
 
-1. WHEN Prompt Interception is in an editable mode (Pause & review / Auto-apply capture), THE system SHALL surface an edit affordance on message cards that toggles an “advanced” raw-structure editor for that single card.
+1. WHEN Prompt Interception is in an editable mode (Pause & review / Auto-apply), THE system SHALL surface an edit affordance on message cards via the card action toolbar (visible on hover or focus) that toggles an “advanced” raw-structure editor for that single card.
 2. WHEN the raw-structure editor is active for a message card, THE system SHALL render a nested, expandable tree view of the underlying `Raw.ChatMessage` object for that message (keys as headers, objects/arrays as groups).
 3. WHEN a node is a scalar leaf value (string/number/boolean/null), THE system SHALL allow editing that value and applying it back to the underlying request.
 4. WHEN the message card exits raw-structure edit mode, THEN the card SHALL return to the standard rendered preview.
 5. THE system SHALL NOT require switching to the dedicated Raw Payload view to perform these message edits (the dedicated view remains a read-only debug surface).
+6. WHEN the user changes the selected conversation (dropdown) or toggles Auto-follow, THEN the edit affordance SHALL remain correctly gated (available via hover/focus in editable modes; hidden in “Send normally”).
+7. WHEN the raw-structure tree re-renders (e.g. after Apply/Undo/Redo), THEN it SHALL NOT show `[circular]` for non-circular payloads.
 
 ### Requirement 15 – Surgical fidelity for message edits (one-to-one mapping)
 

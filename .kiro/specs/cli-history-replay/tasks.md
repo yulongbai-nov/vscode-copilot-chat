@@ -74,8 +74,9 @@
 - [x] 13. Declare session participants in package.json  _Requirements: 13.1–13.2_
   - [x] 13.1 Add `contributes.chatParticipants` entries for session-backed participants created at runtime (e.g. `copilotcli`, `copilot-cloud-agent`, `claude-code`, `copilot-live-replay`, `copilot-live-replay-fork`).
 
-- [x] 14. LRE raw-structure leaf editor (messages[])  _Requirements: 14.1–14.5, 15.1–15.5_
-  - [x] 14.1 Add a per-card raw-structure tree editor in `src/extension/prompt/webview/vscode/liveRequestEditor/main.tsx`.
+- [x] 14. LRE raw-structure leaf editor (messages[])  _Requirements: 14.1–14.7, 15.1–15.5_
+  - [x] 14.1 Add `RawStructureEditor` in `src/extension/prompt/webview/vscode/liveRequestEditor/rawStructureEditor.ts` and render it from `SectionCard` in `src/extension/prompt/webview/vscode/liveRequestEditor/main.tsx`.
   - [x] 14.2 Wire leaf-edit messages (`editLeaf`, `undoLeafEdit`, `redoLeafEdit`) through `src/extension/prompt/vscode-node/liveRequestEditorProvider.ts`.
   - [x] 14.3 Implement leaf editing + undo/redo history in `src/extension/prompt/node/liveRequestEditorService.ts`.
   - [x] 14.4 Add unit coverage for leaf edits in `src/extension/prompt/node/test/liveRequestEditorService.spec.ts`.
+  - [x] 14.5 Ensure raw-structure tree re-renders never show false `[circular]` markers; add a focused unit test in `src/extension/prompt/webview/vscode/liveRequestEditor/rawStructureEditor.spec.ts`.  _Requirements: 14.7_

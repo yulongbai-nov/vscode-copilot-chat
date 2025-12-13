@@ -408,6 +408,15 @@ Targeted unit coverage for this path:
     - Negative path:
       - When no snapshot can be obtained, no session is created and `vscode.window.showInformationMessage('Nothing to replay for this request.')` is called.
 
+Repo verification notes (Dec 2025):
+
+- `npm run test:unit` currently has upstream timeouts (known flaky suites). Recent failures include:
+  - `src/platform/notebook/test/node/alternativeContent.spec.ts`
+  - `src/extension/prompts/node/agent/test/agentPrompt.spec.tsx`
+  - `src/extension/prompts/node/agent/test/parseAttachments.spec.ts`
+  - `src/extension/prompts/node/agent/test/summarization.spec.tsx`
+  - `src/extension/typescriptContext/serverPlugin/src/node/test/simple.spec.ts`
+
 This completes the “fork from edited prompt into a native Copilot CLI session” story: the forked session’s history matches what the user saw in the Live Replay payload view, and subsequent turns run through the standard Copilot CLI session / JSONL pipeline.
 
 ---
