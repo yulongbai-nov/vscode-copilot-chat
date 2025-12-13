@@ -41,7 +41,7 @@ type SectionActionIconType = 'edit' | 'close' | 'delete' | 'pin' | 'pinFilled' |
 
 type LiveRequestEditorMode = 'off' | 'interceptOnce' | 'interceptAlways' | 'autoOverride';
 
-type InspectorExtraSection = 'requestOptions' | 'telemetry' | 'rawRequest';
+type InspectorExtraSection = 'telemetry';
 
 interface EditableChatRequestMetadata {
 	requestId?: string;
@@ -197,7 +197,7 @@ function formatNumber(value?: number): string {
 	return Number(value).toLocaleString();
 }
 
-const EXTRA_SECTION_VALUES: InspectorExtraSection[] = ['requestOptions', 'telemetry', 'rawRequest'];
+const EXTRA_SECTION_VALUES: InspectorExtraSection[] = ['telemetry'];
 
 const MODE_OPTIONS: Array<{ label: string; mode: LiveRequestEditorMode; description: string }> = [
 	{ label: 'Send normally', mode: 'off', description: 'Send requests immediately.' },
