@@ -45,6 +45,8 @@ npm run workflow:coach -- --query "…" --no-persist
 - A “Detected state” + “Suggested next state”
 - Warnings + suggested commands (advisory)
 
+If the phase cannot be inferred (e.g. clean tree with no previous phase), the coach will emit a reminder to explicitly decide whether you are still refining the spec (design) or executing tasks (implementation).
+
 ## Spec cross-checks (deterministic)
 
 When possible, Workflow Coach infers an “Active spec” and warns on common spec-first drift:
