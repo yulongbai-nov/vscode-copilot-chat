@@ -1621,7 +1621,7 @@ const App: React.FC = () => {
 						spellCheck={false}
 					/>
 					<div className='snapshot-actions'>
-						<vscode-button appearance='primary' onClick={applySnapshot} disabled={!request}>
+						<vscode-button appearance='primary' onClick={applySnapshot}>
 							Apply to prompt
 						</vscode-button>
 						{snapshotError && <span className='error-text'>{snapshotError}</span>}
