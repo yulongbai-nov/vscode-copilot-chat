@@ -9,12 +9,12 @@ export type GraphitiPromotionScope = 'workspace' | 'user';
 export function formatGraphitiPromotionEpisode(kind: GraphitiPromotionKind, scope: GraphitiPromotionScope, text: string, now: Date = new Date()): string {
 	const cleanedText = text.trim();
 	return [
-		'Copilot Chat Memory',
-		`kind: ${kind}`,
+		`<graphiti_episode kind="${kind}">`,
+		'source: copilot-chat',
 		`scope: ${scope}`,
 		`timestamp: ${now.toISOString()}`,
-		'---',
+		'content:',
 		cleanedText,
+		'</graphiti_episode>',
 	].join('\n');
 }
-

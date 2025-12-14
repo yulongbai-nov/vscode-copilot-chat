@@ -12,11 +12,12 @@ suite('Graphiti promotion helpers', () => {
 	test('formatGraphitiPromotionEpisode uses stable header + trimmed content', () => {
 		const now = new Date('2025-01-02T03:04:05.000Z');
 		const content = formatGraphitiPromotionEpisode('decision', 'workspace', '  hello world \n', now);
-		assert.ok(content.includes('Copilot Chat Memory'));
-		assert.ok(content.includes('kind: decision'));
+		assert.ok(content.startsWith('<graphiti_episode kind="decision">'));
+		assert.ok(content.includes('source: copilot-chat'));
 		assert.ok(content.includes('scope: workspace'));
 		assert.ok(content.includes(`timestamp: ${now.toISOString()}`));
-		assert.ok(content.endsWith('hello world'));
+		assert.ok(content.includes('\ncontent:\nhello world\n'));
+		assert.ok(content.endsWith('</graphiti_episode>'));
 	});
 
 	test('computeWorkspaceKey sorts and joins folder URIs', () => {

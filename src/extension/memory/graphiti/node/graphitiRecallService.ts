@@ -78,41 +78,51 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 			}
 		};
 
-		const remaining = () => Math.max(0, config.maxFacts - results.length);
+		const searchTargets: Array<{ scope: GraphitiRecalledFact['scope']; groupId: string }> = [];
 
-		if ((config.scopes === 'session' || config.scopes === 'both' || config.scopes === 'all') && args.sessionId && remaining() > 0) {
-			const groupId = computeGraphitiGroupId('session', config.groupIdStrategy, args.sessionId);
-			try {
-				const res = await client.search({ query, group_ids: [groupId], max_facts: remaining() });
-				addFacts('session', res.facts);
-			} catch (err) {
-				this._logService.debug(`Graphiti recall failed for session scope.`);
-			}
+		if ((config.scopes === 'session' || config.scopes === 'both' || config.scopes === 'all') && args.sessionId) {
+			searchTargets.push({
+				scope: 'session',
+				groupId: computeGraphitiGroupId('session', config.groupIdStrategy, args.sessionId),
+			});
 		}
 
-		if ((config.scopes === 'workspace' || config.scopes === 'both' || config.scopes === 'all') && remaining() > 0) {
+		if (config.scopes === 'workspace' || config.scopes === 'both' || config.scopes === 'all') {
 			const workspaceFolders = this._workspaceService.getWorkspaceFolders().map(u => u.toString());
 			const workspaceKey = computeWorkspaceKey(workspaceFolders);
-			const groupId = computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKey);
-			try {
-				const res = await client.search({ query, group_ids: [groupId], max_facts: remaining() });
-				addFacts('workspace', res.facts);
-			} catch (err) {
-				this._logService.debug(`Graphiti recall failed for workspace scope.`);
+			searchTargets.push({
+				scope: 'workspace',
+				groupId: computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKey),
+			});
+		}
+
+		if (config.scopes === 'all') {
+			const userScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
+			if (userScopeKey) {
+				searchTargets.push({
+					scope: 'user',
+					groupId: computeGraphitiGroupId('user', config.groupIdStrategy, userScopeKey),
+				});
 			}
 		}
 
-		if (config.scopes === 'all' && remaining() > 0) {
-			const userScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
-			if (userScopeKey) {
-				const groupId = computeGraphitiGroupId('user', config.groupIdStrategy, userScopeKey);
-				try {
-					const res = await client.search({ query, group_ids: [groupId], max_facts: remaining() });
-					addFacts('user', res.facts);
-				} catch (err) {
-					this._logService.debug(`Graphiti recall failed for user scope.`);
-				}
+		const settled = await Promise.allSettled(
+			searchTargets.map(({ groupId }) => client.search({ query, group_ids: [groupId], max_facts: config.maxFacts }))
+		);
+
+		for (let i = 0; i < searchTargets.length; i++) {
+			if (results.length >= config.maxFacts) {
+				break;
 			}
+
+			const { scope } = searchTargets[i];
+			const result = settled[i];
+			if (result?.status === 'fulfilled') {
+				addFacts(scope, result.value.facts);
+				continue;
+			}
+
+			this._logService.debug(`Graphiti recall failed for ${scope} scope.`);
 		}
 
 		this._logService.trace(`Graphiti recall produced ${results.length} fact(s).`);
