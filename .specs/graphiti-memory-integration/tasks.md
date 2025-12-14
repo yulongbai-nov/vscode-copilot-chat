@@ -11,7 +11,7 @@
 - [x] 7. Add consent flow + commands (test + promote) _Requirements: 1.4, 4.3, 5.1, 5.2, 5.3_
 - [x] 8. Add tests (unit + optional real-service E2E) _Requirements: 2.2, 2.3, 3.3, 3.4_
 - [x] 9. Add docs + end-to-end demo guide _Requirements: 5.1_
-- [ ] 10. Run quad verification and ship PR _Requirements: all_
+- [x] 10. Run quad verification and ship PR _Requirements: all_
 
 ## Implementation Notes
 
@@ -34,5 +34,6 @@
 ## Current Status Summary
 
 - Phase: implementation.
-- Completed: ingestion + recall + promotion, demo guide, and tests.
-- Next: run quad verification, commit spec updates, push branch, open/update PR.
+- Completed: ingestion + recall + promotion, demo guide, tests, and spec alignment.
+- PR: https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51
+- Next: address review feedback and merge.
