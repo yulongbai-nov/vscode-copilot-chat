@@ -635,6 +635,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}
 
 		const replayResource = this._currentReplay ? buildReplayResource(this._currentReplay).toString() : undefined;
+		const activeKey = this._activeSessionKey
+			?? (this._currentRequest ? this._toCompositeKey(this._currentRequest.sessionId, this._currentRequest.location) : undefined);
 
 		this._view.webview.postMessage({
 			type: 'stateUpdate',
@@ -643,7 +645,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			replayUri: replayResource,
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
-			activeSessionKey: this._activeSessionKey,
+			activeSessionKey: activeKey,
 			extraSections: this._extraSections,
 			replayEnabled: this._liveRequestEditorService.isReplayEnabled(),
 			followLatest: this._followLatest
