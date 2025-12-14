@@ -2489,15 +2489,20 @@
 				"command": "github.copilot.cloud.resetWorkspaceConfirmations",
 				"title": "%github.copilot.command.resetCloudAgentWorkspaceConfirmations%"
 			},
-			{
-				"command": "github.copilot.cloud.sessions.openInBrowser",
-				"title": "%github.copilot.command.openCopilotAgentSessionsInBrowser%",
-				"icon": "$(link-external)"
-			},
-			{
-				"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
-				"title": "%github.copilot.command.closeChatSessionPullRequest.title%"
-			},
+				{
+					"command": "github.copilot.cloud.sessions.openInBrowser",
+					"title": "%github.copilot.command.openCopilotAgentSessionsInBrowser%",
+					"icon": "$(link-external)"
+				},
+				{
+					"command": "github.copilot.cloud.sessions.refresh",
+					"title": "%github.copilot.command.refreshCloudAgentSessions%",
+					"icon": "$(refresh)"
+				},
+				{
+					"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
+					"title": "%github.copilot.command.closeChatSessionPullRequest.title%"
+				},
 			{
 				"command": "github.copilot.chat.openSuggestionsPanel",
 				"title": "Open Completions Panel",
@@ -4500,14 +4505,18 @@
 					"command": "github.copilot.cli.sessions.resumeInTerminal",
 					"when": "false"
 				},
-				{
-					"command": "github.copilot.cloud.sessions.openInBrowser",
-					"when": "false"
-				},
-				{
-					"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
-					"when": "false"
-				},
+					{
+						"command": "github.copilot.cloud.sessions.openInBrowser",
+						"when": "false"
+					},
+					{
+						"command": "github.copilot.cloud.sessions.refresh",
+						"when": "false"
+					},
+					{
+						"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
+						"when": "false"
+					},
 				{
 					"command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges",
 					"when": "false"
