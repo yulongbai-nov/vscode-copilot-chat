@@ -11,9 +11,20 @@
 - [x] 4. Add unit tests for rule engine (mock git/gh collectors) _Requirements: 4, 5_
 - [x] 5. Update `agent-prompt.md` to reference the coach at decision points (shorten prose) _Requirements: 4_
 - [x] 6. Document usage in a short `docs/workflow-coach.md` _Requirements: 1–5_
+- [x] 7. Add local-only per-branch persisted state _Requirements: 6_
+  - [x] 7.1 Store state under git common dir (worktree-safe)
+  - [x] 7.2 Read prior state and surface “previous run” summary
+  - [x] 7.3 Add `--no-persist` to disable reading/writing state
+- [x] 8. Add deterministic spec cross-check warnings _Requirements: 7_
+  - [x] 8.1 Infer expected Active Spec from branch naming
+  - [x] 8.2 Infer Active Spec from `.specs/<name>/...` working changes
+  - [x] 8.3 Warn on mismatch / missing core spec docs / code changes without `.specs` changes
+- [x] 9. Extend unit tests for new state/spec rules _Requirements: 6, 7_
+- [x] 10. Update docs to reflect persistence + spec cross-check behavior _Requirements: 6, 7_
 
 ## Implementation Notes
 
-- Keep the MVP purely advisory (no automatic changes).
+- Keep the coach advisory: no automatic git operations, and no tracked-file edits.
+- Persisted state must be local-only (git common dir) and best-effort.
 - `gh` integration must be optional and fail-open.
 - Prefer a small, deterministic rule engine over ML/heuristics.

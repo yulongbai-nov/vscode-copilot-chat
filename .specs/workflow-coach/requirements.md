@@ -4,11 +4,15 @@
 
 This feature introduces a **Workflow Coach** command that inspects the repo’s current state and the current user request, then prints actionable reminders about the spec-first workflow, branching, verification, and PR hygiene.
 
+The coach can also persist **local-only** per-branch metadata (under the git common directory) so it can provide better reminders across restarts and git worktrees without modifying tracked files.
+
 ## Glossary
 
 - **Workflow Coach** — A CLI script that produces workflow reminders and next-step recommendations.
 - **Detected State** — The script’s classification of the current working situation (dirty main, unpushed commits, etc.).
 - **Suggested Next State** — A short description of the next “good” situation (clean branch, PR opened, etc.).
+- **Active Spec** — The spec folder (`.specs/<name>/`) the current work is expected to correspond to.
+- **Persisted State** — Local-only metadata saved by the coach (e.g. last run time, last inferred Active Spec), stored under the git common directory to work across git worktrees.
 
 ## Requirements
 
@@ -21,7 +25,7 @@ This feature introduces a **Workflow Coach** command that inspects the repo’s 
 1.1 WHEN invoked from a git worktree, THE Workflow_Coach SHALL print the current branch and change counts (staged/unstaged/untracked).  
 1.2 THE Workflow_Coach SHALL print a Detected State and Suggested Next State.  
 1.3 THE Workflow_Coach SHALL exit with code `0` for normal operation and non-zero only for operational failures (e.g. not a git repo).  
-1.4 THE Workflow_Coach SHALL be advisory-only and SHALL NOT modify the repository state (no commits, no pushes, no branch changes).  
+1.4 THE Workflow_Coach SHALL be advisory-only and SHALL NOT modify git history or tracked files (no commits, no pushes, no branch changes).  
 
 ### Requirement 2 — Accept user request input
 
@@ -63,3 +67,25 @@ This feature introduces a **Workflow Coach** command that inspects the repo’s 
 #### Acceptance Criteria
 
 5.1 THE Workflow_Coach SHALL support `--json` to output a JSON object containing detected state, suggested next state, warnings, and next actions.  
+
+### Requirement 6 — Persist local-only per-branch metadata
+
+**User Story:** As a developer/agent, I want the coach to remember basic context across runs so that it can detect drift and give better reminders across restarts and git worktrees.
+
+#### Acceptance Criteria
+
+6.1 BY DEFAULT, THE Workflow_Coach SHALL persist per-branch metadata under the git common directory so it is shared across git worktrees.  
+6.2 THE persisted metadata SHALL NOT modify tracked files and SHALL NOT change git history.  
+6.3 THE Workflow_Coach SHALL support `--no-persist` to skip reading/writing persisted metadata.  
+6.4 WHEN prior metadata exists for the current branch, THE Workflow_Coach SHOULD surface a short “previous run” summary (e.g. timestamp, last inferred Active Spec, last Detected State).  
+
+### Requirement 7 — Deterministic spec cross-check (“spec drift” warnings)
+
+**User Story:** As a developer/agent, I want the coach to warn when my code changes don’t match the expected spec folder so that I don’t silently drift away from spec-first workflow.
+
+#### Acceptance Criteria
+
+7.1 WHEN the branch name matches `<type>/<spec>` (or `<type>/<spec>/...`), THE Workflow_Coach SHOULD infer an expected Active Spec name from the branch.  
+7.2 WHEN the working changes touch a single `.specs/<name>/...` subtree, THE Workflow_Coach SHOULD treat that as the Active Spec and cross-check it against the branch-inferred spec (if any).  
+7.3 WHEN an expected Active Spec is inferred and code/build/CI changes exist without any `.specs/...` changes in the current working changes, THE Workflow_Coach SHOULD warn that the spec may be stale.  
+7.4 WHEN an expected Active Spec is inferred but `.specs/<name>/{design,requirements,tasks}.md` are missing, THE Workflow_Coach SHOULD warn that the spec is incomplete.  
