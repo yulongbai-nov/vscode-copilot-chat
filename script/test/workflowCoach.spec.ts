@@ -23,6 +23,8 @@ function createContext(overrides: Partial<WorkflowContext> = {}): WorkflowContex
 			...overrides.git,
 		},
 		gh: overrides.gh,
+		previous: overrides.previous,
+		spec: overrides.spec,
 	};
 }
 
@@ -103,6 +105,54 @@ suite('Workflow Coach', () => {
 			const mixedScopeWarning = result.warnings.find(w => w.id === 'mixed-scope');
 			expect(mixedScopeWarning?.why).toContain('docs');
 			expect(mixedScopeWarning?.why).toContain('specs');
+		});
+
+		test('warns when spec inferred from branch mismatches spec inferred from changes', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					spec: {
+						inferredFromBranch: 'expected-spec',
+						inferredFromChanges: 'actual-spec',
+						active: 'actual-spec',
+						hasRequiredDocs: true,
+						hasSpecChanges: true,
+					},
+				}),
+			);
+
+			expect(result.warnings.some(w => w.id === 'spec-mismatch')).toBe(true);
+		});
+
+		test('warns when active spec is missing core docs', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					spec: {
+						active: 'workflow-coach',
+						hasRequiredDocs: false,
+						hasSpecChanges: true,
+					},
+				}),
+			);
+
+			expect(result.warnings.some(w => w.id === 'spec-incomplete')).toBe(true);
+		});
+
+		test('warns when code changes exist without any .specs changes', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					git: {
+						unstagedFiles: 1,
+						changedPaths: ['src/a.ts'],
+					},
+					spec: {
+						active: 'workflow-coach',
+						hasRequiredDocs: true,
+						hasSpecChanges: false,
+					},
+				}),
+			);
+
+			expect(result.warnings.some(w => w.id === 'spec-not-updated')).toBe(true);
 		});
 
 		test('recommends opening PR when authenticated and missing', () => {

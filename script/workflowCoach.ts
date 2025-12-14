@@ -4,16 +4,31 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { evaluateWorkflow, inferWorkType, type CoachResult, type WorkflowContext } from './workflowCoachCore.ts';
+import { evaluateWorkflow, inferWorkType, type CoachResult, type WorkType, type WorkflowContext } from './workflowCoachCore.ts';
 
 type CliArgs = {
 	query?: string;
 	type?: string;
 	json?: boolean;
 	'no-gh'?: boolean;
+	'no-persist'?: boolean;
 	help?: boolean;
+};
+
+type PersistedBranchState = {
+	lastRunAt?: string;
+	lastWorkType?: WorkType;
+	lastActiveSpec?: string;
+	lastDetectedState?: string;
+};
+
+type PersistedStateFile = {
+	version: 1;
+	branches: Record<string, PersistedBranchState>;
 };
 
 function main() {
@@ -23,18 +38,32 @@ function main() {
 		return;
 	}
 
+	const { repoRoot, gitCommonDir } = collectRepoPaths();
 	const git = collectGitState();
 	const workType = inferWorkType(args.query, args.type);
 	const gh = args['no-gh'] ? { hasAuth: false } : collectGitHubState(git.branch);
+
+	const previous = args['no-persist'] ? undefined : loadPersistedBranchState(gitCommonDir, git.branch);
+	const spec = inferSpecContext(repoRoot, git, previous);
 
 	const context: WorkflowContext = {
 		query: args.query,
 		workType,
 		git,
 		gh,
+		previous,
+		spec,
 	};
 
 	const result = evaluateWorkflow(context, { defaultBranch: 'main' });
+	if (!args['no-persist']) {
+		savePersistedBranchState(gitCommonDir, git.branch, {
+			lastRunAt: new Date().toISOString(),
+			lastWorkType: workType,
+			lastActiveSpec: spec?.active,
+			lastDetectedState: result.detectedState,
+		});
+	}
 	if (args.json) {
 		process.stdout.write(`${JSON.stringify({ context, result }, null, 2)}\n`);
 		return;
@@ -51,6 +80,7 @@ function parseCliArgs(argv: string[]): CliArgs {
 			type: { type: 'string' },
 			json: { type: 'boolean' },
 			'no-gh': { type: 'boolean' },
+			'no-persist': { type: 'boolean' },
 			help: { type: 'boolean' },
 		},
 		allowPositionals: false,
@@ -70,18 +100,36 @@ Options:
   --query   Current user request (advisory)
   --type    Explicit work type: feature|fix|docs|ci|chore|refactor|test|perf
   --no-gh   Skip GitHub PR lookup (faster/offline)
+  --no-persist  Skip reading/writing local per-branch metadata
   --json    Emit machine-readable JSON
   --help    Show this help
 `);
 }
 
-function collectGitState(): WorkflowContext['git'] {
+function collectRepoPaths(): { repoRoot: string; gitCommonDir: string } {
 	const repoRoot = execGit(['rev-parse', '--show-toplevel']);
 	if (!repoRoot) {
 		process.stderr.write('workflow-coach: not a git repository\n');
 		process.exit(2);
 	}
 
+	const gitCommonDirRaw = execGit(['rev-parse', '--git-common-dir']);
+	const gitCommonDir = resolvePath(repoRoot, gitCommonDirRaw || path.join(repoRoot, '.git'));
+
+	return { repoRoot, gitCommonDir };
+}
+
+function resolvePath(baseDir: string, maybeRelativePath: string): string {
+	if (!maybeRelativePath) {
+		return baseDir;
+	}
+	if (path.isAbsolute(maybeRelativePath)) {
+		return maybeRelativePath;
+	}
+	return path.resolve(baseDir, maybeRelativePath);
+}
+
+function collectGitState(): WorkflowContext['git'] {
 	const status = execGit(['status', '-sb', '--porcelain=v1']);
 	const lines = status.split(/\r?\n/).filter(Boolean);
 	const header = lines[0] ?? '## (unknown)';
@@ -101,6 +149,156 @@ function collectGitState(): WorkflowContext['git'] {
 		behind: parsed.behind,
 		changedPaths,
 	};
+}
+
+function inferSpecContext(
+	repoRoot: string,
+	git: WorkflowContext['git'],
+	previous: WorkflowContext['previous'] | undefined,
+): WorkflowContext['spec'] | undefined {
+	const inferredFromBranch = inferSpecFromBranch(git.branch);
+	const inferredFromChanges = inferSpecFromChanges(git.changedPaths);
+	const hasSpecChanges = git.changedPaths.some(p => p.startsWith('.specs/'));
+
+	const active = inferredFromChanges ?? inferredFromBranch ?? previous?.lastActiveSpec;
+	if (!active && !hasSpecChanges && !inferredFromBranch && !inferredFromChanges) {
+		return undefined;
+	}
+
+	const hasRequiredDocs = active ? hasRequiredSpecDocs(repoRoot, active) : undefined;
+
+	return {
+		inferredFromBranch,
+		inferredFromChanges,
+		active,
+		hasRequiredDocs,
+		hasSpecChanges,
+	};
+}
+
+function inferSpecFromBranch(branch: string): string | undefined {
+	const parts = branch.split('/').filter(Boolean);
+	if (parts.length < 2) {
+		return undefined;
+	}
+
+	const type = inferWorkType(undefined, parts[0]);
+	if (!type) {
+		return undefined;
+	}
+
+	return parts[1];
+}
+
+function inferSpecFromChanges(changedPaths: readonly string[]): string | undefined {
+	const names = new Set<string>();
+	for (const changedPath of changedPaths) {
+		if (!changedPath.startsWith('.specs/')) {
+			continue;
+		}
+		const rest = changedPath.slice('.specs/'.length);
+		const name = rest.split('/')[0];
+		if (name) {
+			names.add(name);
+		}
+	}
+
+	if (names.size === 1) {
+		return Array.from(names.values())[0];
+	}
+	return undefined;
+}
+
+function hasRequiredSpecDocs(repoRoot: string, specName: string): boolean {
+	const specDir = path.join(repoRoot, '.specs', specName);
+	return (
+		existsSync(path.join(specDir, 'design.md')) &&
+		existsSync(path.join(specDir, 'requirements.md')) &&
+		existsSync(path.join(specDir, 'tasks.md'))
+	);
+}
+
+function persistedStatePath(gitCommonDir: string): string {
+	return path.join(gitCommonDir, 'workflow-coach', 'state.json');
+}
+
+function loadPersistedBranchState(gitCommonDir: string, branch: string): WorkflowContext['previous'] | undefined {
+	const stateFilePath = persistedStatePath(gitCommonDir);
+	if (!existsSync(stateFilePath)) {
+		return undefined;
+	}
+
+	try {
+		const contents = readFileSync(stateFilePath, 'utf8');
+		const parsed = JSON.parse(contents) as Partial<PersistedStateFile>;
+		if (parsed.version !== 1 || typeof parsed.branches !== 'object' || parsed.branches === null) {
+			return undefined;
+		}
+
+		const stored = (parsed.branches as Record<string, PersistedBranchState>)[branch];
+		if (!stored) {
+			return undefined;
+		}
+
+		const rawWorkType = (stored as { lastWorkType?: unknown }).lastWorkType;
+		const lastWorkType = typeof rawWorkType === 'string' ? inferWorkType(undefined, rawWorkType) : undefined;
+
+		return {
+			lastRunAt: typeof stored.lastRunAt === 'string' ? stored.lastRunAt : undefined,
+			lastWorkType,
+			lastActiveSpec: typeof stored.lastActiveSpec === 'string' ? stored.lastActiveSpec : undefined,
+			lastDetectedState: typeof stored.lastDetectedState === 'string' ? stored.lastDetectedState : undefined,
+		};
+	} catch {
+		return undefined;
+	}
+}
+
+function savePersistedBranchState(gitCommonDir: string, branch: string, next: PersistedBranchState): void {
+	try {
+		const stateFilePath = persistedStatePath(gitCommonDir);
+		const dir = path.dirname(stateFilePath);
+		mkdirSync(dir, { recursive: true });
+
+		const current = readPersistedStateFile(stateFilePath);
+		const nextFile: PersistedStateFile = {
+			version: 1,
+			branches: {
+				...current.branches,
+				[branch]: {
+					...current.branches[branch],
+					...next,
+				},
+			},
+		};
+
+		writeFileAtomic(stateFilePath, `${JSON.stringify(nextFile, null, 2)}\n`);
+	} catch {
+		// Best-effort persistence; never fail the run.
+	}
+}
+
+function readPersistedStateFile(stateFilePath: string): PersistedStateFile {
+	if (!existsSync(stateFilePath)) {
+		return { version: 1, branches: {} };
+	}
+
+	try {
+		const contents = readFileSync(stateFilePath, 'utf8');
+		const parsed = JSON.parse(contents) as Partial<PersistedStateFile>;
+		if (parsed.version === 1 && typeof parsed.branches === 'object' && parsed.branches !== null) {
+			return { version: 1, branches: parsed.branches as Record<string, PersistedBranchState> };
+		}
+	} catch {
+		// Ignore malformed state.
+	}
+	return { version: 1, branches: {} };
+}
+
+function writeFileAtomic(filePath: string, contents: string): void {
+	const tmpPath = `${filePath}.tmp-${process.pid}`;
+	writeFileSync(tmpPath, contents, 'utf8');
+	renameSync(tmpPath, filePath);
 }
 
 function parseStatusHeader(line: string): { branch: string; upstream?: string; ahead: number; behind: number } {
@@ -245,6 +443,16 @@ function renderText(context: WorkflowContext, result: CoachResult) {
 	lines.push('');
 	lines.push(`Branch: ${git.branch}${git.upstream ? ` (upstream: ${git.upstream})` : ''}`);
 	lines.push(`Changes: staged ${git.stagedFiles} | unstaged ${git.unstagedFiles} | untracked ${git.untrackedFiles}`);
+	if (context.previous?.lastRunAt) {
+		const parts: string[] = [context.previous.lastRunAt];
+		if (context.previous.lastDetectedState) {
+			parts.push(`state: ${context.previous.lastDetectedState}`);
+		}
+		if (context.previous.lastActiveSpec) {
+			parts.push(`spec: ${context.previous.lastActiveSpec}`);
+		}
+		lines.push(`Previous: ${parts.join(' | ')}`);
+	}
 	if (git.upstream) {
 		lines.push(`Upstream delta: ahead ${git.ahead} | behind ${git.behind}`);
 	}
@@ -259,6 +467,21 @@ function renderText(context: WorkflowContext, result: CoachResult) {
 		} else {
 			lines.push('PR: (none)');
 		}
+	}
+	if (context.spec?.active) {
+		const specParts: string[] = [];
+		if (context.spec.inferredFromBranch) {
+			specParts.push(`branch→${context.spec.inferredFromBranch}`);
+		}
+		if (context.spec.inferredFromChanges) {
+			specParts.push(`changes→${context.spec.inferredFromChanges}`);
+		}
+		if (context.spec.hasRequiredDocs === true) {
+			specParts.push('docs: ok');
+		} else if (context.spec.hasRequiredDocs === false) {
+			specParts.push('docs: missing');
+		}
+		lines.push(`Active spec: ${context.spec.active}${specParts.length ? ` (${specParts.join(' | ')})` : ''}`);
 	}
 
 	lines.push('');

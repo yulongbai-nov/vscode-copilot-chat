@@ -24,6 +24,19 @@ export type WorkflowContext = {
 		prNumber?: number;
 		prUrl?: string;
 	};
+	previous?: {
+		lastRunAt?: string;
+		lastWorkType?: WorkType;
+		lastActiveSpec?: string;
+		lastDetectedState?: string;
+	};
+	spec?: {
+		inferredFromBranch?: string;
+		inferredFromChanges?: string;
+		active?: string;
+		hasRequiredDocs?: boolean;
+		hasSpecChanges?: boolean;
+	};
 };
 
 export type Recommendation = {
@@ -144,6 +157,54 @@ export function evaluateWorkflow(context: WorkflowContext, options: WorkflowCoac
 	const { git, gh, workType } = context;
 	const hasWorkingChanges = git.stagedFiles + git.unstagedFiles + git.untrackedFiles > 0;
 	const scopeBuckets = detectScopeBuckets(git.changedPaths);
+
+	const activeSpec = context.spec?.active;
+	const inferredSpecFromBranch = context.spec?.inferredFromBranch;
+	const inferredSpecFromChanges = context.spec?.inferredFromChanges;
+
+	if (inferredSpecFromBranch && inferredSpecFromChanges && inferredSpecFromBranch !== inferredSpecFromChanges) {
+		warnings.push({
+			id: 'spec-mismatch',
+			severity: 'warn',
+			title: 'Active spec does not match branch',
+			why: `Branch suggests spec "${inferredSpecFromBranch}", but working changes touch ".specs/${inferredSpecFromChanges}/...". Consider splitting the work or aligning the branch/spec.`,
+			commands: [
+				'# If this is a scope shift, start a new branch/worktree for the new spec:',
+				`git fetch origin && git worktree add -b <type>/<spec> ../<repo>.worktrees/<branchSlug> origin/${defaultBranch}`,
+				'# If this is accidental drift, move the edits back into the expected spec folder.',
+			],
+		});
+	}
+
+	if (activeSpec && context.spec?.hasRequiredDocs === false) {
+		warnings.push({
+			id: 'spec-incomplete',
+			severity: 'warn',
+			title: 'Spec folder is missing core docs',
+			why: `The active spec ".specs/${activeSpec}/" is missing one or more of: design.md, requirements.md, tasks.md.`,
+			commands: [
+				`mkdir -p .specs/${activeSpec}`,
+				`# Create: .specs/${activeSpec}/design.md`,
+				`# Create: .specs/${activeSpec}/requirements.md`,
+				`# Create: .specs/${activeSpec}/tasks.md`,
+			],
+		});
+	}
+
+	if (
+		activeSpec &&
+		hasWorkingChanges &&
+		context.spec?.hasSpecChanges === false &&
+		(scopeBuckets.includes('code') || scopeBuckets.includes('ci') || scopeBuckets.includes('build'))
+	) {
+		warnings.push({
+			id: 'spec-not-updated',
+			severity: 'warn',
+			title: 'Spec may be stale for current changes',
+			why: `Working changes touch ${scopeBuckets.join(', ')} but no ".specs/..." changes were detected. Consider updating ".specs/${activeSpec}/" to keep spec-first workflow aligned.`,
+			commands: [`$EDITOR .specs/${activeSpec}/tasks.md`, `$EDITOR .specs/${activeSpec}/design.md`],
+		});
+	}
 
 	if (git.isMainBranch && (hasWorkingChanges || git.ahead > 0)) {
 		warnings.push({
@@ -275,6 +336,18 @@ function computeSuggestedNextState(
 
 	if (warnings.some(w => w.id === 'mixed-scope')) {
 		return 'Separate branches/PRs per scope';
+	}
+
+	if (warnings.some(w => w.id === 'spec-mismatch')) {
+		return 'Spec folder aligned with active work';
+	}
+
+	if (warnings.some(w => w.id === 'spec-incomplete')) {
+		return 'Spec docs present (design/requirements/tasks)';
+	}
+
+	if (warnings.some(w => w.id === 'spec-not-updated')) {
+		return 'Spec updated to match current changes';
 	}
 
 	if (git.stagedFiles > 0) {
