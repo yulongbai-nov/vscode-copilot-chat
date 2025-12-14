@@ -29,6 +29,10 @@
 - [x] 12. Add docs code-link formatting reminder _Requirements: 9_
   - [x] 12.1 Emit reminder when work type is docs or Markdown files change
   - [x] 12.2 Update agent-prompt.md to require line-link formatting in docs
+- [x] 13. Add optional git hook integration _Requirements: 10_
+  - [x] 13.1 Add `.githooks/pre-commit` and `.githooks/pre-push` that run the coach
+  - [x] 13.2 Add `npm run workflow:install-hooks` to set `core.hooksPath=.githooks`
+  - [x] 13.3 Add `--fail-on` support + unit tests for selectors
 
 ## Implementation Notes
 

@@ -22,11 +22,41 @@ Machine-readable mode:
 npm run workflow:coach -- --query "…" --json
 ```
 
+Fail (exit non-zero) when selected warnings are present:
+
+```bash
+npm run workflow:coach -- --query "…" --fail-on dirty-main,spec-mismatch
+```
+
+Fail on any warning:
+
+```bash
+npm run workflow:coach -- --query "…" --fail-on warn
+```
+
 Disable local persistence (no previous-run memory):
 
 ```bash
 npm run workflow:coach -- --query "…" --no-persist
 ```
+
+## Install git hooks (optional)
+
+This repo can run the coach automatically at **pre-commit** and **pre-push** checkpoints via git hooks.
+
+Install the repo-local hook scripts by setting `core.hooksPath`:
+
+```bash
+npm run workflow:install-hooks
+```
+
+Notes:
+
+- This writes a local git config value (`core.hooksPath=.githooks`) and does not modify history.
+- Default hook behavior is **non-blocking** (prints reminders only).
+- To enforce (block) based on warnings, run git with:
+  - `WORKFLOW_COACH_ENFORCE=1`
+  - `WORKFLOW_COACH_FAIL_ON=dirty-main,spec-mismatch` (or `warn` for any warning)
 
 ## When to run (recommended checkpoints)
 

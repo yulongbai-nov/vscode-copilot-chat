@@ -199,7 +199,8 @@ flowchart TD
 
 - `package.json` scripts to run the coach quickly.
 - `agent-prompt.md` can be shortened to “run the coach at decision points” plus the spec-first requirements.
-- Optional (future): `husky` pre-push hook that prints the coach summary, without blocking.
+- Git hooks (pre-commit / pre-push) to run the coach at workflow checkpoints (default: non-blocking).
+  - Optional enforcement via environment variables and `--fail-on` (selected warning IDs).
 
 ## Migration / Rollout Strategy
 
@@ -225,4 +226,4 @@ flowchart TD
 - Interactive mode that can generate a suggested branch name from the query.
 - “Plan-mode” integration: emit a suggested `update_plan` skeleton for the agent.
 - Optional “snapshot/export” mode for committing a coach run summary into the repo for remote review.
-- Optional enforcement hooks (pre-push) once the rule set stabilizes.
+- Optional stronger enforcement once the rule set stabilizes (e.g. default fail-on sets; CI integration).
