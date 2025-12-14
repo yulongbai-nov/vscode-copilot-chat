@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Raw } from '@vscode/prompt-tsx';
+import type * as vscode from 'vscode';
 import { DeferredPromise, RunOnceScheduler } from '../../../util/vs/base/common/async';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
@@ -13,13 +14,14 @@ import { Mutable } from '../../../util/vs/base/common/types';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
-import { ChatEndpointFamily, IEndpointProvider, LanguageModelChat } from '../../../platform/endpoint/common/endpointProvider';
+import { ChatEndpointFamily, IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../platform/log/common/logService';
-import { OptionalChatRequestParams, ChatRequest } from '../../../platform/networking/common/fetch';
+import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
-import { EditableChatRequest, EditableChatRequestInit, EditHistory, EditOp, EditTargetKind, LiveRequestContextSnapshot, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, EditHistory, EditOp, EditTargetKind, LiveRequestContextSnapshot, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError, LiveRequestSessionSnapshot } from '../common/liveRequestEditorModel';
 import { AutoOverrideDiffEntry, AutoOverrideSummary, ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, LiveRequestReplayEvent, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
+import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { DEFAULT_REPLAY_SECTION_CAP, buildEditableChatRequest, buildReplayProjection, computeChatMessagesHash, computeReplayProjectionHash, createSectionsFromMessages, renderMessageContent } from './liveRequestBuilder';
 import { IBuildPromptContext } from '../common/intents';
 import { AgentPrompt } from '../../prompts/node/agent/agentPrompt';
@@ -1339,12 +1341,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return undefined;
 		}
 		try {
-			const endpointKey = (request.sessionSnapshot.endpointFamily ?? request.sessionSnapshot.endpointModel) as ChatEndpointFamily | LanguageModelChat | ChatRequest;
-			const endpoint = await this._endpointProvider.getChatEndpoint(endpointKey);
+			const normalizedContext = this.normalizeSnapshotContext(request.sessionSnapshot);
+			const endpointKey = request.sessionSnapshot.endpointFamily ?? request.sessionSnapshot.endpointModel;
+			const endpoint = await this._endpointProvider.getChatEndpoint(endpointKey as ChatEndpointFamily);
 			const customizations = await PromptRegistry.resolveAllCustomizations(this._instantiationService, endpoint);
 			const props = {
 				endpoint,
-				promptContext: request.sessionSnapshot.promptContext as unknown as IBuildPromptContext,
+				promptContext: normalizedContext,
 				location: request.location,
 				enableCacheBreakpoints: false,
 				customizations,
@@ -1376,6 +1379,26 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		this._onDidChange.fire(request);
 		this.emitMetadataForRequest(request);
 		return true;
+	}
+
+	private normalizeSnapshotContext(snapshot: LiveRequestSessionSnapshot): IBuildPromptContext {
+		const context = deepClone(snapshot.promptContext) as Partial<IBuildPromptContext>;
+		const mutableContext = context as Mutable<IBuildPromptContext>;
+		const chatVars = (mutableContext as { chatVariables?: unknown }).chatVariables;
+		if (chatVars) {
+			if (chatVars instanceof ChatVariablesCollection) {
+				mutableContext.chatVariables = chatVars;
+			} else if (typeof chatVars === 'object' && chatVars !== null && Array.isArray((chatVars as { _source?: unknown })._source)) {
+				const source = (chatVars as { _source?: unknown })._source as ReadonlyArray<Record<string, unknown>>;
+				mutableContext.chatVariables = new ChatVariablesCollection(source as unknown as readonly vscode.ChatPromptReference[]);
+			} else if (Array.isArray(chatVars)) {
+				const source = chatVars as ReadonlyArray<Record<string, unknown>>;
+				mutableContext.chatVariables = new ChatVariablesCollection(source as unknown as readonly vscode.ChatPromptReference[]);
+			} else {
+				delete (mutableContext as { chatVariables?: unknown }).chatVariables;
+			}
+		}
+		return mutableContext as IBuildPromptContext;
 	}
 
 	private validateRequestForSend(request: EditableChatRequest): LiveRequestValidationError | undefined {
@@ -1564,7 +1587,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		try {
 			await this._configurationService.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, enabled);
 		} catch (error) {
-			this._logService.warn(`Live Request Editor: failed to persist interception setting (${String(error)}). Continuing with in-memory mode only.`);
+			this._logService.debug(`Live Request Editor: failed to persist interception setting (${String(error)}). Continuing with in-memory mode only.`);
 		} finally {
 			this._modeUpdateFromConfig = false;
 		}
