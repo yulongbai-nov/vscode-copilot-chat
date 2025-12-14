@@ -203,20 +203,25 @@ export class LiveRequestEditorContribution implements IExtensionContribution {
 					vscode.window.showInformationMessage('Nothing to replay yet. Edit a prompt first.');
 					return;
 				}
-				const snapshot = this._liveRequestEditorService.buildReplayForRequest({ sessionId: current.sessionId, location: current.location });
-				if (!snapshot) {
-					vscode.window.showInformationMessage('Nothing to replay for this request.');
+				const fork = await this._liveRequestEditorService.replayEditedSession({
+					sessionId: current.sessionId,
+					location: current.location
+				});
+				if (!fork) {
+					vscode.window.showInformationMessage('Replay failed or produced no payload.');
 					return;
 				}
-				const projection = snapshot.projection;
 				this._telemetryService.sendMSFTTelemetryEvent('liveRequestEditor.replay.invoked', {
-					state: snapshot.state,
-					totalSections: String(projection?.totalSections ?? 0),
-					edited: String(projection?.editedCount ?? 0),
-					deleted: String(projection?.deletedCount ?? 0),
-					overflow: String(projection?.overflowCount ?? 0),
+					state: fork.state,
+					parentSessionId: current.sessionId,
+					replaySessionId: fork.sessionId,
 				});
-				this._replayChatProvider?.showReplay(snapshot);
+				// Show the forked session in the chat panel.
+				try {
+					await vscode.commands.executeCommand('github.copilot.liveRequestEditor.openInChat', { sessionId: fork.sessionId, location: fork.location });
+				} catch {
+					// best-effort; ignore
+				}
 			}
 		);
 

@@ -40,12 +40,13 @@ import { createExtensionUnitTestingServices, type TestingServiceCollection } fro
 import { Conversation, Turn } from '../../common/conversation';
 import { IBuildPromptContext } from '../../common/intents';
 import { ToolCallRound } from '../../common/toolCallRound';
+import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
 import { ChatTelemetryBuilder } from '../chatParticipantTelemetry';
 import { DefaultIntentRequestHandler } from '../defaultIntentRequestHandler';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
 import { IIntent, IIntentInvocation, nullRenderPromptResult, promptResultMetadata } from '../intents';
 import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, PromptInterceptionDecision } from '../../common/liveRequestEditorService';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestContextSnapshot, LiveRequestReplayState, LiveRequestValidationError } from '../../common/liveRequestEditorModel';
 
 suite('defaultIntentRequestHandler', () => {
 	let accessor: ITestingServicesAccessor;
@@ -258,9 +259,12 @@ suite('defaultIntentRequestHandler', () => {
 		deleteSection(): EditableChatRequest | undefined { return undefined; }
 		restoreSection(): EditableChatRequest | undefined { return undefined; }
 		resetRequest(): EditableChatRequest | undefined { return undefined; }
+		prunePromptContext(context: IBuildPromptContext): LiveRequestContextSnapshot { return { ...context } as unknown as LiveRequestContextSnapshot; }
+		regenerateFromSnapshot(): Promise<boolean> { return Promise.resolve(false); }
 		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
 		applyTraceData(): EditableChatRequest | undefined { return undefined; }
-		buildReplayForRequest(): undefined { return undefined; }
+		async buildReplayForRequest(): Promise<undefined> { return undefined; }
+		replayEditedSession(): Promise<{ sessionId: string; location: ChatLocation; state: LiveRequestReplayState } | undefined> { return Promise.resolve(undefined); }
 		getReplaySnapshot(): undefined { return undefined; }
 		restorePreviousReplay(): undefined { return undefined; }
 		markReplayForkActive(): undefined { return undefined; }
@@ -268,7 +272,7 @@ suite('defaultIntentRequestHandler', () => {
 			// no-op
 		}
 
-		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
+		async getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
 			const messages = this._messages.length ? this._messages : fallback;
 			return { messages, error: this.validationError };
 		}
@@ -387,7 +391,20 @@ suite('defaultIntentRequestHandler', () => {
 		const chatSessions = new IntegrationChatSessionService();
 		const extensionContext = new MockExtensionContext() as unknown as IVSCodeExtensionContext;
 		const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
-		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log);
+		const endpointProvider = {
+			getChatEndpoint: async () => ({
+				model: 'gpt-test',
+				family: 'gpt-4.1',
+				modelMaxPromptTokens: 8192,
+				urlOrRequestMetadata: undefined,
+				acquireTokenizer: async () => ({ countMessagesTokens: async () => 0 }),
+			}),
+			getAllChatEndpoints: async () => [],
+			getAllCompletionModels: async () => [],
+			getEmbeddingsEndpoint: async () => ({}),
+		} as unknown as IEndpointProvider;
+		const instantiationService = { createInstance: () => ({}) } as unknown as IInstantiationService;
+		const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log, endpointProvider, instantiationService);
 		return { service, chatSessions };
 	}
 

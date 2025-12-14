@@ -190,7 +190,7 @@ describe('LiveRequestEditorProvider', () => {
 		};
 
 		(service.getRequest as Mock).mockReturnValue(request);
-		(service.getMessagesForSend as Mock).mockReturnValue({
+		(service.getMessagesForSend as Mock).mockResolvedValue({
 			messages: [{
 				role: Raw.ChatRole.User,
 				content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'edited' }],
@@ -261,6 +261,8 @@ describe('LiveRequestEditorProvider', () => {
 			prepareRequest: () => undefined,
 			getRequest: vi.fn(),
 			getAllRequests: () => [],
+			prunePromptContext: () => ({} as any),
+			regenerateFromSnapshot: vi.fn().mockResolvedValue(false),
 			updateSectionContent: () => undefined,
 			updateLeafByPath: vi.fn(),
 			undoLastEdit: vi.fn(),
@@ -272,7 +274,7 @@ describe('LiveRequestEditorProvider', () => {
 			applyTraceData: () => undefined,
 			getOriginalRequestMessages: () => undefined,
 			updateRequestOptions: (_key: LiveRequestSessionKey, _requestOptions: OptionalChatRequestParams | undefined) => undefined,
-			getMessagesForSend: vi.fn().mockImplementation((_key: LiveRequestSessionKey, _fallback: Raw.ChatMessage[]) => ({ messages: [] as Raw.ChatMessage[] })),
+			getMessagesForSend: vi.fn().mockResolvedValue({ messages: [] as Raw.ChatMessage[] }),
 			getInterceptionState: () => currentInterceptionState,
 			setMode: async mode => {
 				currentMode = mode;
@@ -314,7 +316,8 @@ describe('LiveRequestEditorProvider', () => {
 			getSubagentRequests: () => [],
 			clearSubagentHistory: () => undefined,
 			getMetadataSnapshot: () => undefined,
-			buildReplayForRequest: () => undefined,
+			buildReplayForRequest: async () => undefined,
+			replayEditedSession: async () => undefined,
 			getReplaySnapshot: () => undefined,
 			restorePreviousReplay: () => undefined,
 			markReplayForkActive: () => undefined,

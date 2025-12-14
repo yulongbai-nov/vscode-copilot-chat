@@ -794,7 +794,7 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 		}, token);
 	}
 
-	protected override prepareLiveRequest(buildPromptResult: IBuildPromptResult, context: IBuildPromptContext, requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+	protected override async prepareLiveRequest(buildPromptResult: IBuildPromptResult, context: IBuildPromptContext, requestOptions: OptionalChatRequestParams): Promise<Raw.ChatMessage[] | undefined> {
 		this.applyDefaultRequestOptions(requestOptions);
 		if (!this._liveRequestEditorService.isEnabled()) {
 			return undefined;
@@ -816,15 +816,24 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			chatSessionResource: this.options.chatSessionResource,
 			requestOptions,
 			maxPromptTokens: this.options.invocation.endpoint.modelMaxPromptTokens,
+			sessionSnapshot: {
+				promptContext: this._liveRequestEditorService.prunePromptContext(context),
+				requestOptions,
+				endpointModel: this.options.invocation.endpoint.model,
+				endpointFamily: this.options.invocation.endpoint.family,
+				endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
+			},
 		};
 		this._liveRequestEditorService.prepareRequest(init);
+		// Try to regenerate from snapshot before computing final messages.
+		await this._liveRequestEditorService.regenerateFromSnapshot(sessionKey, undefined);
 		if (buildPromptResult.traceData) {
 			void this.populateTraceData(sessionKey, buildPromptResult.traceData, buildPromptResult.messages)
 				.then(applied => applied ? undefined : this.populateTokenCounts(sessionKey, buildPromptResult.messages));
 		} else {
 			void this.populateTokenCounts(sessionKey, buildPromptResult.messages);
 		}
-		const result = this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
+		const result = await this._liveRequestEditorService.getMessagesForSend(sessionKey, buildPromptResult.messages);
 		if (result.error) {
 			throw new LiveRequestEditorValidationError(result.error);
 		}

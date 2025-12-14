@@ -79,7 +79,7 @@ describe('Copilot CLI – Live Replay to CLI fork command', () => {
 
 		snapshot = buildSnapshot();
 		getReplaySnapshot = vi.fn().mockReturnValue(snapshot);
-		buildReplayForRequest = vi.fn().mockReturnValue(snapshot);
+		buildReplayForRequest = vi.fn().mockResolvedValue(snapshot);
 
 		const copilotcliSessionItemProvider = {
 			setCustomLabel,
@@ -157,7 +157,7 @@ describe('Copilot CLI – Live Replay to CLI fork command', () => {
 
 	test('shows info message and does not create session when snapshot and replay build are missing', async () => {
 		(getReplaySnapshot as Mock).mockReturnValue(undefined);
-		(buildReplayForRequest as Mock).mockReturnValue(undefined);
+		(buildReplayForRequest as Mock).mockResolvedValue(undefined);
 
 		await vscode.commands.executeCommand('github.copilot.liveRequestEditor.openInCopilotCLI', {
 			sessionId: 'missing',

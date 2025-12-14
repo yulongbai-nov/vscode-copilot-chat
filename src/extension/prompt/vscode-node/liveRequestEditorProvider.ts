@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { ILogService } from '../../../platform/log/common/logService';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
-import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestReplaySnapshot, LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, LiveRequestOverrideScope, LiveRequestReplaySnapshot, LiveRequestSessionKey, LiveRequestSessionSnapshot } from '../common/liveRequestEditorModel';
 import { ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestReplayEvent, PromptInterceptionAction, PromptInterceptionState } from '../common/liveRequestEditorService';
 import { buildReplayResource } from './liveReplayChatProvider';
 import { LIVE_REQUEST_EDITOR_VISIBLE_CONTEXT_KEY } from './liveRequestEditorContextKeys';
@@ -41,7 +41,8 @@ type WebviewMessage =
 	| { type: 'command'; command: string; args?: unknown[] }
 	| { type: 'selectSession'; sessionKey: string }
 	| { type: 'setFollowMode'; followLatest: boolean }
-	| { type: 'showOverrideDiff'; slotIndex: number; scope: LiveRequestOverrideScope; sessionKey?: string };
+	| { type: 'showOverrideDiff'; slotIndex: number; scope: LiveRequestOverrideScope; sessionKey?: string }
+	| { type: 'applySnapshot'; snapshot?: LiveRequestSessionSnapshot };
 
 interface SessionSummaryPayload {
 	key: string;
@@ -433,6 +434,24 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 						}
 					}
 					break;
+				case 'applySnapshot': {
+					if (!this._currentRequest) {
+						break;
+					}
+					const message = payload as { snapshot?: LiveRequestSessionSnapshot | undefined };
+					if (message.snapshot !== undefined && (typeof message.snapshot !== 'object' || message.snapshot === null)) {
+						break;
+					}
+					const key = { sessionId: this._currentRequest.sessionId, location: this._currentRequest.location };
+					(this._currentRequest as EditableChatRequest).sessionSnapshot = message.snapshot;
+					await this._liveRequestEditorService.regenerateFromSnapshot(key, undefined);
+					const refreshed = this._liveRequestEditorService.getRequest(key);
+					if (refreshed) {
+						this._currentRequest = refreshed;
+					}
+					this._postStateToWebview();
+					break;
+				}
 
 				default: {
 					const exhaustive: never = payload;
@@ -616,6 +635,8 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 		}
 
 		const replayResource = this._currentReplay ? buildReplayResource(this._currentReplay).toString() : undefined;
+		const activeKey = this._activeSessionKey
+			?? (this._currentRequest ? this._toCompositeKey(this._currentRequest.sessionId, this._currentRequest.location) : undefined);
 
 		this._view.webview.postMessage({
 			type: 'stateUpdate',
@@ -624,7 +645,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 			replayUri: replayResource,
 			interception: this._toWebviewInterceptionPayload(),
 			sessions: this._getSessionSummaries(),
-			activeSessionKey: this._activeSessionKey,
+			activeSessionKey: activeKey,
 			extraSections: this._extraSections,
 			replayEnabled: this._liveRequestEditorService.isReplayEnabled(),
 			followLatest: this._followLatest
@@ -781,7 +802,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 		// Original vs edited payloads, serialized with stable formatting.
 		const originalPayload = request.originalMessages;
-		const editedResult = this._liveRequestEditorService.getMessagesForSend(key, request.originalMessages);
+		const editedResult = await this._liveRequestEditorService.getMessagesForSend(key, request.originalMessages);
 		if (editedResult.error) {
 			void vscode.window.showWarningMessage('Cannot build payload diff because the edited request is invalid. Reset the prompt and try again.');
 			return;

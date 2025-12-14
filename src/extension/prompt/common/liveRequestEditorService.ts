@@ -9,7 +9,8 @@ import { Event } from '../../../util/vs/base/common/event';
 import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
-import { EditableChatRequest, EditableChatRequestInit, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestReplayKey, LiveRequestReplaySnapshot, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot } from './liveRequestEditorModel';
+import { IBuildPromptContext } from './intents';
+import { EditableChatRequest, EditableChatRequestInit, LiveRequestContextSnapshot, LiveRequestEditorMode, LiveRequestOverrideScope, LiveRequestReplayKey, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot } from './liveRequestEditorModel';
 
 export type { LiveRequestEditorMode, LiveRequestOverrideScope } from './liveRequestEditorModel';
 
@@ -133,7 +134,10 @@ export interface ILiveRequestEditorService {
 
 	updateRequestOptions(key: LiveRequestSessionKey, requestOptions: OptionalChatRequestParams | undefined): EditableChatRequest | undefined;
 
-	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): LiveRequestSendResult;
+	prunePromptContext(context: IBuildPromptContext): LiveRequestContextSnapshot;
+	regenerateFromSnapshot(key: LiveRequestSessionKey, token: CancellationToken | undefined): Promise<boolean>;
+
+	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): Promise<LiveRequestSendResult>;
 
 	getInterceptionState(): PromptInterceptionState;
 
@@ -166,11 +170,12 @@ export interface ILiveRequestEditorService {
 
 	getMetadataSnapshot(key: LiveRequestSessionKey): LiveRequestMetadataSnapshot | undefined;
 
-	buildReplayForRequest(key: LiveRequestSessionKey): LiveRequestReplaySnapshot | undefined;
+	buildReplayForRequest(key: LiveRequestSessionKey): Promise<LiveRequestReplaySnapshot | undefined>;
 	getReplaySnapshot(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
 	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
 	markReplayForkActive(key: LiveRequestReplayKey, forkSessionId: string): LiveRequestReplaySnapshot | undefined;
 	markReplayStale(key: LiveRequestSessionKey, requestId?: string, reason?: string): void;
+	replayEditedSession(key: LiveRequestSessionKey): Promise<{ sessionId: string; location: ChatLocation; state: LiveRequestReplayState } | undefined>;
 
 	/**
 	 * Returns the original (pre-edit) messages for a request key, if present.

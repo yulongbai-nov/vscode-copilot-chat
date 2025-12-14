@@ -168,6 +168,7 @@ export interface EditableChatRequest {
 	metadata: EditableChatRequestMetadata;
 	isDirty: boolean;
 	editHistory?: EditHistory;
+	sessionSnapshot?: LiveRequestSessionSnapshot;
 }
 
 export interface EditableChatRequestInit {
@@ -189,6 +190,12 @@ export interface EditableChatRequestInit {
 		total?: number;
 		perMessage?: number[];
 	};
+	/**
+	 * Optional session snapshot to allow re-rendering the prompt from
+	 * normalized chat state instead of only using the flattened messages.
+	 * This should not be persisted across reloads.
+	 */
+	sessionSnapshot?: LiveRequestSessionSnapshot;
 }
 
 export interface LiveRequestTraceSection {
@@ -211,6 +218,39 @@ export interface LiveRequestValidationError {
 export interface LiveRequestSendResult {
 	messages: Raw.ChatMessage[];
 	error?: LiveRequestValidationError;
+}
+
+/**
+ * Minimal session snapshot that can be used to re-render the prompt.
+ * Keep this JSON-friendly and avoid storing heavy/host-bound objects
+ * in persisted caches.
+ */
+export interface LiveRequestSessionSnapshot {
+	readonly promptContext: LiveRequestContextSnapshot;
+	readonly requestOptions?: OptionalChatRequestParams;
+	readonly endpointModel: string;
+	readonly endpointFamily?: string;
+	readonly endpointUrl?: string;
+}
+
+/**
+ * A JSON-friendly representation of prompt context suitable for storing in the
+ * Live Request Editor snapshot. Avoids heavy/host-bound objects (Conversation,
+ * streams, etc.) and uses plain data.
+ */
+export interface LiveRequestContextSnapshot {
+	readonly requestId?: string;
+	readonly query: string;
+	readonly history: unknown;
+	readonly chatVariables: unknown;
+	readonly workingSet?: unknown;
+	readonly tools?: unknown;
+	readonly toolCallRounds?: unknown;
+	readonly toolCallResults?: unknown;
+	readonly toolGrouping?: unknown;
+	readonly editedFileEvents?: unknown;
+	readonly isContinuation?: boolean;
+	readonly modeInstructions?: unknown;
 }
 
 export class LiveRequestEditorValidationError extends Error {

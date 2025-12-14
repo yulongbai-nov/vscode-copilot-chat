@@ -354,6 +354,27 @@ body {
 	word-break: break-all;
 }
 
+.snapshot-textarea {
+	width: 100%;
+	min-height: 220px;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 4px;
+	padding: 8px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-size: 12px;
+	background-color: var(--vscode-editorWidget-background);
+	color: var(--vscode-editor-foreground);
+	box-sizing: border-box;
+	resize: vertical;
+}
+
+.snapshot-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+}
+
 .status-meter {
 	position: relative;
 	margin-top: 8px;

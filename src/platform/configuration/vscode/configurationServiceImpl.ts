@@ -240,7 +240,14 @@ export class ConfigurationServiceImpl extends AbstractConfigurationService {
 			} else {
 				currentValue[key.advancedSubKey] = value;
 			}
-			return this.config.update('advanced', currentValue, this._getTargetFromInspect(this.config.inspect('advanced')));
+			try {
+				return this.config.update('advanced', currentValue, this._getTargetFromInspect(this.config.inspect('advanced')));
+			} catch (error) {
+				// When the `github.copilot.advanced` object is not registered (or a host disallows
+				// writing to the object style), fall back to writing the flat setting key so users
+				// can still persist their preference.
+				return this.config.update(key.id, value, this._getTargetFromInspect(this.config.inspect(key.id)));
+			}
 		}
 		return this.config.update(key.id, value, this._getTargetFromInspect(this.config.inspect(key.id)));
 	}

@@ -164,7 +164,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 		token: CancellationToken
 	): Promise<ChatResponse>;
 
-	protected prepareLiveRequest(_buildPromptResult: IBuildPromptResult, _context: IBuildPromptContext, _requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | undefined {
+	protected prepareLiveRequest(_buildPromptResult: IBuildPromptResult, _context: IBuildPromptContext, _requestOptions: OptionalChatRequestParams): Raw.ChatMessage[] | Promise<Raw.ChatMessage[] | undefined> | undefined {
 		return undefined;
 	}
 
@@ -389,7 +389,7 @@ export abstract class ToolCallingLoop<TOptions extends IToolCallingLoopOptions =
 				type: 'function',
 			})),
 		};
-		let messagesForRequest = this.prepareLiveRequest(buildPromptResult, context, requestOptions) ?? buildPromptResult.messages;
+		let messagesForRequest = await this.prepareLiveRequest(buildPromptResult, context, requestOptions) ?? buildPromptResult.messages;
 		messagesForRequest = await this.interceptMessages(messagesForRequest, token);
 
 		const that = this;

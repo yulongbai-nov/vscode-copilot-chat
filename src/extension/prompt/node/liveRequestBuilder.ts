@@ -42,6 +42,7 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 		originalMessages,
 		metadata,
 		isDirty: false,
+		sessionSnapshot: ctx.sessionSnapshot,
 	};
 }
 

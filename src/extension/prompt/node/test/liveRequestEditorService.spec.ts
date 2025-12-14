@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Raw, RenderPromptResult } from '@vscode/prompt-tsx';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../../platform/chat/common/chatSessionService';
 import { ConfigKey } from '../../../../platform/configuration/common/configurationService';
@@ -16,6 +16,8 @@ import { MockExtensionContext } from '../../../../platform/test/node/extensionCo
 import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyingTelemetryService';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { Emitter } from '../../../../util/vs/base/common/event';
+import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
+import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { EditableChatRequestInit, LiveRequestSessionKey, LiveRequestTraceSnapshot } from '../../common/liveRequestEditorModel';
 import { LiveRequestMetadataEvent } from '../../common/liveRequestEditorService';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
@@ -72,8 +74,21 @@ async function createService(extensionContext: IVSCodeExtensionContext = new Moc
 	const telemetry = new SpyingTelemetryService();
 	const chatSessions = new TestChatSessionService();
 	const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
-	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log);
-	return { service, telemetry, chatSessions, extensionContext, config };
+	const endpointProvider = {
+		getChatEndpoint: async () => ({
+			model: 'gpt-test',
+			family: 'gpt-4.1',
+			modelMaxPromptTokens: 8192,
+			urlOrRequestMetadata: undefined,
+			acquireTokenizer: async () => ({ countMessagesTokens: async () => 0 }),
+		}),
+		getAllChatEndpoints: async () => [],
+		getAllCompletionModels: async () => [],
+		getEmbeddingsEndpoint: async () => ({}),
+	} as unknown as IEndpointProvider;
+	const instantiationService = { createInstance: () => ({}) } as unknown as IInstantiationService;
+	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log, endpointProvider, instantiationService);
+	return { service, telemetry, chatSessions, extensionContext, config, endpointProvider, instantiationService };
 }
 
 describe('LiveRequestEditorService interception', () => {
@@ -87,7 +102,7 @@ describe('LiveRequestEditorService interception', () => {
 		const request = service.getRequest(key)!;
 		const firstSection = request.sections[0];
 		service.updateSectionContent(key, firstSection.id, 'edited');
-		const sendResult = service.getMessagesForSend(key, request.originalMessages);
+		const sendResult = await service.getMessagesForSend(key, request.originalMessages);
 		expect(sendResult.error).toBeUndefined();
 		const editedMessages = sendResult.messages;
 		service.resolvePendingIntercept(key, 'resume');
@@ -150,7 +165,7 @@ describe('LiveRequestEditorService interception', () => {
 		service.deleteSection(key, request.sections[1].id); // remove user1
 		service.updateSectionContent(key, request.sections[2].id, 'edited user2');
 
-		const sendResult = service.getMessagesForSend(key, request.originalMessages);
+		const sendResult = await service.getMessagesForSend(key, request.originalMessages);
 		expect(sendResult.error).toBeUndefined();
 		expect(sendResult.messages).toHaveLength(2);
 		expect(sendResult.messages[0].role).toBe(Raw.ChatRole.System);
@@ -353,7 +368,7 @@ describe('LiveRequestEditorService interception', () => {
 			service.deleteSection(key, section.id);
 		}
 
-		const result = service.getMessagesForSend(key, request.originalMessages);
+		const result = await service.getMessagesForSend(key, request.originalMessages);
 		expect(result.error?.code).toBe('empty');
 	});
 
@@ -611,17 +626,17 @@ describe('LiveRequestEditorService interception', () => {
 		service.updateSectionContent(key, request.sections[1].id, 'first edited');
 		service.deleteSection(key, request.sections[2].id);
 
-		const replay = service.buildReplayForRequest(key)!;
-		expect(replay.state).toBe('ready');
-		expect(replay.version).toBe(1);
-		expect(replay.payload).toHaveLength(2);
-		expect(getText(replay.payload[1].content[0])).toBe('first edited');
-		expect(replay.projection?.sections).toHaveLength(2);
-		expect(replay.projection?.editedCount).toBe(1);
-		expect(replay.projection?.deletedCount).toBe(1);
-		expect(replay.projection?.overflowCount).toBe(0);
-		expect(replay.projection?.requestOptions).toEqual(requestOptions);
-		if (replay.projection?.requestOptions) {
+		const replay = await service.buildReplayForRequest(key);
+		expect(replay?.state).toBe('ready');
+		expect(replay?.version).toBe(1);
+		expect(replay?.payload).toHaveLength(2);
+		expect(getText(replay?.payload![1].content![0] as Raw.ChatCompletionContentPart)).toBe('first edited');
+		expect(replay?.projection?.sections).toHaveLength(2);
+		expect(replay?.projection?.editedCount).toBe(1);
+		expect(replay?.projection?.deletedCount).toBe(1);
+		expect(replay?.projection?.overflowCount).toBe(0);
+		expect(replay?.projection?.requestOptions).toEqual(requestOptions);
+		if (replay?.projection?.requestOptions) {
 			replay.projection.requestOptions.temperature = 0.9;
 		}
 		expect(request.metadata.requestOptions?.temperature).toBe(0.3);
@@ -650,8 +665,8 @@ describe('LiveRequestEditorService interception', () => {
 		const userSection = request.sections.find(s => s.kind === 'user')!;
 		service.updateSectionContent(key, userSection.id, 'updated description');
 
-		const replay = service.buildReplayForRequest(key)!;
-		const userPayload = replay.payload[1];
+		const replay = await service.buildReplayForRequest(key);
+		const userPayload = replay!.payload[1];
 		expect(userPayload.role).toBe(Raw.ChatRole.User);
 		expect(Array.isArray(userPayload.content)).toBe(true);
 		// First part is the updated text.
@@ -690,8 +705,8 @@ describe('LiveRequestEditorService interception', () => {
 		const updatedText = 'updated aggregate text';
 		service.updateSectionContent(key, userSection.id, updatedText);
 
-		const replay = service.buildReplayForRequest(key)!;
-		const userPayload = replay.payload[1];
+		const replay = await service.buildReplayForRequest(key);
+		const userPayload = replay!.payload[1];
 		expect(userPayload.role).toBe(Raw.ChatRole.User);
 		expect(Array.isArray(userPayload.content)).toBe(true);
 		// One Text part (aggregate) + one Image part.
@@ -711,19 +726,19 @@ describe('LiveRequestEditorService interception', () => {
 		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
 		service.prepareRequest(init);
 
-		const first = service.buildReplayForRequest(key)!;
-		expect(first.version).toBe(1);
+		const first = await service.buildReplayForRequest(key);
+		expect(first?.version).toBe(1);
 
 		const request = service.getRequest(key)!;
 		service.updateSectionContent(key, request.sections[1].id, 'second');
-		const second = service.buildReplayForRequest(key)!;
-		expect(second.version).toBe(2);
-		expect(getText(second.payload[1].content[0])).toBe('second');
+		const second = await service.buildReplayForRequest(key);
+		expect(second?.version).toBe(2);
+		expect(getText(second?.payload![1].content![0] as Raw.ChatCompletionContentPart)).toBe('second');
 
 		const restored = service.restorePreviousReplay({ ...key, requestId: init.requestId })!;
-		expect(restored.version).toBeGreaterThan(second.version);
-		expect(restored.restoreOfVersion).toBe(second.version);
-		expect(getText(restored.payload[1].content[0])).toBe('first');
+		expect(restored.version).toBeGreaterThan(second?.version ?? 0);
+		expect(restored.restoreOfVersion).toBe(second?.version);
+		expect(getText(restored.payload[1].content![0] as Raw.ChatCompletionContentPart)).toBe('first');
 	});
 
 	test('markReplayStale marks snapshot stale and clears restore buffer', async () => {
@@ -731,7 +746,7 @@ describe('LiveRequestEditorService interception', () => {
 		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
 		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
 		service.prepareRequest(init);
-		service.buildReplayForRequest(key);
+		await service.buildReplayForRequest(key);
 
 		service.markReplayStale(key, init.requestId, 'contextChanged:model');
 		const stale = service.getReplaySnapshot({ ...key, requestId: init.requestId })!;
@@ -745,12 +760,41 @@ describe('LiveRequestEditorService interception', () => {
 		const init = createServiceInit();
 		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
 		service.prepareRequest(init);
-		const ready = service.buildReplayForRequest(key)!;
+		const ready = await service.buildReplayForRequest(key);
 
 		const forked = service.markReplayForkActive({ ...key, requestId: init.requestId }, 'fork-session');
 		expect(forked?.state).toBe('forkActive');
 		expect(forked?.forkSessionId).toBe('fork-session');
-		expect((forked?.version ?? 0) > ready.version).toBe(true);
+		expect((forked?.version ?? 0) > (ready?.version ?? 0)).toBe(true);
+	});
+
+	test('replayEditedSession prefers snapshot render when available', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({
+			sessionSnapshot: {
+				promptContext: { query: 'q', history: [] } as any,
+				endpointModel: 'gpt-test',
+			}
+		});
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+
+		const snapshotMessages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.User,
+			content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'from snapshot' }]
+		}];
+
+		const renderSpy = vi.spyOn<any, any>(service as any, 'renderFromSnapshot').mockResolvedValue(snapshotMessages);
+		const replaySpy = vi.spyOn(service, 'buildReplayForRequest');
+		const result = await service.replayEditedSession(key);
+
+		expect(result).toBeTruthy();
+		const forkKey: LiveRequestSessionKey = { sessionId: result!.sessionId, location: result!.location };
+		const fork = service.getRequest(forkKey)!;
+		expect(fork.sessionSnapshot).toBeTruthy();
+		expect(getText(fork.messages[0].content[0])).toBe('from snapshot');
+		expect(renderSpy).toHaveBeenCalled();
+		expect(replaySpy).toHaveBeenCalled();
 	});
 
 	describe('LiveRequestEditorService leaf edits', () => {
@@ -835,7 +879,7 @@ describe('LiveRequestEditorService interception', () => {
 		service.prepareRequest(init);
 		await config.setConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled, false);
 		expect(service.isReplayEnabled()).toBe(false);
-		const replay = service.buildReplayForRequest(key);
+		const replay = await service.buildReplayForRequest(key);
 		expect(replay).toBeUndefined();
 	});
 

@@ -136,6 +136,45 @@ Implication for the Live Chat Request Editor:
 - The **true source of what gets sent** is `Raw.ChatMessage[]` (`options.messages`) plus `postOptions` (`OptionalChatRequestParams`).
 - If we update `EditableChatRequest.messages` and the associated request options before `fetchMany` runs, the JSON body will automatically reflect those edits; we do not need to edit `IEndpointBody` directly.
 
+### Session-sourced Live Request model (new)
+
+- Problem: the current Live Request Editor uses the flattened `RenderPromptResult.messages` as its backing model, making “replay” or regeneration from a payload brittle and lossy (component structure, branch decisions, and pre-render state are gone).
+- Source of truth: `IBuildPromptContext` (from `addHistoryToConversation`) already carries normalized history, current `toolCallRounds`, tool results, request id, endpoint/model, and `requestOptions` before endpoint normalization.
+- Proposal: capture a **SessionSnapshot** (context + request options + endpoint) before rendering and treat it as the canonical model. Render sections by re-running `PromptRenderer` on the snapshot; apply Live Request Editor edits as deltas atop the rendered `Raw.ChatMessage[]`.
+- Fallback: if snapshot-based render fails, use the existing `RenderPromptResult.messages` but log a parity warning and keep editability.
+
+Mermaid (proposed data flow):
+```mermaid
+flowchart TD
+  ctx[Chat session state<br/>(Conversation + IBuildPromptContext)] --> snap[SessionSnapshot<br/>(history, toolCallRounds,<br/>tool results, requestOptions, endpoint)]
+  snap --> render[PromptRenderer<br/>(AgentPrompt, same config)]
+  render --> msgs[Raw.ChatMessage[]]
+  msgs --> sections[LiveRequestBuilder<br/>sections + metadata]
+  sections --> edits[Live Request Editor<br/>edits/deletes/diffs]
+  edits --> send[makeChatRequest2<br/>(messages + requestOptions)]
+  send --> logger[IRequestLogger.logChatRequest]
+```
+
+Feasibility:
+- Data availability: `defaultIntentRequestHandler` has the normalized context + `OptionalChatRequestParams`; we can capture/store it in `LiveRequestEditorService` alongside the render result.
+- Determinism: rerendering from the snapshot with the same endpoint/config yields the same messages (including summarization/truncation). Edits stay as overlays on the rendered messages.
+- UI impact: the editor still shows sections derived from rendered messages; reset/regenerate can rerun the renderer from the snapshot to recover fidelity. No UI layout change required.
+
+### Session snapshot editing view (proposed)
+
+- Goal: expose a “Session” view in the Live Request Editor that operates on a pruned, JSON-safe snapshot of `IBuildPromptContext` + request options/endpoint. Edits here mutate only the snapshot; the visible chat transcript remains unchanged. The re-rendered prompt is what we send.
+- Edit surface: list turns and tool-call rounds; allow delete/restore, edit user/assistant text, edit tool args/results, and add synthetic user/assistant/tool-result entries. Apply = mutate snapshot → re-render AgentPrompt → update outbound `Raw.ChatMessage[]` (fallback to original messages on render failure). Show a disclaimer that edits affect only the next prompt, not the chat history UI.
+- Snapshot handling: keep snapshots in-memory (drop before persistence); prune non-serializable fields; emit parity diagnostics on render success/fallback.
+
+### Replay edited session (new flow)
+
+- Goal: allow users to take an edited session snapshot and “Replay” it into a **new chat session**, send the re-rendered request there, and continue chatting in that new session. The original session remains untouched.
+- Flow:
+  - User edits the snapshot in the Session view (turn/round edits).
+  - “Apply & Replay” creates a new chat session (new `sessionId`, lineage back to the original session/turn), re-renders the snapshot to `Raw.ChatMessage[]`, sends that request, and waits for the response. Subsequent turns continue in the replay session.
+  - Fallback: if re-render fails, use the last rendered/original messages and surface a warning.
+  - UI disclaimer: replay is a fork; the original chat transcript does not change.
+
 ### Request Logger UI (for reference only)
 
 `src/extension/log/vscode-node/requestLogTree.ts` provides the Copilot Chat debug tree (`copilot-chat` view) that:
@@ -148,6 +187,14 @@ For this feature, the **Request Logger UI** is a reference only:
 
 - We do not extend the tree with an editor.
 - Instead, we rely on the **same data model** (`LoggedRequest`, `RenderPromptResult`, `HTMLTracer`) to power the live editor embedded in the chat panel.
+
+## Current implementation vs spec (reality check)
+
+- Session snapshots are now captured (pruned `IBuildPromptContext` + requestOptions + endpoint info), re-rendered via `AgentPrompt` with resolved `PromptRegistry` customizations, and used as the base for edits/resets. Snapshot regeneration blocks send and falls back to the last render on failure; snapshots are stripped before persistence.
+- The webview has a **Session Snapshot** panel (raw JSON textarea) that applies snapshot edits and triggers re-render. The main section editor is still the legacy textarea; the hierarchical/leaf-level Raw structure editor (Requirements 15–16, Tasks 2.6, 4.12–4.15) is not shipped.
+- Replay (“Apply & Replay”) now forks an edited **session snapshot** into a new session and re-renders from that snapshot (preferring the session data over the flattened payload) before seeding the fork. It still does not auto-send/stream a response in the fork, and lineage telemetry remains minimal.
+- Undo/redo for leaf edits (Task 4.15) and snapshot parity telemetry (Task 14.4) are unimplemented; leaf edit UI is still missing even though service-side plumbing exists.
+- Reset/regenerate now reruns prompt rendering from the snapshot when available; parity checks/telemetry for snapshot vs render are still TODO.
 
 ## Current Implementation Status (May 2024)
 
