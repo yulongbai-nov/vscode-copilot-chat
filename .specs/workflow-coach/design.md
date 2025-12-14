@@ -53,7 +53,7 @@ The intent is to move the operational checklist out of prose and into an executa
 
 ### CLI surface
 
-- Node script: `script/workflowCoach.mjs`
+- Node script: `script/workflowCoach.ts` (invoked via `node --experimental-strip-types`)
 - NPM entrypoints (examples):
   - `npm run workflow:coach -- --query "<user request>"`
   - `npm run workflow:coach -- --query "<...>" --json`

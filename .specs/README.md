@@ -5,4 +5,4 @@
 - **chat-history-persistence** — Design fleshed out (SQLite-backed persistence, opt-in); implementation not started. Specs under `.specs/chat-history-persistence/`.
 - **graphiti-memory-integration** — Stubbed concept for optional Graphiti mirroring; no implementation.
 - **chat-api-migration** — Parked. Prompt Section Visualizer code is absent; migration to native chat APIs deferred until re-scoped.
-- **workflow-coach** — Planned. CLI script that inspects repo state + current request and prints workflow reminders for the agent/human.
+- **workflow-coach** — MVP implemented. Advisory CLI script that inspects repo state + current request and prints workflow reminders for the agent/human.
