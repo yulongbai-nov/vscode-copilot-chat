@@ -81,6 +81,14 @@ interface EditHistory {
 	redoStack: unknown[];
 }
 
+interface LiveRequestSessionSnapshot {
+	promptContext: unknown;
+	requestOptions?: unknown;
+	endpointModel: string;
+	endpointFamily?: string;
+	endpointUrl?: string;
+}
+
 interface EditableChatRequest {
 	id: string;
 	sessionId: string;
@@ -92,6 +100,7 @@ interface EditableChatRequest {
 	sections: LiveRequestSection[];
 	metadata?: EditableChatRequestMetadata;
 	editHistory?: EditHistory;
+	sessionSnapshot?: LiveRequestSessionSnapshot;
 }
 
 interface ToolInvocationMetadata {

@@ -9,12 +9,13 @@ import { CancellationToken } from '../../../util/vs/base/common/cancellation';
 import { Emitter, Event } from '../../../util/vs/base/common/event';
 import { Disposable } from '../../../util/vs/base/common/lifecycle';
 import { deepClone, equals } from '../../../util/vs/base/common/objects';
+import { Mutable } from '../../../util/vs/base/common/types';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
-import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
+import { ChatEndpointFamily, IEndpointProvider, LanguageModelChat } from '../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../platform/log/common/logService';
-import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
+import { OptionalChatRequestParams, ChatRequest } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
 import { EditableChatRequest, EditableChatRequestInit, EditHistory, EditOp, EditTargetKind, LiveRequestContextSnapshot, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
@@ -475,7 +476,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			const rendered = await this.renderFromSnapshot(request, undefined);
 			if (rendered && rendered.length) {
 				request.messages = deepClone(rendered);
-				request.originalMessages = deepClone(rendered);
+				(request as Mutable<EditableChatRequest>).originalMessages = deepClone(rendered);
 				request.sections = createSectionsFromMessages(request.messages);
 				request.isDirty = true;
 				this._onDidChange.fire(request);
@@ -719,7 +720,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 					} catch (error) {
 						loggedAction = 'cancel';
 						outcomeReason = 'error';
-						this._log.error?.('Failed to build messages for interception resume', error);
+						this._logService.error?.('Failed to build messages for interception resume', error);
 						void pending.deferred.complete({ action: 'cancel', reason: 'error' });
 					}
 				} else {
@@ -927,7 +928,6 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				requestId: replay.key.requestId,
 				createdAt: Date.now(),
 				lastUpdated: Date.now(),
-				isDirty: false,
 			},
 		};
 
@@ -1339,11 +1339,12 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return undefined;
 		}
 		try {
-			const endpoint = await this._endpointProvider.getChatEndpoint(request.sessionSnapshot.endpointModel);
+			const endpointKey = (request.sessionSnapshot.endpointFamily ?? request.sessionSnapshot.endpointModel) as ChatEndpointFamily | LanguageModelChat | ChatRequest;
+			const endpoint = await this._endpointProvider.getChatEndpoint(endpointKey);
 			const customizations = await PromptRegistry.resolveAllCustomizations(this._instantiationService, endpoint);
 			const props = {
 				endpoint,
-				promptContext: request.sessionSnapshot.promptContext,
+				promptContext: request.sessionSnapshot.promptContext as unknown as IBuildPromptContext,
 				location: request.location,
 				enableCacheBreakpoints: false,
 				customizations,
@@ -1369,7 +1370,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return false;
 		}
 		request.messages = deepClone(rendered);
-		request.originalMessages = deepClone(rendered);
+		(request as Mutable<EditableChatRequest>).originalMessages = deepClone(rendered);
 		request.sections = createSectionsFromMessages(request.messages);
 		request.isDirty = true;
 		this._onDidChange.fire(request);

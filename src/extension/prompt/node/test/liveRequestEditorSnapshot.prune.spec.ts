@@ -5,14 +5,14 @@
 
 import { describe, test, expect } from 'vitest';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
-import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
-import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
-import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
-import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
-import { ILogService } from '../../../platform/log/common/logService';
-import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
-import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
-import { IBuildPromptContext } from '../common/intents';
+import { IConfigurationService } from '../../../../platform/configuration/common/configurationService';
+import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry';
+import { IChatSessionService } from '../../../../platform/chat/common/chatSessionService';
+import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
+import { ILogService } from '../../../../platform/log/common/logService';
+import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
+import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
+import { IBuildPromptContext } from '../../common/intents';
 
 // Simple stubs to satisfy the constructor; methods are unused in the pruner test.
 const noopConfig = { getConfig: () => false, onDidChangeConfiguration: () => ({ dispose() { } }) } as unknown as IConfigurationService;
@@ -35,22 +35,22 @@ describe('LiveRequestEditorService.prunePromptContext', () => {
 			noopInstantiationService,
 		);
 
-		const context: IBuildPromptContext = {
+		const context = {
 			requestId: 'req-123',
 			query: 'hello',
-			history: [{ id: 'turn1' }, { id: 'turn2' }],
+			history: [{ id: 'turn1' } as any, { id: 'turn2' } as any],
 			chatVariables: { foo: 'bar' } as any,
 			workingSet: undefined,
 			tools: { toolReferences: [], toolInvocationToken: {} as any, availableTools: [] },
 			toolCallRounds: [{ id: 'round1', toolCalls: [] }] as any,
-			toolCallResults: { abc: { content: 'result' } as any },
+			toolCallResults: { abc: { content: 'result' } as any } as any,
 			toolGrouping: undefined,
 			editedFileEvents: undefined,
 			conversation: {} as any,
 			request: {} as any,
 			stream: {} as any,
 			isContinuation: true,
-		};
+		} as unknown as IBuildPromptContext;
 
 		const snapshot = service.prunePromptContext(context);
 		expect(snapshot.requestId).toBe('req-123');

@@ -5,22 +5,29 @@
 
 import { describe, test, expect, vi } from 'vitest';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
-import { IConfigurationService } from '../../../platform/configuration/common/configurationService';
-import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
-import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
-import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
-import { ILogService } from '../../../platform/log/common/logService';
-import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
-import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { IConfigurationService } from '../../../../platform/configuration/common/configurationService';
+import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry';
+import { IChatSessionService } from '../../../../platform/chat/common/chatSessionService';
+import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
+import { ILogService } from '../../../../platform/log/common/logService';
+import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
+import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { Raw } from '@vscode/prompt-tsx';
-import { LiveRequestSessionKey } from '../common/liveRequestEditorModel';
+import { LiveRequestSessionKey } from '../../common/liveRequestEditorModel';
 
 const noopConfig = { getConfig: () => true, onDidChangeConfiguration: () => ({ dispose() { } }) } as unknown as IConfigurationService;
 const noopTelemetry = {} as ITelemetryService;
 const noopChatSession = { onDidDisposeChatSession: () => ({ dispose() { } }) } as unknown as IChatSessionService;
 const noopCtx = { workspaceState: { update: async () => undefined, get: () => undefined }, globalState: { update: async () => undefined, get: () => undefined } } as unknown as IVSCodeExtensionContext;
 const noopLog = { error: () => { }, debug: () => { }, info: () => { }, warn: () => { } } as unknown as ILogService;
-const noopEndpointProvider = { getChatEndpoint: async () => ({ model: 'dummy', family: 'openai', modelMaxPromptTokens: 8192, cloneWithTokenOverride: () => ({}) }) } as unknown as IEndpointProvider;
+const noopEndpointProvider = {
+	getChatEndpoint: async () => ({
+		model: 'dummy',
+		family: 'gpt-4.1',
+		modelMaxPromptTokens: 8192,
+		cloneWithTokenOverride: () => ({})
+	})
+} as unknown as IEndpointProvider;
 const noopInstantiationService = { createInstance: () => ({}) } as unknown as IInstantiationService;
 
 function makeRequest(key: LiveRequestSessionKey) {
@@ -38,7 +45,14 @@ function makeRequest(key: LiveRequestSessionKey) {
 		location: key.location,
 		debugName: 'test',
 		model: 'dummy',
-		renderResult: { messages: [{ role: Raw.ChatRole.User, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'orig' }] }], tokenCount: 0, references: [], metadata: {}, html: '' },
+		renderResult: {
+			messages: [{ role: Raw.ChatRole.User, content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'orig' }] }],
+			tokenCount: 0,
+			references: [],
+			metadata: { get: () => undefined, getAll: () => undefined } as any,
+			hasIgnoredFiles: false,
+			omittedReferences: [],
+		},
 		requestId: 'req',
 		endpointUrl: 'http://example',
 	});

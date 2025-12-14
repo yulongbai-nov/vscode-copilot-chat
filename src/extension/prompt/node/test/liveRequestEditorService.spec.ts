@@ -16,6 +16,8 @@ import { MockExtensionContext } from '../../../../platform/test/node/extensionCo
 import { SpyingTelemetryService } from '../../../../platform/telemetry/node/spyingTelemetryService';
 import { CancellationToken } from '../../../../util/vs/base/common/cancellation';
 import { Emitter } from '../../../../util/vs/base/common/event';
+import { IEndpointProvider } from '../../../../platform/endpoint/common/endpointProvider';
+import { IInstantiationService } from '../../../../util/vs/platform/instantiation/common/instantiation';
 import { EditableChatRequestInit, LiveRequestSessionKey, LiveRequestTraceSnapshot } from '../../common/liveRequestEditorModel';
 import { LiveRequestMetadataEvent } from '../../common/liveRequestEditorService';
 import { LiveRequestEditorService } from '../liveRequestEditorService';
@@ -72,8 +74,21 @@ async function createService(extensionContext: IVSCodeExtensionContext = new Moc
 	const telemetry = new SpyingTelemetryService();
 	const chatSessions = new TestChatSessionService();
 	const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
-	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log);
-	return { service, telemetry, chatSessions, extensionContext, config };
+	const endpointProvider = {
+		getChatEndpoint: async () => ({
+			model: 'gpt-test',
+			family: 'gpt-4.1',
+			modelMaxPromptTokens: 8192,
+			urlOrRequestMetadata: undefined,
+			acquireTokenizer: async () => ({ countMessagesTokens: async () => 0 }),
+		}),
+		getAllChatEndpoints: async () => [],
+		getAllCompletionModels: async () => [],
+		getEmbeddingsEndpoint: async () => ({}),
+	} as unknown as IEndpointProvider;
+	const instantiationService = { createInstance: () => ({}) } as unknown as IInstantiationService;
+	const service = new LiveRequestEditorService(config, telemetry, chatSessions, extensionContext, log, endpointProvider, instantiationService);
+	return { service, telemetry, chatSessions, extensionContext, config, endpointProvider, instantiationService };
 }
 
 describe('LiveRequestEditorService interception', () => {
@@ -615,7 +630,7 @@ describe('LiveRequestEditorService interception', () => {
 		expect(replay?.state).toBe('ready');
 		expect(replay?.version).toBe(1);
 		expect(replay?.payload).toHaveLength(2);
-		expect(getText(replay?.payload![1].content[0])).toBe('first edited');
+		expect(getText(replay?.payload![1].content![0] as Raw.ChatCompletionContentPart)).toBe('first edited');
 		expect(replay?.projection?.sections).toHaveLength(2);
 		expect(replay?.projection?.editedCount).toBe(1);
 		expect(replay?.projection?.deletedCount).toBe(1);
@@ -718,12 +733,12 @@ describe('LiveRequestEditorService interception', () => {
 		service.updateSectionContent(key, request.sections[1].id, 'second');
 		const second = await service.buildReplayForRequest(key);
 		expect(second?.version).toBe(2);
-		expect(getText(second?.payload![1].content[0])).toBe('second');
+		expect(getText(second?.payload![1].content![0] as Raw.ChatCompletionContentPart)).toBe('second');
 
 		const restored = service.restorePreviousReplay({ ...key, requestId: init.requestId })!;
 		expect(restored.version).toBeGreaterThan(second?.version ?? 0);
 		expect(restored.restoreOfVersion).toBe(second?.version);
-		expect(getText(restored.payload[1].content[0])).toBe('first');
+		expect(getText(restored.payload[1].content![0] as Raw.ChatCompletionContentPart)).toBe('first');
 	});
 
 	test('markReplayStale marks snapshot stale and clears restore buffer', async () => {

@@ -12,6 +12,8 @@ import { DefaultsOnlyConfigurationService } from '../../src/platform/configurati
 import { InMemoryConfigurationService } from '../../src/platform/configuration/test/common/inMemoryConfigurationService';
 import { MockExtensionContext } from '../../src/platform/test/node/extensionContext';
 import { SpyingTelemetryService } from '../../src/platform/telemetry/node/spyingTelemetryService';
+import { IEndpointProvider } from '../../src/platform/endpoint/common/endpointProvider';
+import { IInstantiationService } from '../../src/util/vs/platform/instantiation/common/instantiation';
 import { Emitter } from '../../src/util/vs/base/common/event';
 import { TestingServiceCollection } from '../../src/platform/test/node/services';
 import { ssuite, stest } from '../base/stest';
@@ -45,11 +47,24 @@ ssuite({ title: 'Live Request Editor', location: 'context' }, () => {
 		await config.setConfig(ConfigKey.Advanced.LivePromptEditorEnabled, true);
 		await config.setConfig(ConfigKey.Advanced.LivePromptEditorInterception, true);
 		const log = { _serviceBrand: undefined, trace() { }, debug() { }, info() { }, warn() { }, error() { }, show() { } };
+		const endpointProvider = {
+			getChatEndpoint: async () => ({
+				model: 'gpt-sim',
+				family: 'gpt-4.1',
+				modelMaxPromptTokens: 8192,
+				urlOrRequestMetadata: undefined,
+				acquireTokenizer: async () => ({ countMessagesTokens: async () => 0 }),
+			}),
+			getAllChatEndpoints: async () => [],
+			getAllCompletionModels: async () => [],
+			getEmbeddingsEndpoint: async () => ({}),
+		} as unknown as IEndpointProvider;
+		const instantiationService = { createInstance: () => ({}) } as unknown as IInstantiationService;
 		return new LiveRequestEditorService(config, new SpyingTelemetryService(), new (class {
 			public readonly _serviceBrand: undefined;
 			private readonly _onDidDispose = new Emitter<string>();
 			public readonly onDidDisposeChatSession = this._onDidDispose.event;
-		})(), new MockExtensionContext() as any, log);
+		})(), new MockExtensionContext() as any, log, endpointProvider, instantiationService);
 	};
 
 	stest({ description: 'edits apply to send result' }, async (_services: TestingServiceCollection) => {
@@ -69,7 +84,7 @@ ssuite({ title: 'Live Request Editor', location: 'context' }, () => {
 		const request = service.getRequest(key)!;
 		service.updateSectionContent(key, request.sections[1].id, 'edited user');
 
-		const send = service.getMessagesForSend(key, renderResult.messages);
+		const send = await service.getMessagesForSend(key, renderResult.messages);
 		if (send.error) {
 			throw new LiveRequestEditorValidationError(send.error);
 		}
@@ -97,7 +112,7 @@ ssuite({ title: 'Live Request Editor', location: 'context' }, () => {
 			service.deleteSection(key, section.id);
 		}
 
-		const send = service.getMessagesForSend(key, renderResult.messages);
+		const send = await service.getMessagesForSend(key, renderResult.messages);
 		assert.ok(send.error?.code === 'empty');
 	});
 });

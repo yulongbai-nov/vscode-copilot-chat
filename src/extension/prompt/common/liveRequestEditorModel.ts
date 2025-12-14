@@ -6,7 +6,6 @@
 import { ITraceData, Raw, RenderPromptResult } from '@vscode/prompt-tsx';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
-import { IBuildPromptContext } from './intents';
 
 export type LiveRequestEditorMode = 'off' | 'interceptOnce' | 'interceptAlways' | 'autoOverride';
 
@@ -227,7 +226,7 @@ export interface LiveRequestSendResult {
  * in persisted caches.
  */
 export interface LiveRequestSessionSnapshot {
-	readonly promptContext: IBuildPromptContext;
+	readonly promptContext: LiveRequestContextSnapshot;
 	readonly requestOptions?: OptionalChatRequestParams;
 	readonly endpointModel: string;
 	readonly endpointFamily?: string;
