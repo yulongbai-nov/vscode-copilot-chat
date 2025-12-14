@@ -151,6 +151,9 @@ When asked to “write the spec” or “create the core documents” for a feat
   - Default to feature branches named `feature/<short-feature-name>` (kebab-case).
   - When a new feature starts, create a fresh branch from the latest `main` (or the agreed integration branch). If multiple features run in parallel, keep each on its own branch to avoid entanglement.
   - Keep commits small, reference the relevant tasks/requirements, and separate spec edits from code when practical. Mention both in the commit message when they ship together.
+- **Workflow Coach (reminder helper)**
+  - At workflow checkpoints (before commit/push/PR/scope changes), run: `npm run workflow:coach -- --query "<current request>"`.
+  - Use `--no-gh` to skip PR lookup when speed/offline.
 - **Verification Before Every Commit/Push** (“quadruple check” + simulation):
   1. `npm run lint`
   2. `npm run typecheck`
