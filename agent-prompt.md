@@ -136,6 +136,11 @@ Additional sections (recommended):
   - If they say “focus on implementation” or “follow the plan”, prioritise executing `tasks.md`.
 - When you are unsure which phase you are in, ask: “Should we refine the spec (design phase) or act on it (implementation phase)?”.
 - Summarise significant changes to any of the three documents so the human can quickly review and approve.
+- When you are about to pause and wait for human input (e.g. tasks are done, or you need clarification), include a short **Debug status** block that states:
+  - Current branch + ahead/behind + clean/dirty
+  - Active spec (if any) + inferred phase (design vs implementation)
+  - Workflow Coach detected/suggested state (best-effort)
+  - If you are using an explicit plan tracker, ensure it is updated (completed/canceled/in-progress) before the debug block.
 
 ## Output expectations
 
