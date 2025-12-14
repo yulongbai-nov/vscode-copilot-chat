@@ -1262,6 +1262,27 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 	}
 
+	/**
+	 * Regenerate messages from the snapshot if available. Returns true on success.
+	 */
+	async regenerateFromSnapshot(key: LiveRequestSessionKey, token: CancellationToken | undefined): Promise<boolean> {
+		const request = this.getRequest(key);
+		if (!request || !request.sessionSnapshot) {
+			return false;
+		}
+		const rendered = await this.renderFromSnapshot(request, token);
+		if (!rendered || !rendered.length) {
+			return false;
+		}
+		request.messages = deepClone(rendered);
+		request.originalMessages = deepClone(rendered);
+		request.sections = createSectionsFromMessages(request.messages);
+		request.isDirty = true;
+		this._onDidChange.fire(request);
+		this.emitMetadataForRequest(request);
+		return true;
+	}
+
 	private validateRequestForSend(request: EditableChatRequest): LiveRequestValidationError | undefined {
 		if (!request.messages.length) {
 			return { code: 'empty' };

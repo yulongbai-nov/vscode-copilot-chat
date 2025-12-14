@@ -825,6 +825,8 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			},
 		};
 		this._liveRequestEditorService.prepareRequest(init);
+		// Try to regenerate from snapshot before computing final messages.
+		void this._liveRequestEditorService.regenerateFromSnapshot(sessionKey, undefined);
 		if (buildPromptResult.traceData) {
 			void this.populateTraceData(sessionKey, buildPromptResult.traceData, buildPromptResult.messages)
 				.then(applied => applied ? undefined : this.populateTokenCounts(sessionKey, buildPromptResult.messages));
