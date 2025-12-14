@@ -41,16 +41,16 @@ sequenceDiagram
   Webview->>Provider: postMessage(replayEditedSession)
   Provider->>Service: replayEditedSession(key)
   Service->>Service: buildReplayForRequest(key)<br/>(async regen from snapshot)
-  alt payload ready
-    Service->>Chat: fork Conversation (new sessionId)
-    Service->>Chat: mark lineage best-effort
+  Service->>Service: renderFromSnapshot(fork)<br/>(prefer session data over payload)
+  alt render succeeds
+    Service->>Chat: fork session (new sessionId)
     Service-->>Provider: { sessionId, location, state }
-  else regen fails/empty
+  else render fails/empty
     Service-->>Provider: undefined (no replay)
   end
 ```
 
-Current limitation: the fork does not yet auto-send the regenerated payload; it only seeds a new session and marks lineage.
+Current limitation: the fork does not yet auto-send the regenerated payload; it only seeds a new session (using the snapshot-preferred render) and marks lineage.
 
 ## Manual verification checklist
 

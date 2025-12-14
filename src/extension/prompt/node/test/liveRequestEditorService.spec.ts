@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Raw, RenderPromptResult } from '@vscode/prompt-tsx';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { ChatLocation } from '../../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../../platform/chat/common/chatSessionService';
 import { ConfigKey } from '../../../../platform/configuration/common/configurationService';
@@ -751,6 +751,35 @@ describe('LiveRequestEditorService interception', () => {
 		expect(forked?.state).toBe('forkActive');
 		expect(forked?.forkSessionId).toBe('fork-session');
 		expect((forked?.version ?? 0) > (ready?.version ?? 0)).toBe(true);
+	});
+
+	test('replayEditedSession prefers snapshot render when available', async () => {
+		const { service } = await createService();
+		const init = createServiceInit({
+			sessionSnapshot: {
+				promptContext: { query: 'q', history: [] } as any,
+				endpointModel: 'gpt-test',
+			}
+		});
+		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
+		service.prepareRequest(init);
+
+		const snapshotMessages: Raw.ChatMessage[] = [{
+			role: Raw.ChatRole.User,
+			content: [{ type: Raw.ChatCompletionContentPartKind.Text, text: 'from snapshot' }]
+		}];
+
+		const renderSpy = vi.spyOn<any, any>(service as any, 'renderFromSnapshot').mockResolvedValue(snapshotMessages);
+		const replaySpy = vi.spyOn(service, 'buildReplayForRequest');
+		const result = await service.replayEditedSession(key);
+
+		expect(result).toBeTruthy();
+		const forkKey: LiveRequestSessionKey = { sessionId: result!.sessionId, location: result!.location };
+		const fork = service.getRequest(forkKey)!;
+		expect(fork.sessionSnapshot).toBeTruthy();
+		expect(getText(fork.messages[0].content[0])).toBe('from snapshot');
+		expect(renderSpy).toHaveBeenCalled();
+		expect(replaySpy).toHaveBeenCalled();
 	});
 
 	describe('LiveRequestEditorService leaf edits', () => {

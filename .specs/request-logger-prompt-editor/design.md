@@ -192,7 +192,7 @@ For this feature, the **Request Logger UI** is a reference only:
 
 - Session snapshots are now captured (pruned `IBuildPromptContext` + requestOptions + endpoint info), re-rendered via `AgentPrompt` with resolved `PromptRegistry` customizations, and used as the base for edits/resets. Snapshot regeneration blocks send and falls back to the last render on failure; snapshots are stripped before persistence.
 - The webview has a **Session Snapshot** panel (raw JSON textarea) that applies snapshot edits and triggers re-render. The main section editor is still the legacy textarea; the hierarchical/leaf-level Raw structure editor (Requirements 15–16, Tasks 2.6, 4.12–4.15) is not shipped.
-- Replay (“Apply & Replay”) forks an edited snapshot into a new session and marks lineage best-effort, but it does not yet send the forked request or stream a response; metadata/telemetry for replay lineage is minimal.
+- Replay (“Apply & Replay”) now forks an edited **session snapshot** into a new session and re-renders from that snapshot (preferring the session data over the flattened payload) before seeding the fork. It still does not auto-send/stream a response in the fork, and lineage telemetry remains minimal.
 - Undo/redo for leaf edits (Task 4.15) and snapshot parity telemetry (Task 14.4) are unimplemented; leaf edit UI is still missing even though service-side plumbing exists.
 - Reset/regenerate now reruns prompt rendering from the snapshot when available; parity checks/telemetry for snapshot vs render are still TODO.
 
