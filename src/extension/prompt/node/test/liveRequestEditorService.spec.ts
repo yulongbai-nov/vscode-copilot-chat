@@ -87,7 +87,7 @@ describe('LiveRequestEditorService interception', () => {
 		const request = service.getRequest(key)!;
 		const firstSection = request.sections[0];
 		service.updateSectionContent(key, firstSection.id, 'edited');
-		const sendResult = service.getMessagesForSend(key, request.originalMessages);
+		const sendResult = await service.getMessagesForSend(key, request.originalMessages);
 		expect(sendResult.error).toBeUndefined();
 		const editedMessages = sendResult.messages;
 		service.resolvePendingIntercept(key, 'resume');
@@ -150,7 +150,7 @@ describe('LiveRequestEditorService interception', () => {
 		service.deleteSection(key, request.sections[1].id); // remove user1
 		service.updateSectionContent(key, request.sections[2].id, 'edited user2');
 
-		const sendResult = service.getMessagesForSend(key, request.originalMessages);
+		const sendResult = await service.getMessagesForSend(key, request.originalMessages);
 		expect(sendResult.error).toBeUndefined();
 		expect(sendResult.messages).toHaveLength(2);
 		expect(sendResult.messages[0].role).toBe(Raw.ChatRole.System);
@@ -353,7 +353,7 @@ describe('LiveRequestEditorService interception', () => {
 			service.deleteSection(key, section.id);
 		}
 
-		const result = service.getMessagesForSend(key, request.originalMessages);
+		const result = await service.getMessagesForSend(key, request.originalMessages);
 		expect(result.error?.code).toBe('empty');
 	});
 

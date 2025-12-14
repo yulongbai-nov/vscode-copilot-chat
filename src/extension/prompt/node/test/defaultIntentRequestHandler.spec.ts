@@ -268,7 +268,7 @@ suite('defaultIntentRequestHandler', () => {
 			// no-op
 		}
 
-		getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
+		async getMessagesForSend(_key: any, fallback: Raw.ChatMessage[]) {
 			const messages = this._messages.length ? this._messages : fallback;
 			return { messages, error: this.validationError };
 		}

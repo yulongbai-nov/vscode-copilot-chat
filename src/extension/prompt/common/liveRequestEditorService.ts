@@ -133,7 +133,7 @@ export interface ILiveRequestEditorService {
 
 	updateRequestOptions(key: LiveRequestSessionKey, requestOptions: OptionalChatRequestParams | undefined): EditableChatRequest | undefined;
 
-	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): LiveRequestSendResult;
+	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): Promise<LiveRequestSendResult>;
 
 	getInterceptionState(): PromptInterceptionState;
 
