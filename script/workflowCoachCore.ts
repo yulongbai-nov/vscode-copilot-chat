@@ -192,6 +192,19 @@ export function evaluateWorkflow(context: WorkflowContext, options: WorkflowCoac
 		});
 	}
 
+	if (!phase) {
+		nextActions.push({
+			id: 'infer-phase',
+			severity: 'info',
+			title: 'Decide phase (design vs implementation)',
+			why: 'The coach could not infer the current phase. Decide whether the next step is design (clarify + update spec) or implementation (follow tasks + verify).',
+			commands: [
+				'# Design: clarify requirements and update .specs/<feature>/design.md + requirements.md',
+				'# Implementation: execute .specs/<feature>/tasks.md and run verification before commits',
+			],
+		});
+	}
+
 	if (phase === 'design') {
 		nextActions.push({
 			id: 'clarify-requirements',

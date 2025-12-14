@@ -45,6 +45,12 @@ suite('Workflow Coach', () => {
 	});
 
 	suite('evaluateWorkflow', () => {
+		test('reminds to decide phase when phase cannot be inferred', () => {
+			const result = evaluateWorkflow(createContext());
+
+			expect(result.nextActions.some(a => a.id === 'infer-phase')).toBe(true);
+		});
+
 		test('infers design phase from .specs-only changes and reminds to clarify requirements', () => {
 			const result = evaluateWorkflow(
 				createContext({
