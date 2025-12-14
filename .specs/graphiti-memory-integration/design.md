@@ -117,7 +117,7 @@ Mapping helper: [`src/extension/memory/graphiti/node/graphitiMessageMapping.ts#L
 User scope is a third grouping boundary intended for generic lessons/preferences that transcend a workspace.
 
 - Automatic ingestion does **not** write to user scope.
-- Promotion writes a single synthetic message containing a structured “episode” header:
+- Promotion writes a single synthetic message containing a structured `<graphiti_episode kind="…">…</graphiti_episode>` block:
   - Template: [`src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L6`](../../src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L6)
   - Kinds: `decision`, `lesson_learned`, `preference`, `procedure`, `task_update`
 - User scope group id uses a stable, random key stored in global state:

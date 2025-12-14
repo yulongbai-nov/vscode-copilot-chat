@@ -134,3 +134,17 @@ Trade-offs to keep in mind:
 - Spec: [`.specs/graphiti-memory-integration/design.md`](../../../.specs/graphiti-memory-integration/design.md)
 - Requirements: [`.specs/graphiti-memory-integration/requirements.md`](../../../.specs/graphiti-memory-integration/requirements.md)
 - Tasks: [`.specs/graphiti-memory-integration/tasks.md`](../../../.specs/graphiti-memory-integration/tasks.md)
+
+## Redeploy Graphiti (Runbook)
+
+From the Graphiti repo:
+- `docker compose up -d --build graph neo4j`
+- Validate:
+  - `docker compose ps`
+  - `docker compose logs -f graph`
+  - `curl -fsS http://localhost:8000/healthcheck` (or `http://graph:8000/healthcheck` inside Docker networks)
+
+Common failure modes:
+- Neo4j not healthy → `docker compose logs neo4j` (and verify credentials/volumes).
+- `/search` returns errors or no facts → Graphiti may need model/provider env vars (e.g., `OPENAI_API_KEY`, `OPENAI_BASE_URL`), and ingestion is async (wait ~5–15s before retrying).
+- `graph-falkordb` hostname not resolvable → optional service; ignore unless you explicitly run the FalkorDB variant.

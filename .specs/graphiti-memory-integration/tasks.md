@@ -13,6 +13,12 @@
 - [x] 9. Add docs + end-to-end demo guide _Requirements: 5.1_
 - [x] 10. Run quad verification and ship PR _Requirements: all_
 
+## Follow-ups (post-PR hardening)
+
+- [x] 11. Parallelize recall queries across scopes _Requirements: 3.4_
+- [x] 12. Wrap promoted memories in `<graphiti_episode kind="…">…</graphiti_episode>` _Requirements: 4.3_
+- [x] 13. Add Graphiti redeploy/runbook notes to the demo guide _Requirements: 5.1_
+
 ## Implementation Notes
 
 - Automatic behavior is always best-effort and fail-open.
@@ -36,4 +42,5 @@
 - Phase: implementation.
 - Completed: ingestion + recall + promotion, demo guide, tests, and spec alignment.
 - PR: https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51
+- Completed (post-PR hardening): recall parallelization, promotion `<graphiti_episode>` formatting, and demo runbook notes.
 - Next: address review feedback and merge.
