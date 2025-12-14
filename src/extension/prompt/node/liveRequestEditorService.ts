@@ -24,6 +24,7 @@ import { IBuildPromptContext } from '../common/intents';
 import { AgentPrompt } from '../../prompts/node/agent/agentPrompt';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { renderPromptElement } from '../../prompts/node/base/promptRenderer';
+import { Conversation } from '../common/conversation';
 
 const SUBAGENT_HISTORY_LIMIT = 10;
 const WORKSPACE_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.workspace';
@@ -862,6 +863,54 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	getReplaySnapshot(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined {
 		const entry = this._replays.get(this.toReplayCompositeKey(key));
 		return entry ? this.toReplaySnapshot(entry) : undefined;
+	}
+
+	async replayEditedSession(key: LiveRequestSessionKey): Promise<{ sessionId: string; location: ChatLocation; state: LiveRequestReplayState } | undefined> {
+		if (!this.isReplayEnabled()) {
+			return undefined;
+		}
+		const replay = this.buildReplayForRequest(key);
+		if (!replay || !replay.payload?.length) {
+			return undefined;
+		}
+		const parentRequest = this.getRequest(key);
+		if (!parentRequest) {
+			return undefined;
+		}
+
+		const forkConversation = new Conversation(undefined, undefined, undefined);
+		const newKey: LiveRequestSessionKey = { sessionId: forkConversation.sessionId, location: key.location };
+
+		const forkRequest: EditableChatRequest = {
+			...deepClone(parentRequest),
+			sessionId: newKey.sessionId,
+			messages: deepClone(replay.payload),
+			originalMessages: deepClone(replay.payload),
+			sections: createSectionsFromMessages(replay.payload),
+			isDirty: false,
+			metadata: {
+				...deepClone(parentRequest.metadata),
+				requestId: replay.key.requestId,
+				createdAt: Date.now(),
+				lastUpdated: Date.now(),
+				isDirty: false,
+			},
+		};
+
+		this._requests.set(this.toKey(newKey.sessionId, newKey.location), forkRequest);
+		this._onDidChange.fire(forkRequest);
+
+		// Best-effort: mark the replay as active on the fork
+		const compositeKey = this.toReplayCompositeKey(replay.key);
+		const entry = this._replays.get(compositeKey);
+		if (entry) {
+			this.markReplayForkActive(replay.key, newKey.sessionId);
+		}
+
+		// Optionally trigger a send via pending intercept (best effort)
+		this.resolvePendingIntercept(newKey, 'resume');
+
+		return { sessionId: newKey.sessionId, location: newKey.location, state: replay.state };
 	}
 
 	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined {

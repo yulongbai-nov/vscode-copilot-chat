@@ -171,6 +171,7 @@ export interface ILiveRequestEditorService {
 	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
 	markReplayForkActive(key: LiveRequestReplayKey, forkSessionId: string): LiveRequestReplaySnapshot | undefined;
 	markReplayStale(key: LiveRequestSessionKey, requestId?: string, reason?: string): void;
+	replayEditedSession(key: LiveRequestSessionKey): Promise<{ sessionId: string; location: ChatLocation; state: LiveRequestReplayState } | undefined>;
 
 	/**
 	 * Returns the original (pre-edit) messages for a request key, if present.
