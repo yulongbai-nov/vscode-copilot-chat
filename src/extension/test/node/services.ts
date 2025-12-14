@@ -44,6 +44,7 @@ import { IWorkspaceTrustService } from '../../../platform/workspace/common/works
 import { Event } from '../../../util/vs/base/common/event';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { SyncDescriptor } from '../../../util/vs/platform/instantiation/common/descriptors';
+import { IGraphitiMemoryService, type GraphitiConversationTurnForIngestion } from '../../memory/graphiti/node/graphitiMemoryService';
 import { IClaudeCodeSdkService } from '../../agents/claude/node/claudeCodeSdkService';
 import { MockClaudeCodeSdkService } from '../../agents/claude/node/test/mockClaudeCodeSdkService';
 import { ILanguageModelServer } from '../../agents/node/langModelServer';
@@ -132,6 +133,13 @@ export function createExtensionUnitTestingServices(disposables: Pick<DisposableS
 	testingServiceCollection.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(MockGithubAvailableEmbeddingTypesService));
 	testingServiceCollection.define(ILiveRequestEditorService, new SyncDescriptor(LiveRequestEditorService));
 	testingServiceCollection.define(IWorkspaceTrustService, new SyncDescriptor(TrustedWorkspaceTrustService));
+	testingServiceCollection.define(IGraphitiMemoryService, new SyncDescriptor(class implements IGraphitiMemoryService {
+		_serviceBrand: undefined;
+		enqueueConversationSnapshot(_sessionId: string, _turns: readonly GraphitiConversationTurnForIngestion[]): void {
+			void _sessionId;
+			void _turns;
+		}
+	}));
 	return testingServiceCollection;
 }
 
