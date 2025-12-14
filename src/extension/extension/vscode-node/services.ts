@@ -86,6 +86,8 @@ import { INewWorkspacePreviewContentManager, NewWorkspacePreviewContentManagerIm
 import { ITestGenInfoStorage, TestGenInfoStorage } from '../../intents/node/testIntent/testInfoStorage';
 import { LanguageContextProviderService } from '../../languageContextProvider/vscode-node/languageContextProviderService';
 import { ILinkifyService, LinkifyService } from '../../linkify/common/linkifyService';
+import { GraphitiMemoryService, IGraphitiMemoryService } from '../../memory/graphiti/node/graphitiMemoryService';
+import { GraphitiRecallService, IGraphitiRecallService } from '../../memory/graphiti/node/graphitiRecallService';
 import { collectFetcherTelemetry } from '../../log/vscode-node/loggingActions';
 import { DebugCommandToConfigConverter, IDebugCommandToConfigConverter } from '../../onboardDebug/node/commandToConfigConverter';
 import { DebuggableCommandIdentifier, IDebuggableCommandIdentifier } from '../../onboardDebug/node/debuggableCommandIdentifier';
@@ -131,6 +133,8 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 
 	builder.define(IAutomodeService, new SyncDescriptor(AutomodeService));
 	builder.define(IConversationStore, new ConversationStore());
+	builder.define(IGraphitiMemoryService, new SyncDescriptor(GraphitiMemoryService));
+	builder.define(IGraphitiRecallService, new SyncDescriptor(GraphitiRecallService));
 	builder.define(IDiffService, new DiffServiceImpl());
 	builder.define(ITokenizerProvider, new SyncDescriptor(TokenizerProvider, [true]));
 	builder.define(IToolsService, new SyncDescriptor(ToolsService));

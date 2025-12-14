@@ -2066,17 +2066,28 @@
 				"category": "Chat",
 				"enablement": "config.github.copilot.chat.enableUserPreferences"
 			},
-			{
-				"command": "github.copilot.chat.tools.memory.openFolder",
-				"title": "%github.copilot.command.openMemoryFolder%",
-				"category": "Chat",
-				"enablement": "config.github.copilot.chat.tools.memory.enabled"
-			},
-			{
-				"command": "github.copilot.chat.review.markUnhelpful",
-				"title": "%github.copilot.command.unhelpfulReviewSuggestion%",
-				"icon": "$(thumbsdown)",
-				"enablement": "!(commentThread =~ /markedAsUnhelpful/)",
+				{
+					"command": "github.copilot.chat.tools.memory.openFolder",
+					"title": "%github.copilot.command.openMemoryFolder%",
+					"category": "Chat",
+					"enablement": "config.github.copilot.chat.tools.memory.enabled"
+				},
+				{
+					"command": "github.copilot.chat.memory.graphiti.testConnection",
+					"title": "%github.copilot.command.testGraphitiConnection%",
+					"category": "Chat"
+				},
+				{
+					"command": "github.copilot.chat.memory.graphiti.promoteToMemory",
+					"title": "%github.copilot.command.promoteToGraphitiMemory%",
+					"category": "Chat",
+					"enablement": "config.github.copilot.chat.memory.graphiti.enabled"
+				},
+				{
+					"command": "github.copilot.chat.review.markUnhelpful",
+					"title": "%github.copilot.command.unhelpfulReviewSuggestion%",
+					"icon": "$(thumbsdown)",
+					"enablement": "!(commentThread =~ /markedAsUnhelpful/)",
 				"category": "Chat"
 			},
 			{
@@ -3655,20 +3666,168 @@
 							"experimental"
 						]
 					},
-					"github.copilot.chat.tools.memory.enabled": {
-						"type": "boolean",
-						"default": false,
-						"markdownDescription": "%github.copilot.config.tools.memory.enabled%",
-						"tags": [
-							"experimental",
-							"onExp"
-						]
-					},
-					"github.copilot.chat.completionsFetcher": {
-						"type": [
-							"string",
-							"null"
-						],
+						"github.copilot.chat.tools.memory.enabled": {
+							"type": "boolean",
+							"default": false,
+							"markdownDescription": "%github.copilot.config.tools.memory.enabled%",
+							"tags": [
+								"experimental",
+								"onExp"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.enabled": {
+							"type": "boolean",
+							"default": false,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.enabled%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.endpoint": {
+							"type": "string",
+							"default": "",
+							"markdownDescription": "%github.copilot.config.memory.graphiti.endpoint%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.timeoutMs": {
+							"type": "number",
+							"default": 5000,
+							"minimum": 250,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.timeoutMs%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.maxBatchSize": {
+							"type": "number",
+							"default": 20,
+							"minimum": 1,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.maxBatchSize%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.maxQueueSize": {
+							"type": "number",
+							"default": 200,
+							"minimum": 1,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.maxQueueSize%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.maxMessageChars": {
+							"type": "number",
+							"default": 4000,
+							"minimum": 256,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.maxMessageChars%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.scopes": {
+							"type": "string",
+							"default": "both",
+							"enum": [
+								"session",
+								"workspace",
+								"both"
+							],
+							"markdownEnumDescriptions": [
+								"%github.copilot.config.memory.graphiti.scopes.session%",
+								"%github.copilot.config.memory.graphiti.scopes.workspace%",
+								"%github.copilot.config.memory.graphiti.scopes.both%"
+							],
+							"markdownDescription": "%github.copilot.config.memory.graphiti.scopes%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.groupIdStrategy": {
+							"type": "string",
+							"default": "hashed",
+							"enum": [
+								"hashed",
+								"raw"
+							],
+							"markdownEnumDescriptions": [
+								"%github.copilot.config.memory.graphiti.groupIdStrategy.hashed%",
+								"%github.copilot.config.memory.graphiti.groupIdStrategy.raw%"
+							],
+							"markdownDescription": "%github.copilot.config.memory.graphiti.groupIdStrategy%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.includeSystemMessages": {
+							"type": "boolean",
+							"default": false,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.includeSystemMessages%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.includeGitMetadata": {
+							"type": "boolean",
+							"default": false,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.includeGitMetadata%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.recall.enabled": {
+							"type": "boolean",
+							"default": false,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.recall.enabled%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.recall.timeoutMs": {
+							"type": "number",
+							"default": 750,
+							"minimum": 100,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.recall.timeoutMs%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.recall.maxFacts": {
+							"type": "number",
+							"default": 10,
+							"minimum": 1,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.recall.maxFacts%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.memory.graphiti.recall.scopes": {
+							"type": "string",
+							"default": "both",
+							"enum": [
+								"session",
+								"workspace",
+								"both",
+								"all"
+							],
+							"markdownEnumDescriptions": [
+								"%github.copilot.config.memory.graphiti.recall.scopes.session%",
+								"%github.copilot.config.memory.graphiti.recall.scopes.workspace%",
+								"%github.copilot.config.memory.graphiti.recall.scopes.both%",
+								"%github.copilot.config.memory.graphiti.recall.scopes.all%"
+							],
+							"markdownDescription": "%github.copilot.config.memory.graphiti.recall.scopes%",
+							"tags": [
+								"experimental"
+							]
+						},
+						"github.copilot.chat.completionsFetcher": {
+							"type": [
+								"string",
+								"null"
+							],
 						"markdownDescription": "%github.copilot.config.completionsFetcher%",
 						"tags": [
 							"experimental",

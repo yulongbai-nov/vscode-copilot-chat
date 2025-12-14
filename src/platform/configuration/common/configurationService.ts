@@ -21,7 +21,7 @@ import { ResponseProcessor } from '../../inlineEdits/common/responseProcessor';
 import { FetcherId } from '../../networking/common/fetcherService';
 import { AlternativeNotebookFormat } from '../../notebook/common/alternativeContentFormat';
 import { IExperimentationService } from '../../telemetry/common/nullExperimentationService';
-import { IValidator, vBoolean, vString } from './validator';
+import { IValidator, vBoolean, vEnum, vNumber, vString } from './validator';
 
 export const CopilotConfigPrefix = 'github.copilot';
 
@@ -837,6 +837,24 @@ export namespace ConfigKey {
 	} | null>('chat.anthropic.tools.websearch.userLocation', ConfigType.Simple, null);
 	/** Enable memory tool */
 	export const MemoryToolEnabled = defineSetting<boolean>('chat.tools.memory.enabled', ConfigType.ExperimentBased, false);
+
+	export const MemoryGraphitiEnabled = defineSetting<boolean>('chat.memory.graphiti.enabled', ConfigType.Simple, false, vBoolean());
+	export const MemoryGraphitiEndpoint = defineSetting<string>('chat.memory.graphiti.endpoint', ConfigType.Simple, '', vString());
+	export const MemoryGraphitiTimeoutMs = defineSetting<number>('chat.memory.graphiti.timeoutMs', ConfigType.Simple, 5000, vNumber());
+	export const MemoryGraphitiMaxBatchSize = defineSetting<number>('chat.memory.graphiti.maxBatchSize', ConfigType.Simple, 20, vNumber());
+	export const MemoryGraphitiMaxQueueSize = defineSetting<number>('chat.memory.graphiti.maxQueueSize', ConfigType.Simple, 200, vNumber());
+	export const MemoryGraphitiMaxMessageChars = defineSetting<number>('chat.memory.graphiti.maxMessageChars', ConfigType.Simple, 4000, vNumber());
+
+	export const MemoryGraphitiScopes = defineSetting<'session' | 'workspace' | 'both'>('chat.memory.graphiti.scopes', ConfigType.Simple, 'both', vEnum('session', 'workspace', 'both'));
+	export const MemoryGraphitiGroupIdStrategy = defineSetting<'raw' | 'hashed'>('chat.memory.graphiti.groupIdStrategy', ConfigType.Simple, 'hashed', vEnum('raw', 'hashed'));
+
+	export const MemoryGraphitiIncludeSystemMessages = defineSetting<boolean>('chat.memory.graphiti.includeSystemMessages', ConfigType.Simple, false, vBoolean());
+	export const MemoryGraphitiIncludeGitMetadata = defineSetting<boolean>('chat.memory.graphiti.includeGitMetadata', ConfigType.Simple, false, vBoolean());
+
+	export const MemoryGraphitiRecallEnabled = defineSetting<boolean>('chat.memory.graphiti.recall.enabled', ConfigType.Simple, false, vBoolean());
+	export const MemoryGraphitiRecallTimeoutMs = defineSetting<number>('chat.memory.graphiti.recall.timeoutMs', ConfigType.Simple, 750, vNumber());
+	export const MemoryGraphitiRecallMaxFacts = defineSetting<number>('chat.memory.graphiti.recall.maxFacts', ConfigType.Simple, 10, vNumber());
+	export const MemoryGraphitiRecallScopes = defineSetting<'session' | 'workspace' | 'both' | 'all'>('chat.memory.graphiti.recall.scopes', ConfigType.Simple, 'both', vEnum('session', 'workspace', 'both', 'all'));
 
 	/** User provided code generation instructions for the chat */
 	export const CodeGenerationInstructions = defineSetting('chat.codeGeneration.instructions', ConfigType.Simple, [] as CodeGenerationInstruction[]);

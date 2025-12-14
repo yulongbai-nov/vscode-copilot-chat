@@ -33,6 +33,7 @@ import { getAgentForIntent, Intent } from '../../common/constants';
 import { IConversationStore } from '../../conversationStore/node/conversationStore';
 import { IIntentService } from '../../intents/node/intentService';
 import { UnknownIntent } from '../../intents/node/unknownIntent';
+import { IGraphitiMemoryService } from '../../memory/graphiti/node/graphitiMemoryService';
 import { ContributedToolName } from '../../tools/common/toolNames';
 import { ChatVariablesCollection } from '../common/chatVariablesCollection';
 import { Conversation, getGlobalContextCacheKey, GlobalContextMessageMetadata, ICopilotChatResult, ICopilotChatResultIn, normalizeSummariesOnRounds, RenderedUserMessageMetadata, Turn, TurnStatus } from '../common/conversation';
@@ -87,6 +88,7 @@ export class ChatParticipantRequestHandler {
 		@IAuthenticationService private readonly _authService: IAuthenticationService,
 		@IAuthenticationChatUpgradeService private readonly _authenticationUpgradeService: IAuthenticationChatUpgradeService,
 		@ILiveRequestEditorService private readonly _liveRequestEditorService: ILiveRequestEditorService,
+		@IGraphitiMemoryService private readonly _graphitiMemoryService: IGraphitiMemoryService,
 	) {
 		this.location = this.getLocation(request);
 
@@ -282,6 +284,26 @@ export class ChatParticipantRequestHandler {
 			}
 
 			this._conversationStore.addConversation(this.turn.id, this.conversation);
+
+			try {
+				const successfulTurns = this.conversation.turns
+					.filter(turn => turn.responseStatus === TurnStatus.Success && !!turn.responseMessage?.message)
+					.map(turn => {
+						const stableTurnId = typeof turn.resultMetadata?.responseId === 'string' ? turn.resultMetadata.responseId : turn.id;
+						return {
+							turnId: stableTurnId,
+							userMessage: turn.request.message,
+							assistantMessage: turn.responseMessage!.message,
+							timestampMs: turn.startTime,
+						};
+					});
+
+				if (successfulTurns.length) {
+					this._graphitiMemoryService.enqueueConversationSnapshot(this.conversation.sessionId, successfulTurns);
+				}
+			} catch (err) {
+				this._logService.error(err as Error, 'Graphiti ingestion failed');
+			}
 
 			// mixin fixed metadata shape into result. Modified in place because the object is already
 			// cached in the conversation store and we want the full information when looking this up

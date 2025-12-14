@@ -37,6 +37,7 @@ import { renderPromptElement } from '../base/promptRenderer';
 import { Tag } from '../base/tag';
 import { ChatToolCalls } from '../panel/toolCalling';
 import { AgentPrompt, AgentPromptProps, AgentUserMessage, AgentUserMessageCustomizations, getUserMessagePropsFromAgentProps, getUserMessagePropsFromTurn } from './agentPrompt';
+import { GraphitiMemoryContext } from './graphitiMemoryContext';
 import { DefaultOpenAIKeepGoingReminder } from './openai/defaultOpenAIPrompt';
 import { SimpleSummarizedHistory } from './simpleSummarizedHistoryPrompt';
 import { isAnthropicFamily } from '../../../../platform/endpoint/common/chatModelCapabilities';
@@ -243,6 +244,7 @@ class ConversationHistory extends PromptElement<SummarizedAgentHistoryProps> {
 		}
 
 		if (!this.props.promptContext.isContinuation) {
+			history.push(<GraphitiMemoryContext flexGrow={1} priority={850} query={this.props.promptContext.query} sessionId={this.props.promptContext.conversation?.sessionId} />);
 			history.push(<AgentUserMessage flexGrow={2} priority={900} {...getUserMessagePropsFromAgentProps(this.props, {
 				userQueryTagName: this.props.userQueryTagName,
 				attachmentHint: this.props.attachmentHint,

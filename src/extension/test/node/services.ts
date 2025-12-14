@@ -40,6 +40,8 @@ import { TestLogService } from '../../../platform/testing/common/testLogService'
 import { ITestProvider } from '../../../platform/testing/common/testProvider';
 import { IGithubAvailableEmbeddingTypesService, MockGithubAvailableEmbeddingTypesService } from '../../../platform/workspaceChunkSearch/common/githubAvailableEmbeddingTypes';
 import { IWorkspaceChunkSearchService, NullWorkspaceChunkSearchService } from '../../../platform/workspaceChunkSearch/node/workspaceChunkSearchService';
+import { IWorkspaceTrustService } from '../../../platform/workspace/common/workspaceTrustService';
+import { Event } from '../../../util/vs/base/common/event';
 import { DisposableStore } from '../../../util/vs/base/common/lifecycle';
 import { SyncDescriptor } from '../../../util/vs/platform/instantiation/common/descriptors';
 import { IClaudeCodeSdkService } from '../../agents/claude/node/claudeCodeSdkService';
@@ -62,6 +64,12 @@ import { ToolGroupingService } from '../../tools/common/virtualTools/toolGroupin
 import '../../tools/node/allTools';
 import { TestToolsService } from '../../tools/node/test/testToolsService';
 import { TestToolEmbeddingsComputer } from '../../tools/test/node/virtualTools/testVirtualTools';
+
+class TrustedWorkspaceTrustService implements IWorkspaceTrustService {
+	declare readonly _serviceBrand: undefined;
+	readonly isTrusted = true;
+	readonly onDidGrantWorkspaceTrust = Event.None;
+}
 
 export interface ISimulationModelConfig {
 	chatModel?: string;
@@ -123,6 +131,7 @@ export function createExtensionUnitTestingServices(disposables: Pick<DisposableS
 	testingServiceCollection.define(IGitDiffService, new SyncDescriptor(NullGitDiffService));
 	testingServiceCollection.define(IGithubAvailableEmbeddingTypesService, new SyncDescriptor(MockGithubAvailableEmbeddingTypesService));
 	testingServiceCollection.define(ILiveRequestEditorService, new SyncDescriptor(LiveRequestEditorService));
+	testingServiceCollection.define(IWorkspaceTrustService, new SyncDescriptor(TrustedWorkspaceTrustService));
 	return testingServiceCollection;
 }
 
