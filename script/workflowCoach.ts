@@ -434,12 +434,16 @@ function collectGitHubState(branch: string): WorkflowContext['gh'] {
 	}
 
 	try {
-		const output = execFileSync('gh', ['pr', 'view', '--json', 'number,url'], { encoding: 'utf8' }).trim();
-		const parsed = JSON.parse(output) as { number?: number; url?: string };
+		const output = execFileSync('gh', ['pr', 'view', '--json', 'number,url,state'], { encoding: 'utf8' }).trim();
+		const parsed = JSON.parse(output) as { number?: number; url?: string; state?: unknown };
+		const rawState = typeof parsed.state === 'string' ? parsed.state.toUpperCase() : undefined;
+		const prState: WorkflowContext['gh']['prState'] =
+			rawState === 'OPEN' || rawState === 'CLOSED' || rawState === 'MERGED' ? (rawState as WorkflowContext['gh']['prState']) : undefined;
 		return {
 			hasAuth: true,
 			prNumber: typeof parsed.number === 'number' ? parsed.number : undefined,
 			prUrl: typeof parsed.url === 'string' ? parsed.url : undefined,
+			prState,
 		};
 	} catch {
 		// No PR for current branch (or API error); keep best-effort behavior.
@@ -498,7 +502,9 @@ function renderText(context: WorkflowContext, result: CoachResult) {
 		if (!gh.hasAuth) {
 			lines.push('PR: (skipped/unavailable)');
 		} else if (gh.prUrl) {
-			lines.push(`PR: ${gh.prUrl}`);
+			const stateSuffix =
+				gh.prState === 'MERGED' ? ' (merged)' : gh.prState === 'CLOSED' ? ' (closed)' : gh.prState === 'OPEN' ? ' (open)' : '';
+			lines.push(`PR: ${gh.prUrl}${stateSuffix}`);
 		} else {
 			lines.push('PR: (none)');
 		}
