@@ -836,6 +836,8 @@ const App: React.FC = () => {
 	const [replayUri, setReplayUri] = React.useState<string | undefined>(undefined);
 	const [lastReplayUri, setLastReplayUri] = React.useState<string | undefined>(undefined);
 	const [followLatest, setFollowLatest] = React.useState(true);
+	const [snapshotText, setSnapshotText] = React.useState<string>('');
+	const [snapshotError, setSnapshotError] = React.useState<string | undefined>(undefined);
 	const [persistedState, setPersistedState] = React.useState<PersistedState>(() => {
 		const stored = (vscode.getState?.() ?? {}) as PersistedState;
 		const pinned = (stored as { pinned?: unknown }).pinned;
@@ -929,6 +931,16 @@ const App: React.FC = () => {
 		});
 	}, [activeSessionKey, updatePersistedState]);
 
+	const applySnapshot = React.useCallback(() => {
+		try {
+			const parsed = snapshotText.trim().length ? JSON.parse(snapshotText) : undefined;
+			setSnapshotError(undefined);
+			sendMessage('applySnapshot', { snapshot: parsed });
+		} catch (error) {
+			setSnapshotError(error instanceof Error ? error.message : 'Invalid JSON');
+		}
+	}, [sendMessage, snapshotText]);
+
 	React.useEffect(() => {
 		const handler = (event: MessageEvent<StateUpdateMessage>) => {
 			if (event.data?.type === 'stateUpdate') {
@@ -949,6 +961,17 @@ const App: React.FC = () => {
 				const extras = (event.data.extraSections ?? []).filter(isInspectorExtraSection);
 				setExtraSections(extras);
 				setReplayEnabled(!!event.data.replayEnabled);
+				// Populate snapshot text from the current request, if present.
+				if (event.data.request?.sessionSnapshot) {
+					try {
+						setSnapshotText(JSON.stringify(event.data.request.sessionSnapshot, null, 2));
+						setSnapshotError(undefined);
+					} catch {
+						setSnapshotText('');
+					}
+				} else {
+					setSnapshotText('');
+				}
 			}
 		};
 		window.addEventListener('message', handler);
@@ -1571,6 +1594,28 @@ const App: React.FC = () => {
 						) : null}
 					</div>
 				) : null}
+
+				<CollapsiblePanel
+					id='session-snapshot'
+					title='Session Snapshot'
+					description='Edit the captured session snapshot and apply to regenerate the prompt.'
+					isCollapsed={collapsedIdSet.has('session-snapshot')}
+					onToggleCollapse={handleToggleCollapse}
+				>
+					<textarea
+						className='snapshot-textarea'
+						value={snapshotText}
+						onChange={e => setSnapshotText(e.target.value)}
+						rows={10}
+						spellCheck={false}
+					/>
+					<div className='snapshot-actions'>
+						<vscode-button appearance='primary' onClick={applySnapshot} disabled={!activeSessionKey}>
+							Apply to prompt
+						</vscode-button>
+						{snapshotError && <span className='error-text'>{snapshotError}</span>}
+					</div>
+				</CollapsiblePanel>
 
 				{mode === 'autoOverride' && autoOverride?.enabled ? (
 					<div className={`auto-override-banner ${captureActive ? 'capturing' : autoOverride.hasOverrides ? 'active' : 'idle'}`}>
