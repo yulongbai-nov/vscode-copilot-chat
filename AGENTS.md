@@ -169,7 +169,6 @@ When asked to “write the spec” or “create the core documents” for a feat
   - If the current branch’s PR is already **merged**, do not keep appending work “into the merged PR”. Start a new PR for any follow-up changes (same branch is acceptable, but it must be a new PR).
 - **Workflow Coach (reminder helper)**
   - At workflow checkpoints (before commit/push/PR/scope changes), run: `npm run workflow:coach -- --query "<current request>"`.
-  - Use `--no-gh` to skip PR lookup when speed/offline.
   - Optional: install repo-local git hooks to run the coach automatically on commit/push: `npm run workflow:install-hooks`.
 - **Scope drift protocol** (when a new, unrelated scope appears mid-branch):
   1. STOP adding more changes in the new scope.

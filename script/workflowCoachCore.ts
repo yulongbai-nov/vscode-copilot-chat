@@ -487,8 +487,7 @@ function computeSuggestedNextState(
 		return 'Branch pushed to origin';
 	}
 
-	const hasActivePr = !!(gh?.hasAuth && gh.prUrl && (gh.prState === undefined || gh.prState === 'OPEN'));
-	if (!git.isMainBranch && gh?.hasAuth && !hasActivePr) {
+	if (nextActions.some(a => a.id === 'open-pr')) {
 		return 'PR opened for current branch';
 	}
 
