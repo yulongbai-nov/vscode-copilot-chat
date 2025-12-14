@@ -956,7 +956,9 @@ const App: React.FC = () => {
 				}
 				setInterception(event.data.interception);
 				setSessions(event.data.sessions ?? []);
-				setActiveSessionKey(event.data.activeSessionKey);
+				const derivedKey = event.data.activeSessionKey
+					?? (event.data.request ? `${event.data.request.sessionId}::${event.data.request.location}` : undefined);
+				setActiveSessionKey(derivedKey);
 				setFollowLatest(event.data.followLatest ?? true);
 				const extras = (event.data.extraSections ?? []).filter(isInspectorExtraSection);
 				setExtraSections(extras);
@@ -1610,7 +1612,7 @@ const App: React.FC = () => {
 						spellCheck={false}
 					/>
 					<div className='snapshot-actions'>
-						<vscode-button appearance='primary' onClick={applySnapshot} disabled={!activeSessionKey}>
+						<vscode-button appearance='primary' onClick={applySnapshot} disabled={!request}>
 							Apply to prompt
 						</vscode-button>
 						{snapshotError && <span className='error-text'>{snapshotError}</span>}
