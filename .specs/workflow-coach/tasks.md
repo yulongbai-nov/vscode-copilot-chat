@@ -25,6 +25,7 @@
   - [x] 11.1 Infer design vs implementation from changed paths
   - [x] 11.2 Persist and display phase transitions
   - [x] 11.3 Add design-phase “clarify requirements” reminder
+  - [x] 11.4 Add “unknown phase” reminder
 - [x] 12. Add docs code-link formatting reminder _Requirements: 9_
   - [x] 12.1 Emit reminder when work type is docs or Markdown files change
   - [x] 12.2 Update agent-prompt.md to require line-link formatting in docs

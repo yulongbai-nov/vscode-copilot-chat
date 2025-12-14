@@ -99,6 +99,7 @@ The coach can also persist **local-only** per-branch metadata (under the git com
 8.1 WHEN working changes touch `.specs/...` and do not touch code/build/CI paths, THE Workflow_Coach SHOULD treat the current phase as “design” and SHOULD remind to clarify vague requirements with the human.  
 8.2 WHEN working changes touch code/build/CI paths, THE Workflow_Coach SHOULD treat the current phase as “implementation”.  
 8.3 WHEN the inferred phase changes compared to the previous persisted run for the branch, THE Workflow_Coach SHOULD surface a short advisory “phase changed” reminder.  
+8.4 WHEN the phase cannot be inferred (e.g. clean tree with no previous phase), THE Workflow_Coach SHOULD remind to explicitly decide whether the next step is design (clarify + update spec) or implementation (follow tasks + verify).  
 
 ### Requirement 9 — Documentation code-link formatting reminder
 
