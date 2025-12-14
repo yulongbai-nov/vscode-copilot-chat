@@ -41,6 +41,7 @@ npm run workflow:coach -- --query "…" --no-persist
 - Branch + upstream + ahead/behind
 - Change counts (staged/unstaged/untracked)
 - Optional PR URL (if `gh` is authenticated)
+- Optional inferred phase (`design` / `implementation`)
 - A “Detected state” + “Suggested next state”
 - Warnings + suggested commands (advisory)
 
