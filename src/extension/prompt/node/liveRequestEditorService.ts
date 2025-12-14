@@ -461,13 +461,24 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}, false);
 	}
 
-	getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): LiveRequestSendResult {
+	async getMessagesForSend(key: LiveRequestSessionKey, fallback: Raw.ChatMessage[]): Promise<LiveRequestSendResult> {
 		if (!this._enabled) {
 			return { messages: fallback };
 		}
 		const request = this.getRequest(key);
 		if (!request) {
 			return { messages: fallback };
+		}
+		if (request.sessionSnapshot) {
+			const rendered = await this.renderFromSnapshot(request, undefined);
+			if (rendered && rendered.length) {
+				request.messages = deepClone(rendered);
+				request.originalMessages = deepClone(rendered);
+				request.sections = createSectionsFromMessages(request.messages);
+				request.isDirty = true;
+				this._onDidChange.fire(request);
+				this.emitMetadataForRequest(request);
+			}
 		}
 		this.recomputeMessages(request);
 		const validationError = this.validateRequestForSend(request);
