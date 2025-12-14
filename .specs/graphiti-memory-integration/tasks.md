@@ -18,6 +18,7 @@
 - [x] 11. Parallelize recall queries across scopes _Requirements: 3.4_
 - [x] 12. Wrap promoted memories in `<graphiti_episode kind="…">…</graphiti_episode>` _Requirements: 4.3_
 - [x] 13. Add Graphiti redeploy/runbook notes to the demo guide _Requirements: 5.1_
+- [x] 14. Register Graphiti ingestion service in simulation harness _Requirements: 2.1_
 
 ## Implementation Notes
 
