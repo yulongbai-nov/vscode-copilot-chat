@@ -7,7 +7,7 @@
   ### Spec Source of Truth
   - `.specs/request-logger-prompt-editor/design.md` — captures the architecture for the Live Request Editor, metadata tree, and Auto Override workflows; update this first if we pivot on UX, data flow, or telemetry.
   - `.specs/request-logger-prompt-editor/requirements.md` — canonical user stories / acceptance criteria for Tasks 1–11; reference the numbered requirements when adding tests or scope.
-  - `.specs/request-logger-prompt-editor/tasks.md` — active implementation checklist (current phase: **implementation** with open work in Tasks 2.4, 6.x, 7.x). Per `agent-prompt.md`, no coding should happen outside this plan; if new scope appears, switch back to design and revise the spec before touching code.
+  - `.specs/request-logger-prompt-editor/tasks.md` — active implementation checklist (current phase: **implementation** with open work in Tasks 2.4, 6.x, 7.x). Per `AGENTS.md`, no coding should happen outside this plan; if new scope appears, switch back to design and revise the spec before touching code.
 
   ### Latest Work
   1. **Metadata stream**
@@ -44,7 +44,7 @@
     1. With the feature flag on, send a prompt, open “Live Request Metadata,” and verify the metadata nodes/token meter update when you send, edit, switch conversations, or change models. Use “Configure metadata” to toggle fields and expand outline nodes for copy.
     2. Switch the mode toggle to **Auto**, send another prompt, edit one of the first three sections, and press **Resume**. Subsequent turns should send immediately with the override applied, the banner should display the chosen scope, and the section card should show the “Override · Show diff” chip. Use the banner actions (Pause next turn, Edit overrides, Clear overrides, Change scope, Preview limit) to confirm they dispatch correctly.
     3. Pin “Live Request Payload,” intercept a prompt, and confirm the JSON mirrors the live `messages[]` state. Exercise Copy/Open controls and drag the view between the chat panel and sidebar to confirm it docks like the metadata view.
-  - Known test debt (per `agent-prompt.md`): `npm run test:unit` can still timeout in the tool-calling, notebook prompt rendering, and agent prompt suites upstream. Treat these failures as pre-existing and mention them in reviews.
+  - Known test debt (per `AGENTS.md`): `npm run test:unit` can still timeout in the tool-calling, notebook prompt rendering, and agent prompt suites upstream. Treat these failures as pre-existing and mention them in reviews.
 
   ### Remaining Scope / Next Steps
   - Task 2.4: HTML tracer enrichment.

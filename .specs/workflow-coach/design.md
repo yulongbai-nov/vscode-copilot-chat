@@ -2,7 +2,7 @@
 
 ## Overview
 
-The repo’s workflow rules live primarily in `agent-prompt.md` (spec-first, branch hygiene, “quad verification”, etc.). As the rules grow, it becomes easy for an agent (or a human driving the agent) to forget a step, mix scopes, or commit/push in the wrong order.
+The repo’s workflow rules live primarily in `AGENTS.md` (spec-first, branch hygiene, “quad verification”, etc.). As the rules grow, it becomes easy for an agent (or a human driving the agent) to forget a step, mix scopes, or commit/push in the wrong order.
 
 This feature adds a lightweight **Workflow Coach** script that:
 
@@ -33,7 +33,7 @@ The intent is to move the operational checklist out of prose and into an executa
 
 ## Current Architecture
 
-- Workflow guidance is documented in `agent-prompt.md`.
+- Workflow guidance is documented in `AGENTS.md`.
 - Enforcement is mostly manual:
   - Humans or the agent remember to run lint/typecheck/compile/tests.
   - Humans or the agent decide when to split commits and when to open PRs.
@@ -43,7 +43,7 @@ The intent is to move the operational checklist out of prose and into an executa
 
 ### How it fits into the “meta workflow”
 
-- **Source of truth remains**: system/developer/user instructions + `agent-prompt.md` + `.specs/...`.
+- **Source of truth remains**: system/developer/user instructions + `AGENTS.md` + `.specs/...`.
 - **Workflow Coach is advisory**: it helps confirm the next step you *already intend* to take is consistent with the workflow.
 - **When to run (to avoid slowing work down)**:
   - Recommended checkpoints (high value / low frequency):
@@ -198,14 +198,14 @@ flowchart TD
 ## Integration Points
 
 - `package.json` scripts to run the coach quickly.
-- `agent-prompt.md` can be shortened to “run the coach at decision points” plus the spec-first requirements.
+- `AGENTS.md` can be shortened to “run the coach at decision points” plus the spec-first requirements.
 - Git hooks (pre-commit / pre-push) to run the coach at workflow checkpoints (default: non-blocking).
   - Optional enforcement via environment variables and `--fail-on` (selected warning IDs).
 
 ## Migration / Rollout Strategy
 
 - Land as opt-in tooling (no enforcement).
-- Document recommended usage in `agent-prompt.md`.
+- Document recommended usage in `AGENTS.md`.
 - Iterate rule set as new workflow pain points appear.
 
 ## Performance / Reliability / Security / UX Considerations
