@@ -109,6 +109,7 @@ Mapping helper: [`src/extension/memory/graphiti/node/graphitiMessageMapping.ts#L
 
 - Query string is derived from the current turn’s user query (trimmed).
 - `POST /search` runs with a strict timeout and `max_facts` cap.
+- When multiple scopes are enabled, recall starts per-scope queries concurrently but processes results in a stable scope order, stopping early once `max_facts` is reached.
 - Returned facts are rendered into a single `<graphiti_memory>` section:
   - It is intentionally framed as “optional context” to reduce over-reliance on possibly-stale facts.
 

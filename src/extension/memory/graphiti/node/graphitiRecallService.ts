@@ -106,23 +106,26 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 			}
 		}
 
-		const settled = await Promise.allSettled(
-			searchTargets.map(({ groupId }) => client.search({ query, group_ids: [groupId], max_facts: config.maxFacts }))
-		);
+		const searchPromises = searchTargets.map(({ scope, groupId }) => {
+			return client.search({ query, group_ids: [groupId], max_facts: config.maxFacts })
+				.then(res => ({ scope, res }))
+				.catch(() => {
+					this._logService.debug(`Graphiti recall failed for ${scope} scope.`);
+					return undefined;
+				});
+		});
 
 		for (let i = 0; i < searchTargets.length; i++) {
 			if (results.length >= config.maxFacts) {
 				break;
 			}
 
-			const { scope } = searchTargets[i];
-			const result = settled[i];
-			if (result?.status === 'fulfilled') {
-				addFacts(scope, result.value.facts);
+			const result = await searchPromises[i];
+			if (!result) {
 				continue;
 			}
 
-			this._logService.debug(`Graphiti recall failed for ${scope} scope.`);
+			addFacts(result.scope, result.res.facts);
 		}
 
 		this._logService.trace(`Graphiti recall produced ${results.length} fact(s).`);
