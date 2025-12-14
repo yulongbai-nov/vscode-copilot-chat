@@ -46,6 +46,7 @@ The coach can also persist **local-only** per-branch metadata (under the git com
 3.1 WHEN `gh` is installed and authenticated, THE Workflow_Coach SHOULD detect whether the current branch has an open PR and print the PR URL if present.  
 3.2 WHEN `gh` is missing or unauthenticated, THE Workflow_Coach SHALL continue and SHALL not fail the run.  
 3.3 THE Workflow_Coach SHALL support a `--no-gh` option that disables PR lookups for faster/offline runs.  
+3.4 WHEN the current branch’s PR is `MERGED` (best-effort) AND new work exists on the branch, THE Workflow_Coach SHOULD remind to open a new PR for the follow-up changes.  
 
 ### Requirement 4 — Recommend actions (commands)
 
@@ -120,3 +121,4 @@ The coach can also persist **local-only** per-branch metadata (under the git com
 10.3 The hook scripts SHALL be non-blocking by default (advisory only).  
 10.4 WHEN enforcement is requested, the hook scripts SHOULD be able to block by setting an environment variable and selecting one or more warning IDs (e.g. `dirty-main`, `spec-mismatch`) or `warn` (any warning).  
 10.5 THE Workflow_Coach SHALL support a `--fail-on` option to exit non-zero when selected warnings are present (enables enforcement in hooks/CI).  
+10.6 By default, the hook scripts SHOULD run with PR lookups enabled so PR-state based reminders (e.g. “open a new PR after merge”) can trigger.  

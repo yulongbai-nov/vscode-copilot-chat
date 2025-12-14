@@ -7,9 +7,9 @@ set -e
 #
 if command -v npm >/dev/null 2>&1; then
 	if [ "${WORKFLOW_COACH_ENFORCE:-0}" = "1" ]; then
-		npm run -s workflow:coach -- --query "pre-commit" --no-gh --fail-on "${WORKFLOW_COACH_FAIL_ON:-dirty-main,spec-mismatch}"
+		npm run -s workflow:coach -- --query "pre-commit" --fail-on "${WORKFLOW_COACH_FAIL_ON:-dirty-main,spec-mismatch}"
 	else
-		npm run -s workflow:coach -- --query "pre-commit" --no-gh || true
+		npm run -s workflow:coach -- --query "pre-commit" || true
 	fi
 fi
 

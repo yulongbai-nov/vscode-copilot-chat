@@ -75,7 +75,7 @@ Run in VS Code:
 3. Enable the settings above and open the Prompt Inspector via the “View Prompt” affordance or `Copilot: Show Prompt Inspector`
 
 Spec-first workflow:
-- See `agent-prompt.md` and `.specs/` for the current design/requirements/tasks.
+- See `AGENTS.md` and `.specs/` for the current design/requirements/tasks.
 
 ## Installing and getting updates (VSIX / intranet)
 

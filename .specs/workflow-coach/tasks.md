@@ -9,7 +9,7 @@
   - [x] 2.5 Text renderer + `--json` renderer
 - [x] 3. Add `npm run workflow:coach` script entry in `package.json` _Requirements: 1_
 - [x] 4. Add unit tests for rule engine (mock git/gh collectors) _Requirements: 4, 5_
-- [x] 5. Update `agent-prompt.md` to reference the coach at decision points (shorten prose) _Requirements: 4_
+- [x] 5. Update `AGENTS.md` to reference the coach at decision points (shorten prose) _Requirements: 4_
 - [x] 6. Document usage in a short `docs/workflow-coach.md` _Requirements: 1–5_
 - [x] 7. Add local-only per-branch persisted state _Requirements: 6_
   - [x] 7.1 Store state under git common dir (worktree-safe)
@@ -28,11 +28,15 @@
   - [x] 11.4 Add “unknown phase” reminder
 - [x] 12. Add docs code-link formatting reminder _Requirements: 9_
   - [x] 12.1 Emit reminder when work type is docs or Markdown files change
-  - [x] 12.2 Update agent-prompt.md to require line-link formatting in docs
+  - [x] 12.2 Update `AGENTS.md` to require line-link formatting in docs
 - [x] 13. Add optional git hook integration _Requirements: 10_
   - [x] 13.1 Add `.githooks/pre-commit` and `.githooks/pre-push` that run the coach
   - [x] 13.2 Add `npm run workflow:install-hooks` to set `core.hooksPath=.githooks`
   - [x] 13.3 Add `--fail-on` support + unit tests for selectors
+- [x] 14. Remind to open new PR after merge _Requirements: 3.4_
+  - [x] 14.1 Parse PR state from `gh pr view`
+  - [x] 14.2 Treat merged/closed PR as non-active for reminders
+  - [x] 14.3 Add unit test for merged PR case
 
 ## Implementation Notes
 

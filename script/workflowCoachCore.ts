@@ -24,6 +24,7 @@ export type WorkflowContext = {
 		hasAuth: boolean;
 		prNumber?: number;
 		prUrl?: string;
+		prState?: 'OPEN' | 'CLOSED' | 'MERGED';
 	};
 	previous?: {
 		lastRunAt?: string;
@@ -224,6 +225,7 @@ export function evaluateWorkflow(context: WorkflowContext, options: WorkflowCoac
 	const hasWorkingChanges = git.stagedFiles + git.unstagedFiles + git.untrackedFiles > 0;
 	const scopeBuckets = detectScopeBuckets(git.changedPaths);
 	const phase = context.phase ?? inferPhase(context);
+	const hasActivePr = !!(gh?.hasAuth && gh.prUrl && (gh.prState === undefined || gh.prState === 'OPEN'));
 
 	const activeSpec = context.spec?.active;
 	const inferredSpecFromBranch = context.spec?.inferredFromBranch;
@@ -384,14 +386,26 @@ export function evaluateWorkflow(context: WorkflowContext, options: WorkflowCoac
 		});
 	}
 
-	if (!git.isMainBranch && gh?.hasAuth && !gh.prUrl) {
-		nextActions.push({
-			id: 'open-pr',
-			severity: 'info',
-			title: 'Open a PR for this branch',
-			why: 'An open PR makes review/CI tracking easier and avoids “forgot to PR” drift.',
-			commands: [`gh pr create --base ${defaultBranch} --head ${git.branch}`],
-		});
+	if (!git.isMainBranch && gh?.hasAuth && !hasActivePr) {
+		const isMerged = gh.prState === 'MERGED';
+		const isClosed = gh.prState === 'CLOSED';
+		const hasWork = hasWorkingChanges || git.ahead > 0;
+		// Only prompt for "new PR" when there is new work; otherwise it’s just noise on a merged/closed branch.
+		if ((isMerged || isClosed) && !hasWork) {
+			// No action.
+		} else {
+			nextActions.push({
+				id: 'open-pr',
+				severity: 'info',
+				title: isMerged ? 'Open a new PR for this branch' : 'Open a PR for this branch',
+				why: isMerged
+					? 'The previous PR for this branch is merged; open a new PR for any follow-up changes.'
+					: isClosed
+						? 'The previous PR for this branch is closed; open a new PR for any follow-up changes.'
+						: 'An open PR makes review/CI tracking easier and avoids “forgot to PR” drift.',
+				commands: [`gh pr create --base ${defaultBranch} --head ${git.branch}`],
+			});
+		}
 	}
 
 	if (workType) {
@@ -473,7 +487,7 @@ function computeSuggestedNextState(
 		return 'Branch pushed to origin';
 	}
 
-	if (!git.isMainBranch && gh?.hasAuth && !gh.prUrl) {
+	if (nextActions.some(a => a.id === 'open-pr')) {
 		return 'PR opened for current branch';
 	}
 

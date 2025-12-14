@@ -211,6 +211,31 @@ suite('Workflow Coach', () => {
 
 			expect(result.nextActions.some(a => a.id === 'open-pr')).toBe(true);
 		});
+
+		test('recommends opening a new PR when the existing PR is merged and there is new work', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					gh: { hasAuth: true, prUrl: 'https://example.invalid/pr/1', prState: 'MERGED' },
+					git: { branch: 'feature/example', isMainBranch: false, ahead: 1, upstream: 'origin/feature/example' },
+				}),
+			);
+
+			const action = result.nextActions.find(a => a.id === 'open-pr');
+			expect(action).toBeDefined();
+			expect(action?.title.toLowerCase()).toContain('new pr');
+		});
+
+		test('does not suggest opening a PR when the existing PR is merged and there is no new work', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					gh: { hasAuth: true, prUrl: 'https://example.invalid/pr/1', prState: 'MERGED' },
+					git: { branch: 'feature/example', isMainBranch: false, ahead: 0, changedPaths: [] },
+				}),
+			);
+
+			expect(result.nextActions.some(a => a.id === 'open-pr')).toBe(false);
+			expect(result.suggestedNextState).toBe('No immediate workflow action required');
+		});
 	});
 
 	suite('fail-on', () => {
