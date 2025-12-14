@@ -5412,6 +5412,8 @@
 		"lint-staged": "node --experimental-strip-types ./node_modules/eslint/bin/eslint.js --max-warnings=0",
 		"fix:changed": "node ./script/fixChangedFiles.mjs",
 		"fix:staged": "node ./script/fixChangedFiles.mjs --staged-only --restage",
+		"workflow:coach": "node --experimental-strip-types script/workflowCoach.ts",
+		"workflow:install-hooks": "node --experimental-strip-types script/workflowInstallHooks.ts",
 		"tsfmt": "npx tsfmt -r --verify",
 		"test": "npm-run-all test:*",
 		"test:extension": "vscode-test",

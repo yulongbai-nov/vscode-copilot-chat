@@ -136,6 +136,13 @@ Additional sections (recommended):
   - If they say “focus on implementation” or “follow the plan”, prioritise executing `tasks.md`.
 - When you are unsure which phase you are in, ask: “Should we refine the spec (design phase) or act on it (implementation phase)?”.
 - Summarise significant changes to any of the three documents so the human can quickly review and approve.
+- When you are about to pause and wait for human input (e.g. tasks are done, or you need clarification), include a short **Debug status** block that states:
+  - Current branch + ahead/behind + clean/dirty
+  - PR URL (best-effort; omit if unknown)
+  - Active spec (if any) + inferred phase (design vs implementation)
+  - Workflow Coach detected/suggested state (best-effort)
+  - Link to this prompt file: `[agent-prompt.md](agent-prompt.md)`
+  - If you are using an explicit plan tracker, ensure it is updated (completed/canceled/in-progress) before the debug block.
 
 ## Output expectations
 
@@ -159,32 +166,36 @@ When asked to “write the spec” or “create the core documents” for a feat
     - `perf/...` (performance-only changes)
   - When a new feature starts, create a fresh branch from the latest `main` (or the agreed integration branch). If multiple features run in parallel, keep each on its own branch to avoid entanglement.
   - Keep commits small, reference the relevant tasks/requirements, and separate spec edits from code when practical. Mention both in the commit message when they ship together.
-  - **Scope drift protocol** (when a new, unrelated scope appears mid-branch):
-    1. STOP adding more changes in the new scope.
-    2. Prefer isolating scopes with **`git worktree`** (so you can continue the current PR while starting a clean branch for the new scope):
-       - Worktree path convention (consistent across machines):
-         - Use a sibling directory: `../<repo>.worktrees/<branchSlug>`
-         - Example: `../vscode-copilot-chat.worktrees/fix-amend-merged-pr-commit-messages`
-         - Where `branchSlug` is the branch name with `/` replaced by `-`.
-       - If you have not started the new work yet:
+- **Workflow Coach (reminder helper)**
+  - At workflow checkpoints (before commit/push/PR/scope changes), run: `npm run workflow:coach -- --query "<current request>"`.
+  - Use `--no-gh` to skip PR lookup when speed/offline.
+  - Optional: install repo-local git hooks to run the coach automatically on commit/push: `npm run workflow:install-hooks`.
+- **Scope drift protocol** (when a new, unrelated scope appears mid-branch):
+  1. STOP adding more changes in the new scope.
+  2. Prefer isolating scopes with **`git worktree`** (so you can continue the current PR while starting a clean branch for the new scope):
+     - Worktree path convention (consistent across machines):
+       - Use a sibling directory: `../<repo>.worktrees/<branchSlug>`
+       - Example: `../vscode-copilot-chat.worktrees/fix-amend-merged-pr-commit-messages`
+       - Where `branchSlug` is the branch name with `/` replaced by `-`.
+     - If you have not started the new work yet:
+       - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
+     - If you already have WIP changes for the new scope in the current worktree:
+       - Stash only the unrelated hunks (include untracked): `git stash push -p -u -m "wip: <new-scope>"`
+       - Create the worktree branch and apply the stash there:
          - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
-       - If you already have WIP changes for the new scope in the current worktree:
-         - Stash only the unrelated hunks (include untracked): `git stash push -p -u -m "wip: <new-scope>"`
-         - Create the worktree branch and apply the stash there:
-           - `git fetch origin && git worktree add -b <type>/<name> ../<repo>-<name> origin/main`
-           - `cd ../<repo>-<name> && git stash pop`
-       - If the new-scope changes are already committed, prefer `git cherry-pick` those commits onto the new branch/worktree (or split with `git rebase -i` if needed).
-    3. Finish the current scope first:
-       - Split into logical commits (spec vs code when practical).
-       - Run the “quad” verification before committing/pushing.
-       - Push and open/update the PR for the current scope.
-    4. Continue the new scope on the new branch/worktree:
-       - If the new work *depends* on unmerged changes from the first branch, branch from that feature branch instead and note the dependency in the PR description.
-    5. (Optional) When you are done with the parallel worktree: `git worktree remove ../<repo>-<name>`
-    6. If the current branch name no longer matches the delivered scope:
-       - If no PR exists yet, rename locally + remote (`git branch -m ...`, push the new branch, delete the old remote branch).
-       - If a PR already exists, avoid renaming the remote head branch; prefer a follow-up PR/branch with the correct name.
-    7. Update `.specs/<feature>/...` before implementing additional scope (spec-first).
+         - `cd ../<repo>-<name> && git stash pop`
+     - If the new-scope changes are already committed, prefer `git cherry-pick` those commits onto the new branch/worktree (or split with `git rebase -i` if needed).
+  3. Finish the current scope first:
+     - Split into logical commits (spec vs code when practical).
+     - Run the “quad” verification before committing/pushing.
+     - Push and open/update the PR for the current scope.
+  4. Continue the new scope on the new branch/worktree:
+     - If the new work *depends* on unmerged changes from the first branch, branch from that feature branch instead and note the dependency in the PR description.
+  5. (Optional) When you are done with the parallel worktree: `git worktree remove ../<repo>-<name>`
+  6. If the current branch name no longer matches the delivered scope:
+     - If no PR exists yet, rename locally + remote (`git branch -m ...`, push the new branch, delete the old remote branch).
+     - If a PR already exists, avoid renaming the remote head branch; prefer a follow-up PR/branch with the correct name.
+  7. Update `.specs/<feature>/...` before implementing additional scope (spec-first).
 - **Verification Before Every Commit/Push** (“quadruple check” + simulation):
   1. `npm run lint`
   2. `npm run typecheck`
@@ -203,6 +214,10 @@ When asked to “write the spec” or “create the core documents” for a feat
   - For quick “make my patch clean” runs, use:
     - `npm run fix:changed` (formats + eslint --fix on changed files)
     - `npm run fix:staged` (formats + eslint --fix on staged files, then re-stages)
+- **Documentation code links**
+  - When writing Markdown docs/specs, prefer **relative links** that include GitHub-style line anchors so references are clickable both on GitHub and in VS Code:
+    - Single line: `[src/foo.ts#L42](src/foo.ts#L42)`
+    - Range: `[src/foo.ts#L42-L55](src/foo.ts#L42-L55)`
 - **Spec-first loop**: update `.specs/<feature>/{design,requirements,tasks}.md` whenever scope changes. Do not implement functionality that isn’t captured in the spec.
 - **Task tracking**: drive work via `tasks.md`. If an ad hoc request arises, either add a task or note the deviation explicitly.
 - **Feature flags & configs**: keep new UX/code paths behind their feature flags or configuration keys until they’re GA-ready. Document every new setting in both the spec and `package.json`.
