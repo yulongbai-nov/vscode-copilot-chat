@@ -800,7 +800,7 @@ export class LiveRequestEditorProvider extends Disposable implements vscode.Webv
 
 		// Original vs edited payloads, serialized with stable formatting.
 		const originalPayload = request.originalMessages;
-		const editedResult = this._liveRequestEditorService.getMessagesForSend(key, request.originalMessages);
+		const editedResult = await this._liveRequestEditorService.getMessagesForSend(key, request.originalMessages);
 		if (editedResult.error) {
 			void vscode.window.showWarningMessage('Cannot build payload diff because the edited request is invalid. Reset the prompt and try again.');
 			return;

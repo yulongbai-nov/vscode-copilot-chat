@@ -1246,10 +1246,10 @@ export function registerCLIChatCommands(copilotcliSessionItemProvider: CopilotCL
 		// existing snapshot; for session keys we build a fresh replay snapshot.
 		let snapshot = 'requestId' in arg
 			? liveRequestEditorService.getReplaySnapshot(arg)
-			: liveRequestEditorService.buildReplayForRequest({ sessionId: arg.sessionId, location: arg.location });
+			: await liveRequestEditorService.buildReplayForRequest({ sessionId: arg.sessionId, location: arg.location });
 
 		if (!snapshot && 'requestId' in arg) {
-			snapshot = liveRequestEditorService.buildReplayForRequest({ sessionId: arg.sessionId, location: arg.location });
+			snapshot = await liveRequestEditorService.buildReplayForRequest({ sessionId: arg.sessionId, location: arg.location });
 		}
 
 		if (!snapshot || !snapshot.payload || snapshot.payload.length === 0) {

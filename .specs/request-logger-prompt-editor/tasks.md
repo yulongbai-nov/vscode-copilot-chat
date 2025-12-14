@@ -111,13 +111,13 @@
   - Tracked in `.specs/graphiti-memory-integration/tasks.md`.  
 
 - [ ] 14. Session-sourced Live Request model  
-  - [ ] 14.1 Capture a per-session snapshot (normalized `IBuildPromptContext`, requestOptions, endpoint/model info) before prompt rendering and persist it in `LiveRequestEditorService`. _Requirements: 17.1_  
-  - [ ] 14.2 Add a snapshot-based renderer (reuse `PromptRenderer` with the captured context/config) to regenerate `Raw.ChatMessage[]` for section building/reset, with graceful fallback to existing `RenderPromptResult.messages`. _Requirements: 17.2, 17.3_  
-  - [ ] 14.3 Update the Live Request Builder/Editor to treat snapshot-rendered messages as the base, applying edits/deletes atop them and preserving `originalMessages` for reset/diff. _Requirements: 17.2, 17.4_  
+  - [x] 14.1 Capture a per-session snapshot (normalized `IBuildPromptContext`, requestOptions, endpoint/model info) before prompt rendering and persist it in `LiveRequestEditorService`. _Requirements: 17.1_  
+  - [x] 14.2 Add a snapshot-based renderer (reuse `PromptRenderer` with the captured context/config) to regenerate `Raw.ChatMessage[]` for section building/reset, with graceful fallback to existing `RenderPromptResult.messages`. _Requirements: 17.2, 17.3_  
+  - [x] 14.3 Update the Live Request Builder/Editor to treat snapshot-rendered messages as the base, applying edits/deletes atop them and preserving `originalMessages` for reset/diff. _Requirements: 17.2, 17.4_  
   - [ ] 14.4 Emit parity telemetry (snapshot render vs fallback) and wire error logging without user content. _Requirements: 17.3, 17.5_  
   - [ ] 14.5 Add unit/integration coverage: snapshot capture, rerender parity, fallback path, and ensuring `ChatMLFetcher` sees edited snapshot-derived messages. _Requirements: 17.1–17.4_  
-  - [ ] 14.6 Add a “Session” view in the webview to edit the snapshot (turns/tool-call rounds: add/edit/delete/restore) and re-render to messages on apply; fallback to original messages on render failure. _Requirements: 17.2, 17.4_  
-  - [ ] 14.7 Add tests per increment: snapshot prune/capture (unit), snapshot edit → re-render → send (integration), and session-view UI wiring (webview tests). _Requirements: 17.1–17.4_  
+  - [x] 14.6 Add a “Session” view in the webview to edit the snapshot (turns/tool-call rounds: add/edit/delete/restore) and re-render to messages on apply; fallback to original messages on render failure. _Requirements: 17.2, 17.4_  
+  - [ ] 14.7 Add tests per increment: snapshot prune/capture (unit), snapshot edit → re-render → send (integration), and session-view UI wiring (webview tests). (Baseline prune/render unit coverage landed; integration/UI coverage pending.) _Requirements: 17.1–17.4_  
 
 - [ ] 15. Replay edited session into new chat  
   - [ ] 15.1 Add “Apply & Replay” action to fork a new chat session using the edited snapshot, preserving lineage (orig session/turn → replay session/turn). _Requirements: 18.1, 18.5_  

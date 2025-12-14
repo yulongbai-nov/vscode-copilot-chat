@@ -260,7 +260,7 @@ suite('defaultIntentRequestHandler', () => {
 		resetRequest(): EditableChatRequest | undefined { return undefined; }
 		updateTokenCounts(): EditableChatRequest | undefined { return undefined; }
 		applyTraceData(): EditableChatRequest | undefined { return undefined; }
-		buildReplayForRequest(): undefined { return undefined; }
+		async buildReplayForRequest(): Promise<undefined> { return undefined; }
 		getReplaySnapshot(): undefined { return undefined; }
 		restorePreviousReplay(): undefined { return undefined; }
 		markReplayForkActive(): undefined { return undefined; }

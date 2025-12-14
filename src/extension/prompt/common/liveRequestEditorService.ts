@@ -166,7 +166,7 @@ export interface ILiveRequestEditorService {
 
 	getMetadataSnapshot(key: LiveRequestSessionKey): LiveRequestMetadataSnapshot | undefined;
 
-	buildReplayForRequest(key: LiveRequestSessionKey): LiveRequestReplaySnapshot | undefined;
+	buildReplayForRequest(key: LiveRequestSessionKey): Promise<LiveRequestReplaySnapshot | undefined>;
 	getReplaySnapshot(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
 	restorePreviousReplay(key: LiveRequestReplayKey): LiveRequestReplaySnapshot | undefined;
 	markReplayForkActive(key: LiveRequestReplayKey, forkSessionId: string): LiveRequestReplaySnapshot | undefined;

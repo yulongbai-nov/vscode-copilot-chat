@@ -25,6 +25,7 @@ import { AgentPrompt } from '../../prompts/node/agent/agentPrompt';
 import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
 import { renderPromptElement } from '../../prompts/node/base/promptRenderer';
 import { Conversation } from '../common/conversation';
+import { PromptRegistry } from '../../prompts/node/agent/promptRegistry';
 
 const SUBAGENT_HISTORY_LIMIT = 10;
 const WORKSPACE_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.workspace';
@@ -694,36 +695,48 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		this._pendingIntercepts.delete(pendingKey);
 
-		let outcomeReason = options?.reason;
-		let loggedAction: PromptInterceptionAction = action;
-		if (!pending.deferred.isSettled) {
-			if (action === 'resume') {
-				if (this._mode === 'autoOverride' && this._autoOverrideCapturing) {
-					this.captureAutoOverrideForRequest(key);
-				}
-				const request = this.getRequest(key);
-				const result = request ? this.getMessagesForSend(key, request.messages) : { messages: pending.fallbackMessages };
-				if (result.error) {
-					loggedAction = 'cancel';
-					outcomeReason = 'invalid';
-					void pending.deferred.complete({ action: 'cancel', reason: 'invalid' });
+		void (async () => {
+			let outcomeReason = options?.reason;
+			let loggedAction: PromptInterceptionAction = action;
+
+			if (!pending.deferred.isSettled) {
+				if (action === 'resume') {
+					if (this._mode === 'autoOverride' && this._autoOverrideCapturing) {
+						this.captureAutoOverrideForRequest(key);
+					}
+					const request = this.getRequest(key);
+					try {
+						const result = request
+							? await this.getMessagesForSend(key, request.messages)
+							: { messages: pending.fallbackMessages };
+						if (result.error) {
+							loggedAction = 'cancel';
+							outcomeReason = 'invalid';
+							void pending.deferred.complete({ action: 'cancel', reason: 'invalid' });
+						} else {
+							void pending.deferred.complete({ action: 'resume', messages: result.messages });
+						}
+					} catch (error) {
+						loggedAction = 'cancel';
+						outcomeReason = 'error';
+						this._log.error?.('Failed to build messages for interception resume', error);
+						void pending.deferred.complete({ action: 'cancel', reason: 'error' });
+					}
 				} else {
-					void pending.deferred.complete({ action: 'resume', messages: result.messages });
+					void pending.deferred.complete({ action: 'cancel', reason: options?.reason });
 				}
-			} else {
-				void pending.deferred.complete({ action: 'cancel', reason: options?.reason });
 			}
-		}
 
-		if (loggedAction === 'resume' && !outcomeReason) {
-			outcomeReason = 'user';
-		}
+			if (loggedAction === 'resume' && !outcomeReason) {
+				outcomeReason = 'user';
+			}
 
-		this._logInterceptionOutcome(loggedAction, outcomeReason, pending.key);
-		if (this._mode === 'interceptOnce') {
-			this._mode = this._modeBeforeInterceptOnce;
-		}
-		this.emitInterceptionState();
+			this._logInterceptionOutcome(loggedAction, outcomeReason, pending.key);
+			if (this._mode === 'interceptOnce') {
+				this._mode = this._modeBeforeInterceptOnce;
+			}
+			this.emitInterceptionState();
+		})();
 	}
 
 	handleContextChange(event: PromptContextChangeEvent): void {
@@ -792,7 +805,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		return snapshot;
 	}
 
-	buildReplayForRequest(key: LiveRequestSessionKey): LiveRequestReplaySnapshot | undefined {
+	async buildReplayForRequest(key: LiveRequestSessionKey): Promise<LiveRequestReplaySnapshot | undefined> {
 		if (!this.isReplayEnabled()) {
 			return undefined;
 		}
@@ -808,7 +821,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 			return this.toReplaySnapshot(existing);
 		}
 
-		const sendResult = this.getMessagesForSend(key, request.messages);
+		const sendResult = await this.getMessagesForSend(key, request.messages);
 		if (sendResult.error) {
 			this.markReplayStale(key, replayKey.requestId, sendResult.error.code);
 			return undefined;
@@ -869,7 +882,7 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		if (!this.isReplayEnabled()) {
 			return undefined;
 		}
-		const replay = this.buildReplayForRequest(key);
+		const replay = await this.buildReplayForRequest(key);
 		if (!replay || !replay.payload?.length) {
 			return undefined;
 		}
@@ -1306,13 +1319,13 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		}
 		try {
 			const endpoint = await this._endpointProvider.getChatEndpoint(request.sessionSnapshot.endpointModel);
+			const customizations = await PromptRegistry.resolveAllCustomizations(this._instantiationService, endpoint);
 			const props = {
 				endpoint,
 				promptContext: request.sessionSnapshot.promptContext,
 				location: request.location,
 				enableCacheBreakpoints: false,
-				customizations: undefined,
-				requestOptionsOverride: request.sessionSnapshot.requestOptions,
+				customizations,
 			};
 			const rendered = await renderPromptElement(this._instantiationService, endpoint, AgentPrompt, props, undefined, token);
 			return rendered.messages;

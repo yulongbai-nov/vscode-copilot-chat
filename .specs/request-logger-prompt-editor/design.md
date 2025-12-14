@@ -190,11 +190,11 @@ For this feature, the **Request Logger UI** is a reference only:
 
 ## Current implementation vs spec (reality check)
 
-- Live Request Editor currently builds from the rendered `RenderPromptResult.messages` (flattened payload) held in `EditableChatRequest`; **SessionSnapshot-based regeneration (Requirement 17 / Tasks 14.x) is not implemented yet**.
-- The webview still uses the legacy textarea-style editing surface; the hierarchical/leaf-level Raw structure editor (Requirements 15–16, Tasks 2.6, 4.12–4.15) is not shipped.
-- Undo/redo for leaf edits (Task 4.15) and snapshot parity telemetry (Task 14.4) are unimplemented.
-- Reset/regenerate restores from `originalMessages` stored alongside the render result; it does not rerender from session state.
-- The UI continues to present sections derived from the flattened payload; edits are applied as whole-section text replacements, not surgical leaf mutations.
+- Session snapshots are now captured (pruned `IBuildPromptContext` + requestOptions + endpoint info), re-rendered via `AgentPrompt` with resolved `PromptRegistry` customizations, and used as the base for edits/resets. Snapshot regeneration blocks send and falls back to the last render on failure; snapshots are stripped before persistence.
+- The webview has a **Session Snapshot** panel (raw JSON textarea) that applies snapshot edits and triggers re-render. The main section editor is still the legacy textarea; the hierarchical/leaf-level Raw structure editor (Requirements 15–16, Tasks 2.6, 4.12–4.15) is not shipped.
+- Replay (“Apply & Replay”) forks an edited snapshot into a new session and marks lineage best-effort, but it does not yet send the forked request or stream a response; metadata/telemetry for replay lineage is minimal.
+- Undo/redo for leaf edits (Task 4.15) and snapshot parity telemetry (Task 14.4) are unimplemented; leaf edit UI is still missing even though service-side plumbing exists.
+- Reset/regenerate now reruns prompt rendering from the snapshot when available; parity checks/telemetry for snapshot vs render are still TODO.
 
 ## Current Implementation Status (May 2024)
 

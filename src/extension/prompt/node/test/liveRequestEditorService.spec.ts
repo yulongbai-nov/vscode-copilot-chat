@@ -611,17 +611,17 @@ describe('LiveRequestEditorService interception', () => {
 		service.updateSectionContent(key, request.sections[1].id, 'first edited');
 		service.deleteSection(key, request.sections[2].id);
 
-		const replay = service.buildReplayForRequest(key)!;
-		expect(replay.state).toBe('ready');
-		expect(replay.version).toBe(1);
-		expect(replay.payload).toHaveLength(2);
-		expect(getText(replay.payload[1].content[0])).toBe('first edited');
-		expect(replay.projection?.sections).toHaveLength(2);
-		expect(replay.projection?.editedCount).toBe(1);
-		expect(replay.projection?.deletedCount).toBe(1);
-		expect(replay.projection?.overflowCount).toBe(0);
-		expect(replay.projection?.requestOptions).toEqual(requestOptions);
-		if (replay.projection?.requestOptions) {
+		const replay = await service.buildReplayForRequest(key);
+		expect(replay?.state).toBe('ready');
+		expect(replay?.version).toBe(1);
+		expect(replay?.payload).toHaveLength(2);
+		expect(getText(replay?.payload![1].content[0])).toBe('first edited');
+		expect(replay?.projection?.sections).toHaveLength(2);
+		expect(replay?.projection?.editedCount).toBe(1);
+		expect(replay?.projection?.deletedCount).toBe(1);
+		expect(replay?.projection?.overflowCount).toBe(0);
+		expect(replay?.projection?.requestOptions).toEqual(requestOptions);
+		if (replay?.projection?.requestOptions) {
 			replay.projection.requestOptions.temperature = 0.9;
 		}
 		expect(request.metadata.requestOptions?.temperature).toBe(0.3);
@@ -650,8 +650,8 @@ describe('LiveRequestEditorService interception', () => {
 		const userSection = request.sections.find(s => s.kind === 'user')!;
 		service.updateSectionContent(key, userSection.id, 'updated description');
 
-		const replay = service.buildReplayForRequest(key)!;
-		const userPayload = replay.payload[1];
+		const replay = await service.buildReplayForRequest(key);
+		const userPayload = replay!.payload[1];
 		expect(userPayload.role).toBe(Raw.ChatRole.User);
 		expect(Array.isArray(userPayload.content)).toBe(true);
 		// First part is the updated text.
@@ -690,8 +690,8 @@ describe('LiveRequestEditorService interception', () => {
 		const updatedText = 'updated aggregate text';
 		service.updateSectionContent(key, userSection.id, updatedText);
 
-		const replay = service.buildReplayForRequest(key)!;
-		const userPayload = replay.payload[1];
+		const replay = await service.buildReplayForRequest(key);
+		const userPayload = replay!.payload[1];
 		expect(userPayload.role).toBe(Raw.ChatRole.User);
 		expect(Array.isArray(userPayload.content)).toBe(true);
 		// One Text part (aggregate) + one Image part.
@@ -711,18 +711,18 @@ describe('LiveRequestEditorService interception', () => {
 		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
 		service.prepareRequest(init);
 
-		const first = service.buildReplayForRequest(key)!;
-		expect(first.version).toBe(1);
+		const first = await service.buildReplayForRequest(key);
+		expect(first?.version).toBe(1);
 
 		const request = service.getRequest(key)!;
 		service.updateSectionContent(key, request.sections[1].id, 'second');
-		const second = service.buildReplayForRequest(key)!;
-		expect(second.version).toBe(2);
-		expect(getText(second.payload[1].content[0])).toBe('second');
+		const second = await service.buildReplayForRequest(key);
+		expect(second?.version).toBe(2);
+		expect(getText(second?.payload![1].content[0])).toBe('second');
 
 		const restored = service.restorePreviousReplay({ ...key, requestId: init.requestId })!;
-		expect(restored.version).toBeGreaterThan(second.version);
-		expect(restored.restoreOfVersion).toBe(second.version);
+		expect(restored.version).toBeGreaterThan(second?.version ?? 0);
+		expect(restored.restoreOfVersion).toBe(second?.version);
 		expect(getText(restored.payload[1].content[0])).toBe('first');
 	});
 
@@ -731,7 +731,7 @@ describe('LiveRequestEditorService interception', () => {
 		const init = createServiceInit({ renderResult: createRenderResultWithMessages(['system', 'user']) });
 		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
 		service.prepareRequest(init);
-		service.buildReplayForRequest(key);
+		await service.buildReplayForRequest(key);
 
 		service.markReplayStale(key, init.requestId, 'contextChanged:model');
 		const stale = service.getReplaySnapshot({ ...key, requestId: init.requestId })!;
@@ -745,12 +745,12 @@ describe('LiveRequestEditorService interception', () => {
 		const init = createServiceInit();
 		const key: LiveRequestSessionKey = { sessionId: init.sessionId, location: init.location };
 		service.prepareRequest(init);
-		const ready = service.buildReplayForRequest(key)!;
+		const ready = await service.buildReplayForRequest(key);
 
 		const forked = service.markReplayForkActive({ ...key, requestId: init.requestId }, 'fork-session');
 		expect(forked?.state).toBe('forkActive');
 		expect(forked?.forkSessionId).toBe('fork-session');
-		expect((forked?.version ?? 0) > ready.version).toBe(true);
+		expect((forked?.version ?? 0) > (ready?.version ?? 0)).toBe(true);
 	});
 
 	describe('LiveRequestEditorService leaf edits', () => {
@@ -835,7 +835,7 @@ describe('LiveRequestEditorService interception', () => {
 		service.prepareRequest(init);
 		await config.setConfig(ConfigKey.LiveRequestEditorTimelineReplayEnabled, false);
 		expect(service.isReplayEnabled()).toBe(false);
-		const replay = service.buildReplayForRequest(key);
+		const replay = await service.buildReplayForRequest(key);
 		expect(replay).toBeUndefined();
 	});
 
