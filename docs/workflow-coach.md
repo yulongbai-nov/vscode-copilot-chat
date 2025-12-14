@@ -71,6 +71,7 @@ Notes:
 - Branch + upstream + ahead/behind
 - Change counts (staged/unstaged/untracked)
 - Optional PR URL (if `gh` is authenticated)
+  - If known, the coach also prints the PR state suffix: `(open)`, `(merged)`, `(closed)`
 - Optional inferred phase (`design` / `implementation`)
 - A “Detected state” + “Suggested next state”
 - Warnings + suggested commands (advisory)

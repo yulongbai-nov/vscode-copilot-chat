@@ -33,6 +33,10 @@
   - [x] 13.1 Add `.githooks/pre-commit` and `.githooks/pre-push` that run the coach
   - [x] 13.2 Add `npm run workflow:install-hooks` to set `core.hooksPath=.githooks`
   - [x] 13.3 Add `--fail-on` support + unit tests for selectors
+- [x] 14. Remind to open new PR after merge _Requirements: 3.4_
+  - [x] 14.1 Parse PR state from `gh pr view`
+  - [x] 14.2 Treat merged/closed PR as non-active for reminders
+  - [x] 14.3 Add unit test for merged PR case
 
 ## Implementation Notes
 

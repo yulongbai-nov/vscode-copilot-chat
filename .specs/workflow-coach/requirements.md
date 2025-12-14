@@ -46,6 +46,7 @@ The coach can also persist **local-only** per-branch metadata (under the git com
 3.1 WHEN `gh` is installed and authenticated, THE Workflow_Coach SHOULD detect whether the current branch has an open PR and print the PR URL if present.  
 3.2 WHEN `gh` is missing or unauthenticated, THE Workflow_Coach SHALL continue and SHALL not fail the run.  
 3.3 THE Workflow_Coach SHALL support a `--no-gh` option that disables PR lookups for faster/offline runs.  
+3.4 WHEN the current branch’s PR is `MERGED` (best-effort) AND new work exists on the branch, THE Workflow_Coach SHOULD remind to open a new PR for the follow-up changes.  
 
 ### Requirement 4 — Recommend actions (commands)
 

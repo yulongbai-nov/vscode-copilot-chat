@@ -166,6 +166,7 @@ When asked to “write the spec” or “create the core documents” for a feat
     - `perf/...` (performance-only changes)
   - When a new feature starts, create a fresh branch from the latest `main` (or the agreed integration branch). If multiple features run in parallel, keep each on its own branch to avoid entanglement.
   - Keep commits small, reference the relevant tasks/requirements, and separate spec edits from code when practical. Mention both in the commit message when they ship together.
+  - If the current branch’s PR is already **merged**, do not keep appending work “into the merged PR”. Start a new PR for any follow-up changes (same branch is acceptable, but it must be a new PR).
 - **Workflow Coach (reminder helper)**
   - At workflow checkpoints (before commit/push/PR/scope changes), run: `npm run workflow:coach -- --query "<current request>"`.
   - Use `--no-gh` to skip PR lookup when speed/offline.
