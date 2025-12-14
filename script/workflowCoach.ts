@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { evaluateWorkflow, inferWorkType, type CoachResult, type WorkType, type WorkflowContext } from './workflowCoachCore.ts';
+import { evaluateWorkflow, inferPhase, inferWorkType, type CoachResult, type Phase, type WorkType, type WorkflowContext } from './workflowCoachCore.ts';
 
 type CliArgs = {
 	query?: string;
@@ -24,6 +24,7 @@ type PersistedBranchState = {
 	lastWorkType?: WorkType;
 	lastActiveSpec?: string;
 	lastDetectedState?: string;
+	lastPhase?: Phase;
 };
 
 type PersistedStateFile = {
@@ -55,6 +56,9 @@ function main() {
 		spec,
 	};
 
+	const phase = inferPhase(context);
+	context.phase = phase;
+
 	const result = evaluateWorkflow(context, { defaultBranch: 'main' });
 	if (!args['no-persist']) {
 		savePersistedBranchState(gitCommonDir, git.branch, {
@@ -62,6 +66,7 @@ function main() {
 			lastWorkType: workType,
 			lastActiveSpec: spec?.active,
 			lastDetectedState: result.detectedState,
+			lastPhase: phase,
 		});
 	}
 	if (args.json) {
@@ -242,12 +247,15 @@ function loadPersistedBranchState(gitCommonDir: string, branch: string): Workflo
 
 		const rawWorkType = (stored as { lastWorkType?: unknown }).lastWorkType;
 		const lastWorkType = typeof rawWorkType === 'string' ? inferWorkType(undefined, rawWorkType) : undefined;
+		const rawPhase = (stored as { lastPhase?: unknown }).lastPhase;
+		const lastPhase: Phase | undefined = rawPhase === 'design' || rawPhase === 'implementation' ? rawPhase : undefined;
 
 		return {
 			lastRunAt: typeof stored.lastRunAt === 'string' ? stored.lastRunAt : undefined,
 			lastWorkType,
 			lastActiveSpec: typeof stored.lastActiveSpec === 'string' ? stored.lastActiveSpec : undefined,
 			lastDetectedState: typeof stored.lastDetectedState === 'string' ? stored.lastDetectedState : undefined,
+			lastPhase,
 		};
 	} catch {
 		return undefined;
@@ -451,10 +459,16 @@ function renderText(context: WorkflowContext, result: CoachResult) {
 		if (context.previous.lastActiveSpec) {
 			parts.push(`spec: ${context.previous.lastActiveSpec}`);
 		}
+		if (context.previous.lastPhase) {
+			parts.push(`phase: ${context.previous.lastPhase}`);
+		}
 		lines.push(`Previous: ${parts.join(' | ')}`);
 	}
 	if (git.upstream) {
 		lines.push(`Upstream delta: ahead ${git.ahead} | behind ${git.behind}`);
+	}
+	if (context.phase) {
+		lines.push(`Phase: ${context.phase}`);
 	}
 	if (typeof query === 'string' && query.trim()) {
 		lines.push(`Query: ${JSON.stringify(query)}${workType ? ` (type: ${workType})` : ''}`);

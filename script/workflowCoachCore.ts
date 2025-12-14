@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 export type WorkType = 'feature' | 'fix' | 'docs' | 'ci' | 'chore' | 'refactor' | 'test' | 'perf';
+export type Phase = 'design' | 'implementation';
 
 export type WorkflowContext = {
 	query?: string;
@@ -29,6 +30,7 @@ export type WorkflowContext = {
 		lastWorkType?: WorkType;
 		lastActiveSpec?: string;
 		lastDetectedState?: string;
+		lastPhase?: Phase;
 	};
 	spec?: {
 		inferredFromBranch?: string;
@@ -37,6 +39,7 @@ export type WorkflowContext = {
 		hasRequiredDocs?: boolean;
 		hasSpecChanges?: boolean;
 	};
+	phase?: Phase;
 };
 
 export type Recommendation = {
@@ -149,6 +152,23 @@ function detectScopeBuckets(changedPaths: readonly string[]): ScopeBucket[] {
 	return Array.from(buckets.values()).sort();
 }
 
+export function inferPhase(context: WorkflowContext): Phase | undefined {
+	const hasWorkingChanges = context.git.stagedFiles + context.git.unstagedFiles + context.git.untrackedFiles > 0;
+	if (!hasWorkingChanges) {
+		return context.previous?.lastPhase;
+	}
+
+	const buckets = detectScopeBuckets(context.git.changedPaths);
+	if (buckets.includes('code') || buckets.includes('ci') || buckets.includes('build')) {
+		return 'implementation';
+	}
+	if (buckets.includes('specs')) {
+		return 'design';
+	}
+
+	return context.previous?.lastPhase;
+}
+
 export function evaluateWorkflow(context: WorkflowContext, options: WorkflowCoachOptions = {}): CoachResult {
 	const defaultBranch = options.defaultBranch ?? 'main';
 	const warnings: Recommendation[] = [];
@@ -157,10 +177,46 @@ export function evaluateWorkflow(context: WorkflowContext, options: WorkflowCoac
 	const { git, gh, workType } = context;
 	const hasWorkingChanges = git.stagedFiles + git.unstagedFiles + git.untrackedFiles > 0;
 	const scopeBuckets = detectScopeBuckets(git.changedPaths);
+	const phase = context.phase ?? inferPhase(context);
 
 	const activeSpec = context.spec?.active;
 	const inferredSpecFromBranch = context.spec?.inferredFromBranch;
 	const inferredSpecFromChanges = context.spec?.inferredFromChanges;
+
+	if (phase && context.previous?.lastPhase && context.previous.lastPhase !== phase) {
+		nextActions.push({
+			id: 'phase-changed',
+			severity: 'info',
+			title: 'Phase changed since previous run',
+			why: `Previous phase was "${context.previous.lastPhase}", now "${phase}". Ensure your next step matches the spec-first workflow (clarify/align spec in design; follow tasks + verify in implementation).`,
+		});
+	}
+
+	if (phase === 'design') {
+		nextActions.push({
+			id: 'clarify-requirements',
+			severity: 'info',
+			title: 'Clarify vague requirements with the human',
+			why: 'In design phase, prefer asking clarifying questions over guessing so the spec can be made precise before implementation.',
+			commands: [
+				'# Clarify:',
+				'- elevator pitch + motivation',
+				'- constraints (perf, security, UX, compatibility)',
+				'- success criteria + non-goals',
+				'- affected systems + entry points',
+			],
+		});
+	}
+
+	if (workType === 'docs' || scopeBuckets.includes('docs') || scopeBuckets.includes('specs')) {
+		nextActions.push({
+			id: 'doc-link-format',
+			severity: 'info',
+			title: 'Use navigable code links in docs/specs',
+			why: 'Prefer relative Markdown links with GitHub-style line anchors so references are clickable both on GitHub and in VS Code.',
+			commands: ['# Example: [src/foo.ts#L42](src/foo.ts#L42)', '# Range:   [src/foo.ts#L42-L55](src/foo.ts#L42-L55)'],
+		});
+	}
 
 	if (inferredSpecFromBranch && inferredSpecFromChanges && inferredSpecFromBranch !== inferredSpecFromChanges) {
 		warnings.push({

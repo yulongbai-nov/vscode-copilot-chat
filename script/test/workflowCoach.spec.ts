@@ -11,6 +11,7 @@ function createContext(overrides: Partial<WorkflowContext> = {}): WorkflowContex
 	return {
 		query: overrides.query,
 		workType: overrides.workType,
+		phase: overrides.phase,
 		git: {
 			branch: 'feature/example',
 			isMainBranch: false,
@@ -44,6 +45,45 @@ suite('Workflow Coach', () => {
 	});
 
 	suite('evaluateWorkflow', () => {
+		test('infers design phase from .specs-only changes and reminds to clarify requirements', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					git: {
+						unstagedFiles: 1,
+						changedPaths: ['.specs/example/design.md'],
+					},
+				}),
+			);
+
+			expect(result.nextActions.some(a => a.id === 'clarify-requirements')).toBe(true);
+		});
+
+		test('does not emit clarify reminder for implementation changes', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					git: {
+						unstagedFiles: 1,
+						changedPaths: ['src/a.ts'],
+					},
+				}),
+			);
+
+			expect(result.nextActions.some(a => a.id === 'clarify-requirements')).toBe(false);
+		});
+
+		test('reminds to use navigable code links when docs change', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					git: {
+						unstagedFiles: 1,
+						changedPaths: ['docs/a.md'],
+					},
+				}),
+			);
+
+			expect(result.nextActions.some(a => a.id === 'doc-link-format')).toBe(true);
+		});
+
 		test('warns on dirty main', () => {
 			const result = evaluateWorkflow(
 				createContext({
