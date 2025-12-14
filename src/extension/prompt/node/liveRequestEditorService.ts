@@ -12,13 +12,18 @@ import { deepClone, equals } from '../../../util/vs/base/common/objects';
 import { ChatLocation } from '../../../platform/chat/common/commonTypes';
 import { IChatSessionService } from '../../../platform/chat/common/chatSessionService';
 import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
+import { IEndpointProvider } from '../../../platform/endpoint/common/endpointProvider';
 import { ILogService } from '../../../platform/log/common/logService';
 import { OptionalChatRequestParams } from '../../../platform/networking/common/fetch';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry';
 import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
-import { EditableChatRequest, EditableChatRequestInit, EditHistory, EditOp, EditTargetKind, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, EditHistory, EditOp, EditTargetKind, LiveRequestContextSnapshot, LiveRequestReplayKey, LiveRequestReplayProjection, LiveRequestReplaySnapshot, LiveRequestReplayState, LiveRequestSection, LiveRequestSectionKind, LiveRequestSendResult, LiveRequestSessionKey, LiveRequestTraceSnapshot, LiveRequestValidationError } from '../common/liveRequestEditorModel';
 import { AutoOverrideDiffEntry, AutoOverrideSummary, ILiveRequestEditorService, LiveRequestEditorMode, LiveRequestMetadataEvent, LiveRequestMetadataSnapshot, LiveRequestOverrideScope, LiveRequestReplayEvent, PendingPromptInterceptSummary, PromptContextChangeEvent, PromptInterceptionAction, PromptInterceptionDecision, PromptInterceptionState, SubagentRequestEntry } from '../common/liveRequestEditorService';
 import { DEFAULT_REPLAY_SECTION_CAP, buildEditableChatRequest, buildReplayProjection, computeChatMessagesHash, computeReplayProjectionHash, createSectionsFromMessages, renderMessageContent } from './liveRequestBuilder';
+import { IBuildPromptContext } from '../common/intents';
+import { AgentPrompt } from '../../prompts/node/agent/agentPrompt';
+import { IInstantiationService } from '../../../util/vs/platform/instantiation/common/instantiation';
+import { renderPromptElement } from '../../prompts/node/base/promptRenderer';
 
 const SUBAGENT_HISTORY_LIMIT = 10;
 const WORKSPACE_AUTO_OVERRIDE_KEY = 'github.copilot.liveRequestEditor.autoOverride.workspace';
@@ -126,13 +131,14 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 	private _interceptionState: PromptInterceptionState;
 	private _timelineReplayEnabled: boolean;
 	private readonly _persistRequestsScheduler: RunOnceScheduler;
-
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 		@IChatSessionService private readonly _chatSessionService: IChatSessionService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
 		@ILogService private readonly _logService: ILogService,
+		@IEndpointProvider private readonly _endpointProvider: IEndpointProvider,
+		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 	) {
 		super();
 		this._enabled = this._configurationService.getConfig(ConfigKey.Advanced.LivePromptEditorEnabled);
@@ -226,6 +232,38 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 
 	isReplayEnabled(): boolean {
 		return this._enabled && this._timelineReplayEnabled;
+	}
+
+	/**
+	 * Produce a JSON-friendly snapshot of the prompt context for in-memory use.
+	 * Strips host-bound objects (conversation, streams, documents).
+	 */
+	prunePromptContext(context: IBuildPromptContext): LiveRequestContextSnapshot {
+		const prune = <T,>(value: T): T | undefined => {
+			if (!value) {
+				return undefined;
+			}
+			try {
+				return JSON.parse(JSON.stringify(value)) as T;
+			} catch {
+				return undefined;
+			}
+		};
+
+		return {
+			requestId: context.requestId,
+			query: context.query,
+			history: prune(context.history),
+			chatVariables: prune(context.chatVariables),
+			workingSet: prune(context.workingSet),
+			tools: prune(context.tools),
+			toolCallRounds: prune(context.toolCallRounds),
+			toolCallResults: prune(context.toolCallResults),
+			toolGrouping: prune(context.toolGrouping),
+			editedFileEvents: prune(context.editedFileEvents),
+			isContinuation: context.isContinuation,
+			modeInstructions: prune(context.modeInstructions),
+		};
 	}
 
 	prepareRequest(init: EditableChatRequestInit): EditableChatRequest | undefined {
@@ -413,6 +451,12 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				return false;
 			}
 			request.metadata.requestOptions = next;
+			if (request.sessionSnapshot) {
+				request.sessionSnapshot = {
+					...request.sessionSnapshot,
+					requestOptions: next
+				};
+			}
 			return true;
 		}, false);
 	}
@@ -1192,6 +1236,32 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 		request.isDirty = isDirty || !equals(updatedMessages, request.originalMessages);
 	}
 
+	/**
+	 * Attempt to re-render messages from a stored session snapshot. If unavailable or it fails,
+	 * return undefined to signal fallback.
+	 */
+	private async renderFromSnapshot(request: EditableChatRequest, token: CancellationToken | undefined): Promise<Raw.ChatMessage[] | undefined> {
+		if (!request.sessionSnapshot) {
+			return undefined;
+		}
+		try {
+			const endpoint = await this._endpointProvider.getChatEndpoint(request.sessionSnapshot.endpointModel);
+			const props = {
+				endpoint,
+				promptContext: request.sessionSnapshot.promptContext,
+				location: request.location,
+				enableCacheBreakpoints: false,
+				customizations: undefined,
+				requestOptionsOverride: request.sessionSnapshot.requestOptions,
+			};
+			const rendered = await renderPromptElement(this._instantiationService, endpoint, AgentPrompt, props, undefined, token);
+			return rendered.messages;
+		} catch (error) {
+			this._logService.warn(`LiveRequestEditor: snapshot render failed: ${error instanceof Error ? error.message : String(error)}`);
+			return undefined;
+		}
+	}
+
 	private validateRequestForSend(request: EditableChatRequest): LiveRequestValidationError | undefined {
 		if (!request.messages.length) {
 			return { code: 'empty' };
@@ -1653,7 +1723,15 @@ export class LiveRequestEditorService extends Disposable implements ILiveRequest
 				.slice()
 				.sort((a, b) => this.getRequestTimestamp(b) - this.getRequestTimestamp(a))
 				.slice(0, MAX_PERSISTED_REQUESTS)
-				.map(request => deepClone(request));
+				.map(request => {
+					const clone = deepClone(request);
+					// Session snapshots may carry non-serializable objects (Conversation, streams, etc.);
+					// they are for in-memory regeneration only. Drop them before persisting.
+					if (clone.sessionSnapshot) {
+						delete (clone as { sessionSnapshot?: unknown }).sessionSnapshot;
+					}
+					return clone;
+				});
 			const payload: PersistedRequestCacheV1 = {
 				version: 1,
 				updatedAt: Date.now(),

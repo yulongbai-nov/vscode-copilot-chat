@@ -7,6 +7,7 @@
 - ✅ HTML tracer enrichment is applied end-to-end, aligning token counts/trace paths with sections even when tracing is optional.
 - ✅ Legacy section edit/delete/reset logic is covered by unit + simulation tests; interception/subagent flows are validated.
 - 🚧 Remaining focus: (1) message-level fidelity editing UI (Tasks 2.6, 4.12–4.15, 7.8), (2) performance/accessibility hardening (Tasks 6.x), and (3) deeper integration/simulation coverage (Tasks 7.3–7.6).
+- Reality gap: snapshot-based rendering from `IBuildPromptContext` (Tasks 14.x / Requirement 17) is **not implemented**; the editor still runs on `RenderPromptResult.messages`. Leaf-level/structural editing is also pending.
 
 ---
 
@@ -115,6 +116,14 @@
   - [ ] 14.3 Update the Live Request Builder/Editor to treat snapshot-rendered messages as the base, applying edits/deletes atop them and preserving `originalMessages` for reset/diff. _Requirements: 17.2, 17.4_  
   - [ ] 14.4 Emit parity telemetry (snapshot render vs fallback) and wire error logging without user content. _Requirements: 17.3, 17.5_  
   - [ ] 14.5 Add unit/integration coverage: snapshot capture, rerender parity, fallback path, and ensuring `ChatMLFetcher` sees edited snapshot-derived messages. _Requirements: 17.1–17.4_  
+  - [ ] 14.6 Add a “Session” view in the webview to edit the snapshot (turns/tool-call rounds: add/edit/delete/restore) and re-render to messages on apply; fallback to original messages on render failure. _Requirements: 17.2, 17.4_  
+  - [ ] 14.7 Add tests per increment: snapshot prune/capture (unit), snapshot edit → re-render → send (integration), and session-view UI wiring (webview tests). _Requirements: 17.1–17.4_  
+
+- [ ] 15. Replay edited session into new chat  
+  - [ ] 15.1 Add “Apply & Replay” action to fork a new chat session using the edited snapshot, preserving lineage (orig session/turn → replay session/turn). _Requirements: 18.1, 18.5_  
+  - [ ] 15.2 Use snapshot re-render for the replay payload, with fallback to last rendered/original messages and warning on failure. _Requirements: 18.2_  
+  - [ ] 15.3 Send the replayed request and continue the conversation in the new session; ensure the original transcript remains unchanged. _Requirements: 18.3, 18.4_  
+  - [ ] 15.4 Tests: replay flow integration (edit snapshot → re-render → replay session send → response received) and lineage recording. _Requirements: 18.1–18.5_  
 
 ## Implementation Notes
 

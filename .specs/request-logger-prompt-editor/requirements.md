@@ -293,3 +293,16 @@ As an engineer debugging prompt fidelity, I want the Live Request Editor to rebu
 17.3 IF snapshot-based render fails, THEN the system SHALL fall back to the last `RenderPromptResult.messages`, log a parity warning, and keep the editor functional.  
 17.4 THE final messages passed to `ChatMLFetcher` (and logged) SHALL reflect user edits applied atop the snapshot-rendered messages, preserving edit parity.  
 17.5 TELEMETRY SHALL record snapshot-vs-render parity checks (success/fallback) without user content.  
+
+### Requirement 18 – Replay edited session into new chat
+
+**User Story:**  
+As a Copilot user who edited a session snapshot, I want to replay it into a **new chat session**, send the re-rendered request there, and continue chatting, while leaving the original session unchanged.
+
+#### Acceptance Criteria
+
+18.1 THE Live Request Editor SHALL provide an action (e.g., “Apply & Replay”) that creates a new chat session with lineage back to the original session/turn.  
+18.2 Replay SHALL use the edited snapshot to re-render the prompt; if re-render fails, it SHALL fall back to the last rendered/original messages and surface a warning.  
+18.3 Replay SHALL send the re-rendered `Raw.ChatMessage[]` as the first request in the new session and wait for the response; subsequent turns continue in that new session.  
+18.4 THE original chat session/transcript SHALL remain unchanged; the replay session is a fork.  
+18.5 LINEAGE metadata (original session/turn → replay session/turn) SHALL be recorded for downstream telemetry/persistence, without storing user content.  

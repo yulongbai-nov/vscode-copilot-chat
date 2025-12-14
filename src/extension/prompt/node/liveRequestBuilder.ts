@@ -8,7 +8,7 @@ import { OptionalChatRequestParams } from '../../../platform/networking/common/f
 import { deepClone } from '../../../util/vs/base/common/objects';
 import { stringHash } from '../../../util/vs/base/common/hash';
 import { generateUuid } from '../../../util/vs/base/common/uuid';
-import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestReplayProjection, LiveRequestReplaySection, LiveRequestSection, LiveRequestSectionKind, LiveRequestTraceSnapshot } from '../common/liveRequestEditorModel';
+import { EditableChatRequest, EditableChatRequestInit, EditableChatRequestMetadata, LiveRequestContextSnapshot, LiveRequestReplayProjection, LiveRequestReplaySection, LiveRequestSection, LiveRequestSectionKind, LiveRequestTraceSnapshot } from '../common/liveRequestEditorModel';
 
 export const DEFAULT_REPLAY_SECTION_CAP = 30;
 
@@ -42,6 +42,7 @@ export function buildEditableChatRequest(ctx: EditableChatRequestInit): Editable
 		originalMessages,
 		metadata,
 		isDirty: false,
+		sessionSnapshot: ctx.sessionSnapshot,
 	};
 }
 

@@ -816,6 +816,13 @@ class DefaultToolCallingLoop extends ToolCallingLoop<IDefaultToolLoopOptions> {
 			chatSessionResource: this.options.chatSessionResource,
 			requestOptions,
 			maxPromptTokens: this.options.invocation.endpoint.modelMaxPromptTokens,
+			sessionSnapshot: {
+				promptContext: this._liveRequestEditorService.prunePromptContext(context),
+				requestOptions,
+				endpointModel: this.options.invocation.endpoint.model,
+				endpointFamily: this.options.invocation.endpoint.family,
+				endpointUrl: stringifyUrlOrRequestMetadata(this.options.invocation.endpoint.urlOrRequestMetadata),
+			},
 		};
 		this._liveRequestEditorService.prepareRequest(init);
 		if (buildPromptResult.traceData) {
