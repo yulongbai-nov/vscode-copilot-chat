@@ -57,9 +57,55 @@ export type CoachResult = {
 	nextActions: Recommendation[];
 };
 
+export type FailOnConfig = {
+	anyWarning: boolean;
+	ids: Set<string>;
+};
+
 export type WorkflowCoachOptions = {
 	defaultBranch?: string;
 };
+
+export function parseFailOn(raw: string | undefined): FailOnConfig | undefined {
+	const normalized = (raw ?? '').trim();
+	if (!normalized) {
+		return undefined;
+	}
+
+	const tokens = normalized
+		.split(',')
+		.map(token => token.trim())
+		.filter(Boolean);
+	if (tokens.length === 0) {
+		return undefined;
+	}
+
+	let anyWarning = false;
+	const ids = new Set<string>();
+	for (const token of tokens) {
+		const lowered = token.toLowerCase();
+		if (lowered === 'warn' || lowered === 'warning' || lowered === 'warnings' || lowered === 'any-warning' || lowered === 'any-warn') {
+			anyWarning = true;
+			continue;
+		}
+		ids.add(lowered);
+	}
+
+	return { anyWarning, ids };
+}
+
+export function shouldFailOnResult(result: CoachResult, failOn: FailOnConfig): boolean {
+	if (failOn.anyWarning && result.warnings.length > 0) {
+		return true;
+	}
+
+	if (failOn.ids.size === 0) {
+		return false;
+	}
+
+	const matches = (rec: Recommendation) => failOn.ids.has(rec.id);
+	return result.warnings.some(matches) || result.nextActions.some(matches);
+}
 
 export function inferWorkType(query: string | undefined, explicitType?: string): WorkType | undefined {
 	if (explicitType) {

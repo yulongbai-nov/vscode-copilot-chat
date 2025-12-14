@@ -5,7 +5,7 @@
 
 import { expect, suite, test } from 'vitest';
 
-import { evaluateWorkflow, inferWorkType, type WorkflowContext } from '../workflowCoachCore';
+import { evaluateWorkflow, inferWorkType, parseFailOn, shouldFailOnResult, type WorkflowContext } from '../workflowCoachCore';
 
 function createContext(overrides: Partial<WorkflowContext> = {}): WorkflowContext {
 	return {
@@ -210,6 +210,45 @@ suite('Workflow Coach', () => {
 			);
 
 			expect(result.nextActions.some(a => a.id === 'open-pr')).toBe(true);
+		});
+	});
+
+	suite('fail-on', () => {
+		test('returns undefined when no fail-on selector is provided', () => {
+			expect(parseFailOn(undefined)).toBeUndefined();
+			expect(parseFailOn('')).toBeUndefined();
+		});
+
+		test('matches explicit warning IDs', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					git: { branch: 'main', isMainBranch: true, unstagedFiles: 1, changedPaths: ['src/a.ts'] },
+				}),
+			);
+
+			const failOn = parseFailOn('dirty-main');
+			expect(failOn).toBeDefined();
+			expect(shouldFailOnResult(result, failOn!)).toBe(true);
+		});
+
+		test('does not fail when no selected warning IDs are present', () => {
+			const result = evaluateWorkflow(createContext());
+
+			const failOn = parseFailOn('dirty-main,spec-mismatch');
+			expect(failOn).toBeDefined();
+			expect(shouldFailOnResult(result, failOn!)).toBe(false);
+		});
+
+		test('supports "warn" selector to fail on any warning', () => {
+			const result = evaluateWorkflow(
+				createContext({
+					git: { branch: 'main', isMainBranch: true, unstagedFiles: 1, changedPaths: ['src/a.ts'] },
+				}),
+			);
+
+			const failOn = parseFailOn('warn');
+			expect(failOn).toBeDefined();
+			expect(shouldFailOnResult(result, failOn!)).toBe(true);
 		});
 	});
 });

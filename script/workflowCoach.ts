@@ -8,12 +8,23 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { evaluateWorkflow, inferPhase, inferWorkType, type CoachResult, type Phase, type WorkType, type WorkflowContext } from './workflowCoachCore.ts';
+import {
+	evaluateWorkflow,
+	inferPhase,
+	inferWorkType,
+	parseFailOn,
+	shouldFailOnResult,
+	type CoachResult,
+	type Phase,
+	type WorkType,
+	type WorkflowContext,
+} from './workflowCoachCore.ts';
 
 type CliArgs = {
 	query?: string;
 	type?: string;
 	json?: boolean;
+	'fail-on'?: string;
 	'no-gh'?: boolean;
 	'no-persist'?: boolean;
 	help?: boolean;
@@ -60,6 +71,8 @@ function main() {
 	context.phase = phase;
 
 	const result = evaluateWorkflow(context, { defaultBranch: 'main' });
+	const failOn = parseFailOn(args['fail-on']);
+	const shouldFail = failOn ? shouldFailOnResult(result, failOn) : false;
 	if (!args['no-persist']) {
 		savePersistedBranchState(gitCommonDir, git.branch, {
 			lastRunAt: new Date().toISOString(),
@@ -70,11 +83,17 @@ function main() {
 		});
 	}
 	if (args.json) {
-		process.stdout.write(`${JSON.stringify({ context, result }, null, 2)}\n`);
+		process.stdout.write(`${JSON.stringify({ context, result, shouldFail }, null, 2)}\n`);
+		if (shouldFail) {
+			process.exitCode = 1;
+		}
 		return;
 	}
 
 	renderText(context, result);
+	if (shouldFail) {
+		process.exitCode = 1;
+	}
 }
 
 function parseCliArgs(argv: string[]): CliArgs {
@@ -84,6 +103,7 @@ function parseCliArgs(argv: string[]): CliArgs {
 			query: { type: 'string' },
 			type: { type: 'string' },
 			json: { type: 'boolean' },
+			'fail-on': { type: 'string' },
 			'no-gh': { type: 'boolean' },
 			'no-persist': { type: 'boolean' },
 			help: { type: 'boolean' },
@@ -98,12 +118,13 @@ function printHelp() {
 	process.stdout.write(`Workflow Coach (advisory)
 
 Usage:
-  node --experimental-strip-types script/workflowCoach.ts --query "..." [--type fix] [--json] [--no-gh]
+  node --experimental-strip-types script/workflowCoach.ts --query "..." [--type fix] [--json] [--no-gh] [--fail-on <...>]
   npm run workflow:coach -- --query "..."
 
 Options:
   --query   Current user request (advisory)
   --type    Explicit work type: feature|fix|docs|ci|chore|refactor|test|perf
+  --fail-on Comma-separated warning IDs (or "warn") that should exit non-zero when present
   --no-gh   Skip GitHub PR lookup (faster/offline)
   --no-persist  Skip reading/writing local per-branch metadata
   --json    Emit machine-readable JSON
