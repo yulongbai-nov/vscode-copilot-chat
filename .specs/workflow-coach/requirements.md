@@ -89,3 +89,21 @@ The coach can also persist **local-only** per-branch metadata (under the git com
 7.2 WHEN the working changes touch a single `.specs/<name>/...` subtree, THE Workflow_Coach SHOULD treat that as the Active Spec and cross-check it against the branch-inferred spec (if any).  
 7.3 WHEN an expected Active Spec is inferred and code/build/CI changes exist without any `.specs/...` changes in the current working changes, THE Workflow_Coach SHOULD warn that the spec may be stale.  
 7.4 WHEN an expected Active Spec is inferred but `.specs/<name>/{design,requirements,tasks}.md` are missing, THE Workflow_Coach SHOULD warn that the spec is incomplete.  
+
+### Requirement 8 — Heuristic phase reminders (design vs implementation)
+
+**User Story:** As a developer/agent, I want the coach to infer whether I’m in a design or implementation phase so that it can surface the right reminders at the right time.
+
+#### Acceptance Criteria
+
+8.1 WHEN working changes touch `.specs/...` and do not touch code/build/CI paths, THE Workflow_Coach SHOULD treat the current phase as “design” and SHOULD remind to clarify vague requirements with the human.  
+8.2 WHEN working changes touch code/build/CI paths, THE Workflow_Coach SHOULD treat the current phase as “implementation”.  
+8.3 WHEN the inferred phase changes compared to the previous persisted run for the branch, THE Workflow_Coach SHOULD surface a short advisory “phase changed” reminder.  
+
+### Requirement 9 — Documentation code-link formatting reminder
+
+**User Story:** As a developer/agent, I want documentation to contain navigable code references so that reviewers can click through to the exact implementation quickly (both locally and on GitHub).
+
+#### Acceptance Criteria
+
+9.1 WHEN the work type is `docs` OR the working changes include Markdown docs/spec changes, THE Workflow_Coach SHOULD remind to use relative Markdown links with GitHub-style line anchors, e.g. `[src/foo.ts#L42](src/foo.ts#L42)` or `[src/foo.ts#L42-L55](src/foo.ts#L42-L55)`.  

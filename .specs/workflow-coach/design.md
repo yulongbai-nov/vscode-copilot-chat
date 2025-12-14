@@ -10,6 +10,7 @@ This feature adds a lightweight **Workflow Coach** script that:
 - Accepts the **current user request** (query) and optional “context events” as inputs.
 - Optionally persists **local-only** per-branch metadata (under the git common directory) so it can detect drift across restarts and git worktrees.
 - Emits a **next-step reminder** and an explicit **recommended next state** (what to do next and why).
+- Infers a coarse **phase** (“design” vs “implementation”) from deterministic signals (which paths are changing) so it can surface phase-appropriate reminders.
 
 The intent is to move the operational checklist out of prose and into an executable “advisor” so the agent can re-run it at decision points (before changing scope, before committing, before pushing, before opening a PR).
 
@@ -19,6 +20,7 @@ The intent is to move the operational checklist out of prose and into an executa
 - Make “quad verification” and spec-first steps harder to forget (reminders, not enforcement).
 - Detect common failure modes: committing on `main`, unpushed commits, missing PR, mixed scopes (docs + code + CI), and stale branch base.
 - Detect deterministic “spec drift” signals (branch/spec mismatch, code changes without `.specs/...` updates).
+- Provide heuristic phase reminders (design vs implementation) that help the agent ask clarifying questions early and follow tasks/verification once implementation begins.
 - Support both **human-readable** and **machine-readable** output.
 - Keep the MVP fast enough to run at workflow checkpoints (not every turn).
 
@@ -132,6 +134,7 @@ type WorkflowContext = {
     active?: string;
     hasRequiredDocs?: boolean;
   };
+  phase?: 'design' | 'implementation';
 };
 ```
 
@@ -188,6 +191,9 @@ flowchart TD
 - **Spec drift cross-check**
   - If branch implies spec `X` but working changes touch `.specs/Y/...`: warn about mismatch.
   - If code/build/CI changes exist without any `.specs/...` changes: warn that the spec may be stale.
+- **Phase inference**
+  - If working changes touch `.specs/...` without code/build/CI: treat as “design” and remind to clarify vague requirements with the human.
+  - If working changes touch code/build/CI: treat as “implementation”.
 
 ## Integration Points
 

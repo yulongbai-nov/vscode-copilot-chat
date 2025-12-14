@@ -21,6 +21,13 @@
   - [x] 8.3 Warn on mismatch / missing core spec docs / code changes without `.specs` changes
 - [x] 9. Extend unit tests for new state/spec rules _Requirements: 6, 7_
 - [x] 10. Update docs to reflect persistence + spec cross-check behavior _Requirements: 6, 7_
+- [x] 11. Add heuristic phase inference + reminders _Requirements: 8_
+  - [x] 11.1 Infer design vs implementation from changed paths
+  - [x] 11.2 Persist and display phase transitions
+  - [x] 11.3 Add design-phase “clarify requirements” reminder
+- [x] 12. Add docs code-link formatting reminder _Requirements: 9_
+  - [x] 12.1 Emit reminder when work type is docs or Markdown files change
+  - [x] 12.2 Update agent-prompt.md to require line-link formatting in docs
 
 ## Implementation Notes
 
