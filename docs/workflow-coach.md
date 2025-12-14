@@ -22,6 +22,12 @@ Machine-readable mode:
 npm run workflow:coach -- --query "…" --json
 ```
 
+Disable local persistence (no previous-run memory):
+
+```bash
+npm run workflow:coach -- --query "…" --no-persist
+```
+
 ## When to run (recommended checkpoints)
 
 - Before committing
@@ -38,9 +44,27 @@ npm run workflow:coach -- --query "…" --json
 - A “Detected state” + “Suggested next state”
 - Warnings + suggested commands (advisory)
 
+## Spec cross-checks (deterministic)
+
+When possible, Workflow Coach infers an “Active spec” and warns on common spec-first drift:
+
+- `spec-incomplete`: the active `.specs/<name>/` folder is missing `design.md`, `requirements.md`, or `tasks.md`
+- `spec-mismatch`: branch suggests one spec, but working changes touch a different `.specs/<name>/...`
+- `spec-not-updated`: code/build/CI changes exist without any `.specs/...` changes (when an Active spec is known)
+
+## Persistence (local-only)
+
+By default, Workflow Coach stores a small amount of **local-only** metadata per branch so it can show a “previous run” summary and support deterministic spec cross-check reminders.
+
+- Storage location: `<git-common-dir>/workflow-coach/state.json`
+  - In a typical repo, this is under `.git/workflow-coach/state.json`.
+  - In git worktrees, the **git common dir** is shared across worktrees, so this state is also shared.
+- This file is not tracked and does not modify git history.
+- Use `--no-persist` to disable reading/writing this state.
+
 ## Observed state transitions
 
-Workflow Coach is **stateless**: each run recomputes `detectedState` from the current `git`/`gh` snapshot. This diagram shows the *observed* states and the repo actions that typically move you between them.
+`detectedState` is computed fresh on each run from the current `git`/`gh` snapshot (persistence does not affect it). This diagram shows the *observed* states and the repo actions that typically move you between them.
 
 ```mermaid
 stateDiagram-v2
