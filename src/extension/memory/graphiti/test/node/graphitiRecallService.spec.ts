@@ -178,6 +178,112 @@ suite('GraphitiRecallService', () => {
 		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, ['copilotchat_user_github_gh-id-1', 'copilotchat_user_user-key-1']);
 	});
 
+	test('includes user scope in auto mode for user-specific queries', async () => {
+		const endpoint = 'http://graph:8000';
+		const configValues = new Map<string, unknown>([
+			[ConfigKey.MemoryGraphitiEnabled.fullyQualifiedId, true],
+			[ConfigKey.MemoryGraphitiEndpoint.fullyQualifiedId, endpoint],
+			[ConfigKey.MemoryGraphitiGroupIdStrategy.fullyQualifiedId, 'raw'],
+			[ConfigKey.MemoryGraphitiRecallEnabled.fullyQualifiedId, true],
+			[ConfigKey.MemoryGraphitiRecallTimeoutMs.fullyQualifiedId, 1000],
+			[ConfigKey.MemoryGraphitiRecallMaxFacts.fullyQualifiedId, 10],
+			[ConfigKey.MemoryGraphitiRecallScopes.fullyQualifiedId, 'auto'],
+		]);
+		const configService = new TestConfigurationService(configValues);
+
+		const workspaceState = new MapMemento();
+		await workspaceState.update(GraphitiWorkspaceConsentStorageKey, { version: 1, endpoint, consentedAt: '2025-01-01T00:00:00.000Z' });
+		const globalState = new MapMemento();
+		await globalState.update(GraphitiUserScopeKeyStorageKey, 'user-key-1');
+
+		const extensionContext = {
+			_serviceBrand: undefined,
+			workspaceState,
+			globalState,
+		} as unknown as IVSCodeExtensionContext;
+
+		const trustService = {
+			_serviceBrand: undefined,
+			isTrusted: true,
+			onDidGrantWorkspaceTrust: new Emitter<void>().event,
+		} satisfies IWorkspaceTrustService;
+
+		const workspaceService = {
+			_serviceBrand: undefined,
+			getWorkspaceFolders: () => [],
+		} as unknown as IWorkspaceService;
+
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
+		} as unknown as IAuthenticationService;
+
+		const fetcher = new SequencedFetcherService([
+			createFakeResponse(200, { facts: [] }),
+			createFakeResponse(200, { facts: [] }),
+			createFakeResponse(200, { facts: [] }),
+		]);
+
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
+		await svc.recallFacts({ sessionId: 'session_1', query: 'what is my preference for linting' });
+
+		assert.strictEqual(fetcher.calls.length, 3);
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, ['copilotchat_session_session_1']);
+		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, ['copilotchat_workspace_no-workspace-folders']);
+		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, ['copilotchat_user_github_gh-id-1', 'copilotchat_user_user-key-1']);
+	});
+
+	test('excludes user scope in auto mode for non-user-specific queries', async () => {
+		const endpoint = 'http://graph:8000';
+		const configValues = new Map<string, unknown>([
+			[ConfigKey.MemoryGraphitiEnabled.fullyQualifiedId, true],
+			[ConfigKey.MemoryGraphitiEndpoint.fullyQualifiedId, endpoint],
+			[ConfigKey.MemoryGraphitiGroupIdStrategy.fullyQualifiedId, 'raw'],
+			[ConfigKey.MemoryGraphitiRecallEnabled.fullyQualifiedId, true],
+			[ConfigKey.MemoryGraphitiRecallTimeoutMs.fullyQualifiedId, 1000],
+			[ConfigKey.MemoryGraphitiRecallMaxFacts.fullyQualifiedId, 10],
+			[ConfigKey.MemoryGraphitiRecallScopes.fullyQualifiedId, 'auto'],
+		]);
+		const configService = new TestConfigurationService(configValues);
+
+		const workspaceState = new MapMemento();
+		await workspaceState.update(GraphitiWorkspaceConsentStorageKey, { version: 1, endpoint, consentedAt: '2025-01-01T00:00:00.000Z' });
+
+		const extensionContext = {
+			_serviceBrand: undefined,
+			workspaceState,
+			globalState: new MapMemento(),
+		} as unknown as IVSCodeExtensionContext;
+
+		const trustService = {
+			_serviceBrand: undefined,
+			isTrusted: true,
+			onDidGrantWorkspaceTrust: new Emitter<void>().event,
+		} satisfies IWorkspaceTrustService;
+
+		const workspaceService = {
+			_serviceBrand: undefined,
+			getWorkspaceFolders: () => [],
+		} as unknown as IWorkspaceService;
+
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
+		} as unknown as IAuthenticationService;
+
+		const fetcher = new SequencedFetcherService([
+			createFakeResponse(200, { facts: [] }),
+			createFakeResponse(200, { facts: [] }),
+		]);
+
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
+		await svc.recallFacts({ sessionId: 'session_1', query: 'how do we build' });
+
+		assert.strictEqual(fetcher.calls.length, 2);
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, ['copilotchat_session_session_1']);
+		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, ['copilotchat_workspace_no-workspace-folders']);
+	});
+
 	test('does not call Graphiti when recall is disabled', async () => {
 		const endpoint = 'http://graph:8000';
 		const configValues = new Map<string, unknown>([

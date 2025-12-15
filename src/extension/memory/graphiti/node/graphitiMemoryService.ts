@@ -14,13 +14,17 @@ import { IWorkspaceTrustService } from '../../../../platform/workspace/common/wo
 import { createServiceIdentifier } from '../../../../util/common/services';
 import { Disposable } from '../../../../util/vs/base/common/lifecycle';
 import { GraphitiWorkspaceConsentStorageKey, isGraphitiConsentRecord } from '../common/graphitiConsent';
-import { getGraphitiActorIdentityFromGitHubSession } from '../common/graphitiIdentity';
+import { getGraphitiActorIdentityFromGitHubSession, getGraphitiUserScopeKeyFromGitHubSession } from '../common/graphitiIdentity';
 import { normalizeGraphitiEndpoint } from '../common/graphitiEndpoint';
+import { GraphitiUserScopeKeyStorageKey } from '../common/graphitiStorageKeys';
 import { GraphitiClient } from './graphitiClient';
 import { computeGraphitiGroupId, computeWorkspaceKey } from './graphitiGroupIds';
 import { GraphitiIngestionQueue } from './graphitiIngestionQueue';
-import { mapChatTurnToGraphitiMessages } from './graphitiMessageMapping';
+import { mapChatTurnToGraphitiMessages, truncateForGraphiti } from './graphitiMessageMapping';
+import { looksLikeSecretForAutoPromotion, parseGraphitiMemoryDirectives } from './graphitiMemoryDirectives';
 import { formatGraphitiOwnershipContextEpisode } from './graphitiOwnershipContext';
+import { formatGraphitiPromotionEpisode } from './graphitiPromotionTemplates';
+import { generateUuid } from '../../../../util/vs/base/common/uuid';
 
 export const IGraphitiMemoryService = createServiceIdentifier<IGraphitiMemoryService>('IGraphitiMemoryService');
 
@@ -46,6 +50,7 @@ type ResolvedGraphitiIngestionConfig = {
 	readonly groupIdStrategy: 'raw' | 'hashed';
 	readonly includeSystemMessages: boolean;
 	readonly includeGitMetadata: boolean;
+	readonly autoPromoteEnabled: boolean;
 };
 
 const FLUSH_DELAY_MS = 250;
@@ -58,6 +63,7 @@ const MAX_SEEN_TURNS_PER_GROUP = 500;
 const MAX_SEEN_GROUPS = 50;
 
 const OWNERSHIP_CONTEXT_TURN_ID = 'copilotchat.graphiti.ownership_context.v1';
+const AUTO_PROMOTION_ID_PREFIX = 'copilotchat.graphiti.auto_promotion.v1';
 
 type PendingBackfillState = {
 	turns: readonly GraphitiConversationTurnForIngestion[];
@@ -133,6 +139,7 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiGroupIdStrategy.fullyQualifiedId)
 				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiIncludeSystemMessages.fullyQualifiedId)
 				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiIncludeGitMetadata.fullyQualifiedId)
+				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiAutoPromoteEnabled.fullyQualifiedId)
 			) {
 				this.clearQueueAndTimers();
 			}
@@ -160,6 +167,7 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 			const targets = this.getTargetGroups(config, sessionId);
 
 			this.enqueueTurnToTargets(config, targets, latestTurn, git);
+			this.maybeEnqueueAutoPromotionDirectives(config, latestTurn, git);
 
 			const existing = this._pendingBackfillBySessionId.get(sessionId);
 			const cursor = existing ? Math.min(existing.cursor, turns.length) : 0;
@@ -214,7 +222,7 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 
 	private maybeEnqueueOwnershipContext(
 		config: ResolvedGraphitiIngestionConfig,
-		scope: 'session' | 'workspace',
+		scope: 'session' | 'workspace' | 'user',
 		groupId: string,
 		seen: LruSet,
 		now: Date,
@@ -257,6 +265,100 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 		const { droppedCount } = this._queue.enqueue(groupId, [message], config.maxQueueSize);
 		if (droppedCount > 0) {
 			this._logService.warn(`Graphiti ingestion queue full; dropped ${droppedCount} queued message(s).`);
+		}
+	}
+
+	private maybeEnqueueAutoPromotionDirectives(
+		config: ResolvedGraphitiIngestionConfig,
+		turn: GraphitiConversationTurnForIngestion,
+		git: { branch?: string; commit?: string; dirty?: boolean } | undefined,
+	): void {
+		if (!config.autoPromoteEnabled) {
+			return;
+		}
+
+		const directives = parseGraphitiMemoryDirectives(turn.userMessage);
+		if (!directives.length) {
+			return;
+		}
+
+		const now = new Date(turn.timestampMs);
+		const timestamp = now.toISOString();
+		const groupIdStrategy = config.groupIdStrategy;
+		const includeGitMetadata = config.includeGitMetadata;
+
+		const workspaceFolders = this._workspaceService.getWorkspaceFolders().map(u => u.toString());
+		const workspaceKey = computeWorkspaceKey(workspaceFolders);
+		const workspaceGroupId = computeGraphitiGroupId('workspace', groupIdStrategy, workspaceKey);
+
+		let userGroupId: string | undefined;
+		const getUserGroupId = (): string => {
+			if (userGroupId) {
+				return userGroupId;
+			}
+
+			const identityUserScopeKey = getGraphitiUserScopeKeyFromGitHubSession(this._authenticationService.anyGitHubSession);
+			let userScopeKey = identityUserScopeKey;
+			if (!userScopeKey) {
+				userScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
+				if (!userScopeKey) {
+					userScopeKey = generateUuid();
+					void this._extensionContext.globalState.update(GraphitiUserScopeKeyStorageKey, userScopeKey);
+				}
+			}
+			userGroupId = computeGraphitiGroupId('user', groupIdStrategy, userScopeKey);
+			return userGroupId;
+		};
+
+		for (let i = 0; i < directives.length; i++) {
+			const directive = directives[i];
+			if (looksLikeSecretForAutoPromotion(directive.content)) {
+				this._logService.debug(`Graphiti auto-promotion skipped (possible secret): kind=${directive.kind} scope=${directive.scope}`);
+				continue;
+			}
+
+			const groupId = directive.scope === 'user' ? getUserGroupId() : workspaceGroupId;
+			const seen = this.getSeenTurnsForGroup(groupId);
+
+			const autoPromotionId = `${AUTO_PROMOTION_ID_PREFIX}:${turn.turnId}:${i}:${directive.scope}:${directive.kind}`;
+			if (seen.has(autoPromotionId)) {
+				continue;
+			}
+
+			const needsOwnershipContext = config.includeSystemMessages && !seen.has(OWNERSHIP_CONTEXT_TURN_ID);
+			const requiredMessages = 1 + (needsOwnershipContext ? 1 : 0);
+			if (this._queue.size + requiredMessages > config.maxQueueSize) {
+				this._logService.debug('Graphiti ingestion queue near capacity; skipping auto-promotion directive.');
+				continue;
+			}
+
+			if (needsOwnershipContext) {
+				this.maybeEnqueueOwnershipContext(config, directive.scope, groupId, seen, now, git);
+			}
+
+			const base = formatGraphitiPromotionEpisode(directive.kind, directive.scope, '', now);
+			const budget = Math.max(0, config.maxMessageChars - base.length);
+			const truncatedText = truncateForGraphiti(directive.content, budget);
+			const content = formatGraphitiPromotionEpisode(directive.kind, directive.scope, truncatedText, now);
+
+			const sourceDescription = includeGitMetadata
+				? JSON.stringify({ source: 'copilotchat', event: 'auto_promotion', scope: directive.scope, kind: directive.kind, turnId: turn.turnId, ...(git ? { git } : {}) })
+				: `copilot-chat:auto_promotion:${directive.scope}:${directive.kind}`;
+
+			const message = {
+				role_type: 'system' as const,
+				role: 'system',
+				name: `copilotchat.auto_promotion.${turn.turnId}.${i}`,
+				content,
+				timestamp,
+				source_description: sourceDescription,
+			};
+
+			seen.add(autoPromotionId);
+			const { droppedCount } = this._queue.enqueue(groupId, [message], config.maxQueueSize);
+			if (droppedCount > 0) {
+				this._logService.warn(`Graphiti ingestion queue full; dropped ${droppedCount} queued message(s).`);
+			}
 		}
 	}
 
@@ -326,6 +428,7 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 			groupIdStrategy: this._configurationService.getConfig(ConfigKey.MemoryGraphitiGroupIdStrategy),
 			includeSystemMessages: this._configurationService.getConfig(ConfigKey.MemoryGraphitiIncludeSystemMessages),
 			includeGitMetadata: this._configurationService.getConfig(ConfigKey.MemoryGraphitiIncludeGitMetadata),
+			autoPromoteEnabled: this._configurationService.getConfig(ConfigKey.MemoryGraphitiAutoPromoteEnabled),
 		};
 	}
 
@@ -548,6 +651,8 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 
 					this._queue.enqueue(target.groupId, messages, config.maxQueueSize);
 				}
+
+				this.maybeEnqueueAutoPromotionDirectives(config, turn, git);
 
 				didEnqueue = true;
 				turnsEnqueuedThisTick++;

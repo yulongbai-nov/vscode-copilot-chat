@@ -35,9 +35,28 @@ type ResolvedGraphitiRecallConfig = {
 	readonly endpoint: string;
 	readonly timeoutMs: number;
 	readonly maxFacts: number;
-	readonly scopes: 'session' | 'workspace' | 'both' | 'all';
+	readonly scopes: 'session' | 'workspace' | 'both' | 'auto' | 'all';
 	readonly groupIdStrategy: 'raw' | 'hashed';
 };
+
+function shouldIncludeUserScopeForAutoRecall(query: string): boolean {
+	const normalized = query.toLowerCase();
+
+	if (/\b(preference|preferences|terminology)\b/.test(normalized)) {
+		return true;
+	}
+	if (/\b(i|we)\s+prefer\b/.test(normalized)) {
+		return true;
+	}
+	if (/\bwhat\s+do\s+(i|we)\s+call\b/.test(normalized)) {
+		return true;
+	}
+	if (/\bmy\b/.test(normalized) && /\b(name|id|email|username|setup|workflow|style|convention|config|settings|alias|aliases|terminology|term|naming)\b/.test(normalized)) {
+		return true;
+	}
+
+	return false;
+}
 
 export class GraphitiRecallService implements IGraphitiRecallService {
 	declare readonly _serviceBrand: undefined;
@@ -83,14 +102,14 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 
 		const searchTargets: Array<{ scope: GraphitiRecalledFact['scope']; groupIds: readonly string[] }> = [];
 
-		if ((config.scopes === 'session' || config.scopes === 'both' || config.scopes === 'all') && args.sessionId) {
+		if ((config.scopes === 'session' || config.scopes === 'both' || config.scopes === 'auto' || config.scopes === 'all') && args.sessionId) {
 			searchTargets.push({
 				scope: 'session',
 				groupIds: [computeGraphitiGroupId('session', config.groupIdStrategy, args.sessionId)],
 			});
 		}
 
-		if (config.scopes === 'workspace' || config.scopes === 'both' || config.scopes === 'all') {
+		if (config.scopes === 'workspace' || config.scopes === 'both' || config.scopes === 'auto' || config.scopes === 'all') {
 			const workspaceFolders = this._workspaceService.getWorkspaceFolders().map(u => u.toString());
 			const workspaceKey = computeWorkspaceKey(workspaceFolders);
 			searchTargets.push({
@@ -99,7 +118,7 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 			});
 		}
 
-		if (config.scopes === 'all') {
+		if (config.scopes === 'all' || (config.scopes === 'auto' && shouldIncludeUserScopeForAutoRecall(query))) {
 			const legacyUserScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
 			const userScopeKeys = getGraphitiUserScopeKeys({
 				gitHubSession: this._authenticationService.anyGitHubSession,

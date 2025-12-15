@@ -850,11 +850,12 @@ export namespace ConfigKey {
 
 	export const MemoryGraphitiIncludeSystemMessages = defineSetting<boolean>('chat.memory.graphiti.includeSystemMessages', ConfigType.Simple, false, vBoolean());
 	export const MemoryGraphitiIncludeGitMetadata = defineSetting<boolean>('chat.memory.graphiti.includeGitMetadata', ConfigType.Simple, false, vBoolean());
+	export const MemoryGraphitiAutoPromoteEnabled = defineSetting<boolean>('chat.memory.graphiti.autoPromote.enabled', ConfigType.Simple, false, vBoolean());
 
 	export const MemoryGraphitiRecallEnabled = defineSetting<boolean>('chat.memory.graphiti.recall.enabled', ConfigType.Simple, false, vBoolean());
 	export const MemoryGraphitiRecallTimeoutMs = defineSetting<number>('chat.memory.graphiti.recall.timeoutMs', ConfigType.Simple, 750, vNumber());
 	export const MemoryGraphitiRecallMaxFacts = defineSetting<number>('chat.memory.graphiti.recall.maxFacts', ConfigType.Simple, 10, vNumber());
-	export const MemoryGraphitiRecallScopes = defineSetting<'session' | 'workspace' | 'both' | 'all'>('chat.memory.graphiti.recall.scopes', ConfigType.Simple, 'both', vEnum('session', 'workspace', 'both', 'all'));
+	export const MemoryGraphitiRecallScopes = defineSetting<'session' | 'workspace' | 'both' | 'auto' | 'all'>('chat.memory.graphiti.recall.scopes', ConfigType.Simple, 'both', vEnum('session', 'workspace', 'both', 'auto', 'all'));
 
 	/** User provided code generation instructions for the chat */
 	export const CodeGenerationInstructions = defineSetting('chat.codeGeneration.instructions', ConfigType.Simple, [] as CodeGenerationInstruction[]);

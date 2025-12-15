@@ -3777,6 +3777,14 @@
 								"experimental"
 							]
 						},
+						"github.copilot.chat.memory.graphiti.autoPromote.enabled": {
+							"type": "boolean",
+							"default": false,
+							"markdownDescription": "%github.copilot.config.memory.graphiti.autoPromote.enabled%",
+							"tags": [
+								"experimental"
+							]
+						},
 						"github.copilot.chat.memory.graphiti.recall.enabled": {
 							"type": "boolean",
 							"default": false,
@@ -3810,12 +3818,14 @@
 								"session",
 								"workspace",
 								"both",
+								"auto",
 								"all"
 							],
 							"markdownEnumDescriptions": [
 								"%github.copilot.config.memory.graphiti.recall.scopes.session%",
 								"%github.copilot.config.memory.graphiti.recall.scopes.workspace%",
 								"%github.copilot.config.memory.graphiti.recall.scopes.both%",
+								"%github.copilot.config.memory.graphiti.recall.scopes.auto%",
 								"%github.copilot.config.memory.graphiti.recall.scopes.all%"
 							],
 							"markdownDescription": "%github.copilot.config.memory.graphiti.recall.scopes%",

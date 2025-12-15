@@ -438,4 +438,165 @@ suite('GraphitiMemoryService', () => {
 
 		service.dispose();
 	});
+
+	test('auto-promotes explicit Memory Directive episodes when enabled', async () => {
+		const endpoint = 'http://graph:8000';
+		const configValues = new Map<string, unknown>([
+			[ConfigKey.MemoryGraphitiEnabled.fullyQualifiedId, true],
+			[ConfigKey.MemoryGraphitiEndpoint.fullyQualifiedId, endpoint],
+			[ConfigKey.MemoryGraphitiTimeoutMs.fullyQualifiedId, 1000],
+			[ConfigKey.MemoryGraphitiMaxBatchSize.fullyQualifiedId, 10],
+			[ConfigKey.MemoryGraphitiMaxQueueSize.fullyQualifiedId, 200],
+			[ConfigKey.MemoryGraphitiMaxMessageChars.fullyQualifiedId, 2000],
+			[ConfigKey.MemoryGraphitiScopes.fullyQualifiedId, 'session'],
+			[ConfigKey.MemoryGraphitiGroupIdStrategy.fullyQualifiedId, 'raw'],
+			[ConfigKey.MemoryGraphitiIncludeSystemMessages.fullyQualifiedId, false],
+			[ConfigKey.MemoryGraphitiAutoPromoteEnabled.fullyQualifiedId, true],
+		]);
+		const configService = new TestConfigurationService(configValues);
+
+		const workspaceState = new MapMemento();
+		await workspaceState.update(GraphitiWorkspaceConsentStorageKey, { version: 1, endpoint, consentedAt: '2025-01-01T00:00:00.000Z' });
+		const extensionContext = {
+			_serviceBrand: undefined,
+			workspaceState,
+			globalState: new MapMemento(),
+		} as unknown as IVSCodeExtensionContext;
+
+		const trustService = {
+			_serviceBrand: undefined,
+			isTrusted: true,
+			onDidGrantWorkspaceTrust: new Emitter<void>().event,
+		} satisfies IWorkspaceTrustService;
+
+		const workspaceService = {
+			_serviceBrand: undefined,
+			getWorkspaceFolders: () => [],
+		} as unknown as IWorkspaceService;
+
+		const gitService = {
+			_serviceBrand: undefined,
+			activeRepository: { get: () => undefined },
+			repositories: [],
+		} as unknown as IGitService;
+
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
+		} as unknown as IAuthenticationService;
+
+		const fetcher = new SequencedFetcherService([
+			createFakeResponse(202, { message: 'ok', success: true }),
+			createFakeResponse(202, { message: 'ok', success: true }),
+		]);
+
+		const service = new GraphitiMemoryService(
+			configService,
+			extensionContext,
+			authenticationService,
+			trustService,
+			workspaceService,
+			fetcher,
+			gitService,
+			silentLogService,
+		);
+
+		service.enqueueConversationSnapshot('session_1', [
+			{
+				turnId: 'turn_1',
+				userMessage: 'preference (user): Keep diffs small and avoid inline comments.',
+				assistantMessage: 'ok',
+				timestampMs: Date.parse('2025-01-02T03:04:05.000Z')
+			},
+		]);
+
+		await vi.advanceTimersByTimeAsync(250);
+		assert.strictEqual(fetcher.calls.length, 2);
+
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_id, 'copilotchat_session_session_1');
+		assert.deepStrictEqual(fetcher.calls[1].options.json.group_id, 'copilotchat_user_github_gh-id-1');
+
+		const promoted = fetcher.calls[1].options.json.messages;
+		assert.strictEqual(promoted.length, 1);
+		assert.strictEqual(promoted[0].role_type, 'system');
+		assert.ok(String(promoted[0].content).includes('<graphiti_episode kind="preference">'));
+		assert.ok(String(promoted[0].content).includes('scope: user'));
+
+		service.dispose();
+	});
+
+	test('refuses auto-promotion when directive content looks like a secret', async () => {
+		const endpoint = 'http://graph:8000';
+		const configValues = new Map<string, unknown>([
+			[ConfigKey.MemoryGraphitiEnabled.fullyQualifiedId, true],
+			[ConfigKey.MemoryGraphitiEndpoint.fullyQualifiedId, endpoint],
+			[ConfigKey.MemoryGraphitiTimeoutMs.fullyQualifiedId, 1000],
+			[ConfigKey.MemoryGraphitiMaxBatchSize.fullyQualifiedId, 10],
+			[ConfigKey.MemoryGraphitiMaxQueueSize.fullyQualifiedId, 200],
+			[ConfigKey.MemoryGraphitiMaxMessageChars.fullyQualifiedId, 2000],
+			[ConfigKey.MemoryGraphitiScopes.fullyQualifiedId, 'session'],
+			[ConfigKey.MemoryGraphitiGroupIdStrategy.fullyQualifiedId, 'raw'],
+			[ConfigKey.MemoryGraphitiIncludeSystemMessages.fullyQualifiedId, false],
+			[ConfigKey.MemoryGraphitiAutoPromoteEnabled.fullyQualifiedId, true],
+		]);
+		const configService = new TestConfigurationService(configValues);
+
+		const workspaceState = new MapMemento();
+		await workspaceState.update(GraphitiWorkspaceConsentStorageKey, { version: 1, endpoint, consentedAt: '2025-01-01T00:00:00.000Z' });
+		const extensionContext = {
+			_serviceBrand: undefined,
+			workspaceState,
+			globalState: new MapMemento(),
+		} as unknown as IVSCodeExtensionContext;
+
+		const trustService = {
+			_serviceBrand: undefined,
+			isTrusted: true,
+			onDidGrantWorkspaceTrust: new Emitter<void>().event,
+		} satisfies IWorkspaceTrustService;
+
+		const workspaceService = {
+			_serviceBrand: undefined,
+			getWorkspaceFolders: () => [],
+		} as unknown as IWorkspaceService;
+
+		const gitService = {
+			_serviceBrand: undefined,
+			activeRepository: { get: () => undefined },
+			repositories: [],
+		} as unknown as IGitService;
+
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
+		} as unknown as IAuthenticationService;
+
+		const fetcher = new SequencedFetcherService([createFakeResponse(202, { message: 'ok', success: true })]);
+
+		const service = new GraphitiMemoryService(
+			configService,
+			extensionContext,
+			authenticationService,
+			trustService,
+			workspaceService,
+			fetcher,
+			gitService,
+			silentLogService,
+		);
+
+		service.enqueueConversationSnapshot('session_1', [
+			{
+				turnId: 'turn_1',
+				userMessage: 'preference (user): My password is 123.',
+				assistantMessage: 'ok',
+				timestampMs: Date.parse('2025-01-02T03:04:05.000Z')
+			},
+		]);
+
+		await vi.advanceTimersByTimeAsync(250);
+		assert.strictEqual(fetcher.calls.length, 1);
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_id, 'copilotchat_session_session_1');
+
+		service.dispose();
+	});
 });

@@ -5,7 +5,8 @@ This demo shows Copilot Chat’s Graphiti integration working end-to-end:
 1. **Chat → Graphiti ingestion** (automatic, on turn finalization)
 2. **Graphiti → facts extraction** (Graphiti service derives facts you can query)
 3. **Graphiti → Copilot recall injection** (optional, prompt-time memory)
-4. **Manual promotion** (optional, higher-signal “memories”)
+4. **Auto-promotion via Memory Directives** (optional, higher-signal “memories”)
+5. **Manual promotion** (optional, higher-signal “memories”)
 
 Presentation deck (for a quick walkthrough): [`docs/demos/graphiti-memory-integration/presentation/index.html`](presentation/index.html)
 
@@ -90,6 +91,9 @@ Enable recall:
 To recall global (“my”) preferences/terminology promoted to user scope, use:
 - `github.copilot.chat.memory.graphiti.recall.scopes`: `all`
 
+To keep user scope recall off by default but include it when the user query indicates “my preferences/terminology”, use:
+- `github.copilot.chat.memory.graphiti.recall.scopes`: `auto`
+
 Ask a follow-up:
 > `Before committing, what should I do?`
 
@@ -101,6 +105,17 @@ Implementation refs:
 - Recall service (`POST /search`): [`src/extension/memory/graphiti/node/graphitiRecallService.ts#L52`](../../../src/extension/memory/graphiti/node/graphitiRecallService.ts#L52)
 
 ## Step 5 — Demo: Promotion (Higher Signal than Raw Chat)
+### 5A) Auto-promotion via Memory Directives (optional)
+Enable:
+- `github.copilot.chat.memory.graphiti.autoPromote.enabled`: `true`
+
+Then send one of these in chat (examples):
+- `preference (user): Keep diffs small and avoid inline comments.`
+- `terminology (workspace): “playbook” means the repo’s runbook docs.`
+
+These directives enqueue an additional `<graphiti_episode kind="…">…</graphiti_episode>` message to Graphiti (best-effort). If the directive content looks like a secret (password/token/private key), auto-promotion is refused.
+
+### 5B) Manual promotion
 Promotion is useful for durable, curated knowledge (decisions, preferences, procedures), and can target Workspace or User scope.
 
 Run: `GitHub Copilot Chat: Promote to Graphiti Memory`
