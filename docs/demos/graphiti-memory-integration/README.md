@@ -7,6 +7,8 @@ This demo shows Copilot Chat’s Graphiti integration working end-to-end:
 3. **Graphiti → Copilot recall injection** (optional, prompt-time memory)
 4. **Manual promotion** (optional, higher-signal “memories”)
 
+Presentation deck (for a quick walkthrough): [`docs/demos/graphiti-memory-integration/presentation/index.html`](presentation/index.html)
+
 It also explains why this can be better than the “old” approaches:
 - **Baseline (no external memory):** in-memory, per-session only.
 - **MemoryTool (file-based):** durable but manual/tool-driven and not semantic.
