@@ -37,6 +37,7 @@ Test source: [`src/extension/memory/graphiti/test/node/graphiti.e2e.spec.ts#L1`]
 2. Set:
    - `github.copilot.chat.memory.graphiti.endpoint`: `http://graph:8000`
    - `github.copilot.chat.memory.graphiti.enabled`: `true`
+   - (Optional) `github.copilot.chat.memory.graphiti.includeSystemMessages`: `true` (adds an ownership context episode with the logged-in user + workspace basenames)
 3. Accept the consent prompt (stored per-workspace per-endpoint).
 
 Implementation refs:
@@ -85,6 +86,9 @@ Implementation refs:
 Enable recall:
 - `github.copilot.chat.memory.graphiti.recall.enabled`: `true`
 - `github.copilot.chat.memory.graphiti.recall.scopes`: `both`
+
+To recall global (“my”) preferences/terminology promoted to user scope, use:
+- `github.copilot.chat.memory.graphiti.recall.scopes`: `all`
 
 Ask a follow-up:
 > `Before committing, what should I do?`

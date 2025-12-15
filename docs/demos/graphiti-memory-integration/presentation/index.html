@@ -409,7 +409,7 @@
 							<ul>
 								<li><span class="tag ok">Session</span> auto-ingest + recall (grouped by session id)</li>
 								<li><span class="tag ok">Workspace</span> auto-ingest + recall (hashed workspace identifier)</li>
-								<li><span class="tag warn">User</span> promotion-only by default (higher-signal, curated)</li>
+								<li><span class="tag warn">User</span> promotion-only by default (keyed by logged-in GitHub id; legacy fallback)</li>
 							</ul>
 							<div class="kv">
 								<div class="k">Design goal</div>
@@ -437,6 +437,7 @@ Always run npm run lint before committing.
 						<li><span class="tag warn">Off by default</span>: no automatic network calls when disabled</li>
 						<li><span class="tag warn">Workspace trust gated</span>: untrusted workspaces disable ingest + recall</li>
 						<li><span class="tag warn">Endpoint consent</span>: consent record is tied to the configured Graphiti endpoint</li>
+						<li><span class="tag ok">Ownership context (optional)</span>: enable <span class="inline-code">includeSystemMessages</span> to ingest owner/session/workspace context</li>
 						<li><span class="tag ok">No paths by default</span>: hashed group ids; optional git metadata avoids filesystem paths</li>
 						<li><span class="tag ok">Fail-open</span>: errors/timeouts never block answering; memories are assistive context</li>
 					</ul>
@@ -444,6 +445,8 @@ Always run npm run lint before committing.
 						<h3>Config keys (Copilot Chat)</h3>
 						<pre><code>github.copilot.chat.memory.graphiti.enabled
 github.copilot.chat.memory.graphiti.endpoint
+github.copilot.chat.memory.graphiti.includeSystemMessages
+github.copilot.chat.memory.graphiti.includeGitMetadata
 github.copilot.chat.memory.graphiti.recall.enabled
 github.copilot.chat.memory.graphiti.recall.scopes</code></pre>
 					</div>
@@ -647,4 +650,3 @@ GRAPHITI_E2E=1 GRAPHITI_ENDPOINT=http://graph:8000 \
 		</script>
 	</body>
 </html>
-
