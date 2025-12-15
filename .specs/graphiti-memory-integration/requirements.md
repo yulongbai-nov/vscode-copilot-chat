@@ -1,30 +1,130 @@
-# Requirements Document: Graphiti Memory Integration
+# Requirements Document
 
 ## Introduction
-Opt-in ingestion of chat data into a Graphiti instance for graph-native memory/RAG/auditing. Disabled by default; trusted workspaces only.
+
+This feature integrates the Graphiti service with Copilot Chat so that Copilot can store and recall useful information across sessions/workspaces. The system must remain safe (off by default + consent + trust gating), fast (bounded recall + async ingest), and controllable (session/workspace scopes; user scope via promotion).
+
+### Goals
+
+- Improve agent continuity by recalling relevant prior context.
+- Persist session and workspace knowledge automatically when enabled.
+- Allow curated, explicit memory promotion to user scope (and/or workspace scope).
+
+### Non-goals
+
+- Guaranteeing all turns are stored (ingestion is best-effort).
+- Building a full graph UI inside the extension.
+
+## Glossary
+
+- **Graphiti**: External service providing knowledge-graph storage and retrieval via REST.
+- **Fact**: A Graphiti-extracted statement returned from `POST /search`.
+- **Memory**: Facts retrieved from Graphiti and injected into the prompt.
+- **Memory Directive**: A user-authored prefix (e.g. `preference:`) that requests auto-promotion into Graphiti.
+- **Scope**: The grouping boundary for memory (`session`, `workspace`, `user`).
+- **Actor / Owner**: The logged-in user identity associated with a scope (used to express “my” preferences/assets).
+- **Workspace Trust**: VS Code’s trust state; untrusted workspaces disable automatic Graphiti behavior.
+- **Consent Record**: Per-workspace record indicating the user approved sending chat text to a specific Graphiti endpoint.
+- **Promotion**: A curated, manually created “episode” (decision/lesson/etc.) written to Graphiti.
 
 ## Requirements
 
-### R1: Opt-in and Trust
-- THE System SHALL gate Graphiti ingestion behind a feature flag/config and require trusted workspace + explicit consent.
-- WHEN disabled, THEN no network calls to Graphiti SHALL occur.
+### Requirement 1 — Safety, trust, and consent gating
 
-### R2: Data Mapping and Idempotency
-- THE System SHALL map conversations/turns/sections/tool calls/results/responses/references to stable Graphiti nodes/edges with deterministic IDs and content hashes.
-- THE System SHALL use append-only writes and avoid mutating prior nodes.
+**User Story:** As a user, I want Graphiti memory to be off by default and gated, so that my chat data is not sent without consent.
 
-### R3: Payload Limits and Truncation
-- THE System SHALL enforce per-node size limits and truncate payloads with clear markers.
-- WHEN attachments are not explicitly allowed, THEN the System SHALL omit attachment bodies and send only URIs/hashes.
+#### Acceptance Criteria
 
-### R4: Failure Handling
-- WHEN network/timeouts/errors occur, THEN ingestion SHALL fail open: queue/retry with backoff and never block chat flows.
-- THE System SHALL bound retry queues to avoid unbounded growth.
+1.1 THE Copilot Chat system SHALL default Graphiti integration to disabled.
+1.2 WHEN `github.copilot.chat.memory.graphiti.enabled` is false, THE Copilot Chat system SHALL NOT make automatic Graphiti network calls.
+1.3 WHEN the workspace is untrusted, THE Copilot Chat system SHALL disable automatic ingest and recall.
+1.4 WHEN Graphiti is enabled, THE Copilot Chat system SHALL require an explicit consent confirmation tied to the configured endpoint before ingest/recall occurs.
 
-### R5: Privacy and Scope
-- THE System SHALL not send data unless enabled; consent UX SHALL indicate what is sent.
-- THE System SHOULD allow embedding to be toggled separately; if disabled, only structure/metadata is sent.
+### Requirement 2 — Automatic ingestion (best-effort)
 
-### R6: Observability
-- THE System SHOULD emit telemetry for ingestion attempts/failures (no user content).
-- THE System SHOULD surface lightweight status/errors to users without noisy prompts.
+**User Story:** As a user, I want Copilot Chat to persist useful history to Graphiti, so that it can be recalled later.
+
+#### Acceptance Criteria
+
+2.1 WHEN Graphiti ingest is enabled, THE Copilot Chat system SHALL enqueue successful turns for ingestion without blocking the response path.
+2.2 THE Copilot Chat system SHALL bound ingestion memory usage (queue size) and apply a deterministic drop policy when full.
+2.3 THE Copilot Chat system SHALL retry transient ingestion failures with backoff and SHALL eventually drop after bounded attempts.
+2.4 THE Copilot Chat system SHALL write ingested messages into Graphiti under scope-derived group ids for `session` and/or `workspace` as configured.
+
+### Requirement 3 — Recall memories per turn (optional)
+
+**User Story:** As a user, I want Copilot Chat to recall relevant memories before answering, so that it can respond consistently without repeating work.
+
+#### Acceptance Criteria
+
+3.1 WHEN Graphiti recall is enabled, THE Copilot Chat system SHALL query Graphiti using the current user query as the recall query.
+3.2 THE Copilot Chat system SHALL inject recalled memory as a structured prompt block (`<graphiti_memory>…</graphiti_memory>`).
+3.3 THE Copilot Chat system SHALL cap recalled results (count and total size) to avoid prompt bloat.
+3.4 THE Copilot Chat system SHALL apply a strict timeout to recall and SHALL fail open (continue without memory) when Graphiti is slow or unavailable.
+
+### Requirement 4 — Scopes and promotion
+
+**User Story:** As a user, I want separate session/workspace memory and an optional user memory, so that I can control where information persists.
+
+#### Acceptance Criteria
+
+4.1 THE Copilot Chat system SHALL support `session` and `workspace` scopes for ingestion and recall.
+4.2 THE Copilot Chat system SHALL support a `user` scope that is disabled for automatic ingestion by default.
+4.3 THE Copilot Chat system SHALL provide a command to promote curated memory into `workspace` or `user` scope.
+4.4 THE Copilot Chat system SHALL allow configuration to include/exclude each scope for recall, including an `all` option that includes user scope.
+
+### Requirement 5 — Observability and operability
+
+**User Story:** As a user, I want to diagnose Graphiti connectivity and validate ingestion, so that I can operate the integration confidently.
+
+#### Acceptance Criteria
+
+5.1 THE Copilot Chat system SHALL provide a command to test Graphiti connectivity with a read-only mode.
+5.2 THE Copilot Chat system SHALL provide a command to run a smoke test that writes a synthetic message and attempts cleanup.
+5.3 THE Copilot Chat system SHALL provide clear logging/output for test outcomes and failures.
+
+### Requirement 6 — Metadata and privacy
+
+**User Story:** As a user, I want the system to store helpful but safe metadata, so that memories are attributable without leaking sensitive paths.
+
+#### Acceptance Criteria
+
+6.1 THE Copilot Chat system SHALL avoid storing absolute filesystem paths in group ids or metadata by default.
+6.2 THE Copilot Chat system SHALL use hashed group ids by default.
+6.3 WHEN enabled, THE Copilot Chat system SHALL include basic git metadata (branch, commit, dirty) in `source_description` without including file paths.
+
+### Requirement 7 — User identity and ownership context
+
+**User Story:** As a user, I want Graphiti memories to be associated with my identity and ownership relationships, so that asking about “my” preferences/terminology/assets recalls relevant facts across sessions and workspaces.
+
+#### Acceptance Criteria
+
+7.1 WHEN `github.copilot.chat.memory.graphiti.includeSystemMessages` is enabled, THE Copilot Chat system SHALL ingest an ownership context `system` message at most once per Graphiti group.
+7.2 WHEN a GitHub authentication session is available, THE Copilot Chat system SHALL include a stable user identifier (GitHub account id and label) in the ownership context without making additional network calls.
+7.3 THE Copilot Chat system SHALL NOT attempt to fetch the user’s email address for Graphiti identity by default.
+7.4 WHEN Graphiti recall scopes are configured as `all`, THE Copilot Chat system SHALL recall from a user-scope group derived from the logged-in GitHub login when available, and SHALL also recall from any fallback identity key(s) (GitHub account id and/or legacy stored user scope key) when present.
+7.5 WHEN promoting a memory to user scope, THE Copilot Chat system SHALL store it into the user-scope group derived from the logged-in GitHub login when available, otherwise falling back to a GitHub account id and/or the legacy stored user scope key.
+
+### Requirement 8 — Automatic scope selection and auto-promotion (optional)
+
+**User Story:** As a user, I want “my” preferences/terminology/owned context to be recalled across workspaces and sessions when relevant, and I want a lightweight way to auto-promote key facts without slowing down the agent loop.
+
+#### Acceptance Criteria
+
+8.1 WHEN `github.copilot.chat.memory.graphiti.recall.scopes` is configured as `auto`, THE Copilot Chat system SHALL dynamically choose recall scopes per turn based on the user query (including `user` scope for “my …”/preference/terminology queries, and excluding it otherwise).
+8.2 WHEN recall scopes are configured as `auto`, THE Copilot Chat system SHALL always include `session` scope recall.
+8.3 WHEN `github.copilot.chat.memory.graphiti.autoPromote.enabled` is enabled, THE Copilot Chat system SHALL detect supported Memory Directives in user messages and SHALL enqueue an additional Graphiti message containing a `<graphiti_episode kind="…">…</graphiti_episode>` block without blocking the response path.
+8.4 WHEN auto-promotion is triggered, THE Copilot Chat system SHALL support explicit scope overrides in the directive (e.g. `(user)` / `(workspace)`), otherwise inferring a scope with a default that prefers the least persistent scope when ambiguous.
+8.5 THE Copilot Chat system SHALL refuse auto-promotion when the directive content appears to contain secrets (e.g. tokens/passwords/private keys) and SHALL log a debug reason.
+
+### Requirement 9 — Canonical group ids for cross-client shared memory
+
+**User Story:** As a user, I want Copilot Chat to use canonical Graphiti group ids, so that my memories can be shared across different agent clients without per-client silos.
+
+#### Acceptance Criteria
+
+9.1 THE Copilot Chat system SHALL write new Graphiti messages to canonical group ids with a `graphiti_<scope>_...` prefix derived from a stable `(scope, key)` mapping.
+9.2 WHEN the connected Graphiti server supports `POST /groups/resolve`, THE Copilot Chat system SHALL be able to use it to resolve canonical group ids, and WHEN it does not, THE Copilot Chat system SHALL fall back to a local deterministic algorithm that matches the server’s resolution behavior.
+9.3 WHEN deriving a `workspace` key, THE Copilot Chat system SHALL prefer a repository identity (e.g. GitHub remote host + org/repo) when available, otherwise falling back to a stable workspace-folder based key.
+9.4 WHEN deriving a `user` key, THE Copilot Chat system SHALL prefer a GitHub login-based key when available, otherwise falling back to a GitHub account id-based key and/or the legacy stored key.
+9.5 WHEN recalling from `workspace` or `user` scope, THE Copilot Chat system SHOULD include legacy group ids in the search target set for a transition period to avoid dropping previously ingested memories.

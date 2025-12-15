@@ -40,6 +40,7 @@ import { AgentMultirootWorkspaceStructure } from '../panel/workspace/workspaceSt
 import { AgentConversationHistory } from './agentConversationHistory';
 import './allAgentPrompts';
 import { AlternateGPTPrompt, DefaultReminderInstructions, DefaultToolReferencesHint, ReminderInstructionsProps, ToolReferencesHintProps } from './defaultAgentInstructions';
+import { GraphitiMemoryContext } from './graphitiMemoryContext';
 import { AgentPromptCustomizations, ReminderInstructionsConstructor, ToolReferencesHintConstructor } from './promptRegistry';
 import { SummarizedConversationHistory } from './summarizedConversationHistory';
 
@@ -138,6 +139,7 @@ export class AgentPrompt extends PromptElement<AgentPromptProps> {
 			return <>
 				{baseInstructions}
 				<AgentConversationHistory flexGrow={1} priority={700} promptContext={this.props.promptContext} />
+				<GraphitiMemoryContext flexGrow={1} priority={850} query={this.props.promptContext.query} sessionId={this.props.promptContext.conversation?.sessionId} />
 				<AgentUserMessage flexGrow={2} priority={900} {...getUserMessagePropsFromAgentProps(this.props, { userQueryTagName, attachmentHint, ReminderInstructionsClass, ToolReferencesHintClass })} />
 				<ChatToolCalls priority={899} flexGrow={2} promptContext={this.props.promptContext} toolCallRounds={this.props.promptContext.toolCallRounds} toolCallResults={this.props.promptContext.toolCallResults} truncateAt={maxToolResultLength} enableCacheBreakpoints={false} />
 			</>;

@@ -31,6 +31,7 @@ import { TestGenLensContribution } from '../../intents/vscode-node/testGenLens';
 import { LoggingActionsContrib } from '../../log/vscode-node/loggingActions';
 import { RequestLogTree } from '../../log/vscode-node/requestLogTree';
 import { McpSetupCommands } from '../../mcp/vscode-node/commands';
+import { GraphitiMemoryContribution } from '../../memory/graphiti/vscode-node/graphitiMemoryContribution';
 import { NotebookFollowCommands } from '../../notebook/vscode-node/followActions';
 import { CopilotDebugCommandContribution } from '../../onboardDebug/vscode-node/copilotDebugCommandContribution';
 import { OnboardTerminalTestsContribution } from '../../onboardDebug/vscode-node/onboardTerminalTestsContribution';
@@ -103,6 +104,7 @@ export const vscodeNodeContributions: IExtensionContributionFactory[] = [
 */
 export const vscodeNodeChatContributions: IExtensionContributionFactory[] = [
 	asContributionFactory(ConfigurationMigrationContribution),
+	asContributionFactory(GraphitiMemoryContribution),
 	asContributionFactory(TestGenLensContribution),
 	asContributionFactory(RequestLogTree),
 	asContributionFactory(OnboardTerminalTestsContribution),

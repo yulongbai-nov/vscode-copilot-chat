@@ -87,6 +87,8 @@ import { TestProvider } from '../../../platform/testing/vscode/testProviderImpl'
 import { IWorkbenchService } from '../../../platform/workbench/common/workbenchService';
 import { WorkbenchServiceImpl } from '../../../platform/workbench/vscode/workbenchServiceImpt';
 import { IWorkspaceService } from '../../../platform/workspace/common/workspaceService';
+import { IWorkspaceTrustService } from '../../../platform/workspace/common/workspaceTrustService';
+import { WorkspaceTrustServiceImpl } from '../../../platform/workspace/vscode/workspaceTrustServiceImpl';
 import { ExtensionTextDocumentManager } from '../../../platform/workspace/vscode/workspaceServiceImpl';
 import { IInstantiationServiceBuilder } from '../../../util/common/services';
 import { SyncDescriptor } from '../../../util/vs/platform/instantiation/common/descriptors';
@@ -151,6 +153,7 @@ export function registerServices(builder: IInstantiationServiceBuilder, extensio
 	builder.define(IRunCommandExecutionService, new SyncDescriptor(RunCommandExecutionServiceImpl));
 	builder.define(ISimulationTestContext, new SyncDescriptor(NulSimulationTestContext));
 	builder.define(IWorkspaceService, new SyncDescriptor(ExtensionTextDocumentManager));
+	builder.define(IWorkspaceTrustService, new SyncDescriptor(WorkspaceTrustServiceImpl));
 	builder.define(IExtensionsService, new SyncDescriptor(VSCodeExtensionsService));
 	builder.define(ICombinedEmbeddingIndex, new SyncDescriptor(VSCodeCombinedIndexImpl, [/*useRemoteCache*/ true]));
 	builder.define(IProjectTemplatesIndex, new SyncDescriptor(ProjectTemplatesIndex, [/*useRemoteCache*/ true]));

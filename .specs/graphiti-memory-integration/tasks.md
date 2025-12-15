@@ -1,22 +1,73 @@
-# Implementation Plan: Graphiti Memory Integration
+# Implementation Plan
 
-- [ ] 0. Finalize scope and consent
-  - Confirm data fields, truncation limits, attachment policy, and embedding toggle.
-  - Define consent UX and trust gating.
+- [x] 1. Align spec docs to Copilot Chat scope _Requirements: 1.1_
+- [x] 2. Add Graphiti settings + wiring _Requirements: 1.1, 1.2, 2.4, 3.1, 4.1, 4.2_
+  - [x] 2.1 Add config keys in `package.json` _Requirements: 1.1, 1.2_
+  - [x] 2.2 Add internal config keys in `src/platform/configuration/common/configurationService.ts` _Requirements: 1.1, 1.2_
+- [x] 3. Implement Graphiti REST client + DTOs _Requirements: 2.1, 3.1, 5.1_
+- [x] 4. Implement ingestion service (gating, queue, retry) _Requirements: 1.2, 1.3, 1.4, 2.1, 2.2, 2.3_
+- [x] 5. Wire ingestion into turn finalization _Requirements: 2.1, 2.4_
+- [x] 6. Implement recall service + prompt injection _Requirements: 3.1, 3.2, 3.3, 3.4_
+- [x] 7. Add consent flow + commands (test + promote) _Requirements: 1.4, 4.3, 5.1, 5.2, 5.3_
+- [x] 8. Add tests (unit + optional real-service E2E) _Requirements: 2.2, 2.3, 3.3, 3.4_
+- [x] 9. Add docs + end-to-end demo guide _Requirements: 5.1_
+- [x] 10. Run quad verification and ship PR _Requirements: all_
 
-- [ ] 1. Mapping and adapter spike
-  - Prototype node/edge mapping with stable IDs + content hashes.
-  - Define batching/backoff and bounded retry queue.
+## Follow-ups (post-PR hardening)
 
-- [ ] 2. Ingestion pipeline
-  - Implement append-only ingestion on turn finalization behind flag.
-  - Add size caps/truncation markers; optional embeddings toggle.
-  - Wire configs: endpoint/apiKey/workspace/timeout/maxBatchSize.
+- [x] 11. Parallelize recall queries across scopes _Requirements: 3.4_
+- [x] 12. Wrap promoted memories in `<graphiti_episode kind="…">…</graphiti_episode>` _Requirements: 4.3_
+- [x] 13. Add Graphiti redeploy/runbook notes to the demo guide _Requirements: 5.1_
+- [x] 14. Register Graphiti ingestion service in simulation harness _Requirements: 2.1_
+- [x] 15. Add presentation deck to showcase the feature _Requirements: 5.1_
+- [x] 16. Add user identity-based user scope key (with legacy fallback) _Requirements: 7.4, 7.5_
+- [x] 17. Ingest ownership context system episode per group _Requirements: 7.1, 7.2_
+- [x] 18. Add a `terminology` promotion kind _Requirements: 4.3, 7.1_
+- [x] 19. Update docs/demo to explain identity + ownership behavior _Requirements: 5.1, 7.1_
+- [x] 20. Add/adjust tests for identity + ownership behavior _Requirements: 7.1, 7.4, 7.5_
 
-- [ ] 3. Failure handling and observability
-  - Implement fail-open behavior, retries with backoff, bounded queue.
-  - Telemetry for attempts/failures (no user content); lightweight status surfacing.
+## Extension: Auto scope selection + auto-promotion
 
-- [ ] 4. Tests
-  - Unit tests for mapping/idempotency and truncation.
-  - Integration tests for batching/retry and fail-open behavior.
+- [x] 21. Add `recall.scopes=auto` setting + docs _Requirements: 8.1, 8.2_
+- [x] 22. Implement dynamic scope selection in `GraphitiRecallService` _Requirements: 8.1, 8.2_
+- [x] 23. Add `autoPromote.enabled` setting + directive parser _Requirements: 8.3, 8.4, 8.5_
+- [x] 24. Enqueue directive episodes on ingestion path _Requirements: 8.3, 8.4_
+- [x] 25. Add unit tests for auto recall + auto-promotion _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+- [x] 26. Update demo guide with directive examples _Requirements: 5.1, 8.3_
+
+## Extension: Cross-client shared group ids
+
+- [x] 27. Switch to canonical `graphiti_*` group ids _Requirements: 2.4, 3.1, 7.4, 7.5, 9.1_
+  - [x] 27.1 Derive `workspace` key from repo identity _Requirements: 9.3_
+  - [x] 27.2 Prefer GitHub login-based `user` key _Requirements: 7.4, 7.5, 9.4_
+  - [x] 27.3 Support Graphiti `POST /groups/resolve` with fallback _Requirements: 9.2_
+  - [x] 27.4 Include legacy `copilotchat_*` ids in recall _Requirements: 9.5_
+- [x] 28. Add cross-client end-to-end demo (Copilot Chat + Codex) _Requirements: 5.1, 9.5_
+
+## Implementation Notes
+
+- Automatic behavior is always best-effort and fail-open.
+- Default scopes: ingest `session` + `workspace`; recall disabled until explicitly enabled.
+- Group ids use hashed strategy by default to prevent leaking identifying strings.
+- User scope is promotion-only by default.
+- Auto-promotion (when enabled) should require explicit user intent (Memory Directives) and should prefer least-persistent scope when ambiguous.
+
+## Testing Priority
+
+1. Unit-test mapping, recall, and gating behaviors under `src/extension/memory/graphiti/test/node/`.
+2. Optional real-service E2E smoke test: `GRAPHITI_E2E=1 … npx vitest run …` (writes + deletes temp group).
+3. Manual VS Code smoke: enable + consent + run “Test Graphiti Connection” in smoke mode.
+
+## Backward Compatibility
+
+- All new behavior is behind config flags and workspace trust gating.
+- Existing chat flows continue unchanged when Graphiti is disabled or unavailable.
+
+## Current Status Summary
+
+- Phase: implementation.
+- Completed: ingestion + recall + promotion, demo guide, tests, and canonical cross-client group ids.
+- PR: https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51
+- Completed (post-PR hardening): recall parallelization, promotion `<graphiti_episode>` formatting, and demo runbook notes.
+- Completed (extension): `recall.scopes=auto` + `autoPromote.enabled` (Memory Directives).
+- Next: add an end-to-end demo shared with Codex (shared memory across clients).

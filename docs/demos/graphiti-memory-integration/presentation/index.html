@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Graphiti Memory Integration — Presentation</title>
+		<style>
+			:root {
+				--bg: #0b0e14;
+				--panel: #111827;
+				--panel2: #0f172a;
+				--text: #e5e7eb;
+				--muted: #94a3b8;
+				--accent: #38bdf8;
+				--accent2: #a78bfa;
+				--ok: #22c55e;
+				--warn: #fbbf24;
+				--bad: #ef4444;
+				--code: #0b1220;
+				--border: rgba(148, 163, 184, 0.25);
+			}
+
+			html,
+			body {
+				height: 100%;
+				margin: 0;
+				background: radial-gradient(1400px 900px at 25% 10%, rgba(56, 189, 248, 0.12), transparent 45%),
+					radial-gradient(1200px 800px at 80% 20%, rgba(167, 139, 250, 0.12), transparent 45%),
+					var(--bg);
+				color: var(--text);
+				font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+					"Segoe UI Emoji";
+				overflow: hidden;
+			}
+
+			a {
+				color: var(--accent);
+				text-decoration: none;
+			}
+			a:hover {
+				text-decoration: underline;
+			}
+
+			#deck {
+				height: 100%;
+				display: grid;
+				grid-template-rows: auto 1fr auto;
+			}
+
+			header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 14px 18px;
+				border-bottom: 1px solid var(--border);
+				background: linear-gradient(to bottom, rgba(17, 24, 39, 0.92), rgba(17, 24, 39, 0.6));
+				backdrop-filter: blur(10px);
+			}
+			header .title {
+				font-weight: 650;
+				letter-spacing: 0.2px;
+			}
+			header .meta {
+				color: var(--muted);
+				font-size: 13px;
+				display: flex;
+				gap: 12px;
+				align-items: center;
+			}
+			.badge {
+				padding: 2px 10px;
+				border: 1px solid var(--border);
+				border-radius: 999px;
+				background: rgba(15, 23, 42, 0.6);
+			}
+
+			main {
+				position: relative;
+				padding: 26px 28px;
+			}
+
+			.slide {
+				position: absolute;
+				inset: 26px 28px;
+				padding: 28px;
+				border: 1px solid var(--border);
+				border-radius: 16px;
+				background: linear-gradient(to bottom, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.65));
+				box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+				opacity: 0;
+				transform: translateY(10px);
+				transition: opacity 220ms ease, transform 220ms ease;
+				overflow: auto;
+			}
+			.slide.active {
+				opacity: 1;
+				transform: translateY(0);
+			}
+
+			.slide h1,
+			.slide h2 {
+				margin: 0 0 14px 0;
+			}
+			.slide h1 {
+				font-size: 42px;
+				line-height: 1.05;
+			}
+			.slide h2 {
+				font-size: 28px;
+				line-height: 1.15;
+				color: rgba(229, 231, 235, 0.95);
+			}
+			.slide p,
+			.slide li {
+				font-size: 18px;
+				line-height: 1.5;
+				color: rgba(229, 231, 235, 0.92);
+			}
+			.slide p.lead {
+				font-size: 20px;
+				color: rgba(229, 231, 235, 0.92);
+				max-width: 88ch;
+			}
+			.slide ul {
+				margin: 14px 0 0 0;
+				padding-left: 22px;
+			}
+			.slide li {
+				margin: 8px 0;
+			}
+
+			.grid-2 {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 16px;
+				margin-top: 14px;
+			}
+			.card {
+				border: 1px solid var(--border);
+				border-radius: 14px;
+				background: rgba(17, 24, 39, 0.65);
+				padding: 16px 16px 14px 16px;
+			}
+			.card h3 {
+				margin: 0 0 10px 0;
+				font-size: 16px;
+				color: rgba(229, 231, 235, 0.95);
+				letter-spacing: 0.2px;
+			}
+			.kv {
+				display: grid;
+				grid-template-columns: 140px 1fr;
+				gap: 8px 12px;
+				align-items: start;
+				margin-top: 10px;
+				font-size: 15px;
+			}
+			.kv .k {
+				color: var(--muted);
+			}
+			.kv .v code {
+				font-size: 13px;
+			}
+
+			pre {
+				background: rgba(11, 18, 32, 0.92);
+				border: 1px solid rgba(148, 163, 184, 0.18);
+				border-radius: 14px;
+				padding: 14px 14px;
+				overflow: auto;
+				margin: 14px 0 0 0;
+			}
+			code {
+				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+				font-size: 14px;
+				color: rgba(229, 231, 235, 0.96);
+			}
+			.inline-code {
+				background: rgba(11, 18, 32, 0.9);
+				border: 1px solid rgba(148, 163, 184, 0.22);
+				border-radius: 8px;
+				padding: 1px 6px;
+			}
+
+			.tag {
+				display: inline-block;
+				padding: 2px 8px;
+				border-radius: 999px;
+				border: 1px solid rgba(148, 163, 184, 0.2);
+				background: rgba(2, 6, 23, 0.4);
+				color: rgba(229, 231, 235, 0.92);
+				font-size: 13px;
+				margin-right: 6px;
+			}
+			.tag.ok {
+				border-color: rgba(34, 197, 94, 0.35);
+				color: rgba(34, 197, 94, 0.95);
+			}
+			.tag.warn {
+				border-color: rgba(251, 191, 36, 0.35);
+				color: rgba(251, 191, 36, 0.95);
+			}
+			.tag.bad {
+				border-color: rgba(239, 68, 68, 0.35);
+				color: rgba(239, 68, 68, 0.95);
+			}
+
+			footer {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 12px 18px;
+				border-top: 1px solid var(--border);
+				background: linear-gradient(to top, rgba(17, 24, 39, 0.92), rgba(17, 24, 39, 0.6));
+				backdrop-filter: blur(10px);
+				color: var(--muted);
+				font-size: 13px;
+			}
+
+			.controls {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+			}
+			button {
+				appearance: none;
+				background: rgba(2, 6, 23, 0.45);
+				color: rgba(229, 231, 235, 0.95);
+				border: 1px solid rgba(148, 163, 184, 0.3);
+				border-radius: 10px;
+				padding: 8px 10px;
+				cursor: pointer;
+				font-size: 13px;
+			}
+			button:hover {
+				border-color: rgba(56, 189, 248, 0.7);
+			}
+
+			#toc {
+				position: absolute;
+				inset: 26px 28px;
+				border: 1px solid var(--border);
+				border-radius: 16px;
+				background: rgba(11, 14, 20, 0.8);
+				backdrop-filter: blur(8px);
+				padding: 18px;
+				display: none;
+				overflow: auto;
+			}
+			#toc.visible {
+				display: block;
+			}
+			#toc h3 {
+				margin: 0 0 12px 0;
+				font-size: 14px;
+				color: rgba(229, 231, 235, 0.95);
+			}
+			#toc ol {
+				margin: 0;
+				padding-left: 22px;
+			}
+			#toc li {
+				margin: 8px 0;
+				font-size: 14px;
+				color: rgba(229, 231, 235, 0.9);
+			}
+
+			@media (max-width: 980px) {
+				.grid-2 {
+					grid-template-columns: 1fr;
+				}
+				.slide {
+					inset: 18px 16px;
+					padding: 20px;
+				}
+				.slide h1 {
+					font-size: 34px;
+				}
+				.slide p,
+				.slide li {
+					font-size: 16px;
+				}
+			}
+		</style>
+	</head>
+
+	<body>
+		<div id="deck">
+			<header>
+				<div class="title">Graphiti Memory Integration</div>
+				<div class="meta">
+					<span class="badge">Copilot Chat + Codex</span>
+					<span class="badge">async ingest • bounded recall • consent</span>
+					<span class="badge" id="counter">1 / 1</span>
+				</div>
+			</header>
+
+			<main>
+				<div id="toc" aria-hidden="true">
+					<h3>Table of Contents (press <span class="inline-code">t</span> to toggle)</h3>
+					<ol id="tocList"></ol>
+				</div>
+
+				<section class="slide" data-title="Title">
+					<h1>Graphiti Memory Integration</h1>
+					<p class="lead">
+						A best-effort, safe, fast memory layer for agent loops:
+						<span class="tag ok">automatic ingestion</span>
+						<span class="tag ok">prompt-time recall</span>
+						<span class="tag ok">manual promotion</span>
+						<span class="tag warn">off by default</span>
+					</p>
+					<div class="grid-2">
+						<div class="card">
+							<h3>Repos</h3>
+							<div class="kv">
+								<div class="k">Copilot Chat</div>
+								<div class="v"><a href="https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51">PR #51</a></div>
+								<div class="k">Codex</div>
+								<div class="v"><a href="https://github.com/openai/codex/pull/8026">PR #8026</a> <span class="tag warn">CLA required</span></div>
+							</div>
+						</div>
+						<div class="card">
+							<h3>Navigate</h3>
+							<ul>
+								<li><span class="inline-code">←</span>/<span class="inline-code">→</span> or <span class="inline-code">PgUp</span>/<span class="inline-code">PgDn</span> to move</li>
+								<li><span class="inline-code">t</span> opens the Table of Contents</li>
+								<li>Slide links jump to specs, code, and the demo guide</li>
+							</ul>
+						</div>
+					</div>
+				</section>
+
+				<section class="slide" data-title="What Shipped">
+					<h2>What shipped (Copilot Chat)</h2>
+					<ul>
+						<li><span class="tag ok">Ingest</span> successful turns to Graphiti <span class="inline-code">POST /messages</span> asynchronously (queued, bounded, retried)</li>
+						<li><span class="tag ok">Recall</span> relevant facts via <span class="inline-code">POST /search</span> and inject into the agent prompt as <span class="inline-code">&lt;graphiti_memory&gt;</span></li>
+						<li><span class="tag ok">Promote</span> curated episodes (decisions, lessons, procedures) with <span class="inline-code">&lt;graphiti_episode kind="…" …&gt;</span></li>
+						<li><span class="tag warn">Safety</span> off-by-default, workspace trust gating, explicit per-endpoint consent</li>
+						<li><span class="tag ok">Operability</span> commands to test connection (read-only) + smoke test (write+cleanup) + demo/runbook</li>
+						<li><span class="tag ok">Quality</span> unit tests + env-gated E2E + CI simulation harness registration fix</li>
+					</ul>
+					<div class="card" style="margin-top: 16px">
+						<h3>Key docs</h3>
+						<ul>
+							<li><a href="../README.md">End-to-end demo guide</a></li>
+							<li><a href="../../../../.specs/graphiti-memory-integration/design.md">Design spec</a> • <a href="../../../../.specs/graphiti-memory-integration/requirements.md">Requirements</a> • <a href="../../../../.specs/graphiti-memory-integration/tasks.md">Tasks</a></li>
+						</ul>
+					</div>
+				</section>
+
+				<section class="slide" data-title="Why It Matters">
+					<h2>Why this is better than the “old” memory</h2>
+					<div class="grid-2">
+						<div class="card">
+							<h3>Baseline (no external memory)</h3>
+							<ul>
+								<li>Session window only; knowledge disappears across new chats / restarts</li>
+								<li>Hard to verify what was “remembered” vs “hallucinated”</li>
+							</ul>
+						</div>
+						<div class="card">
+							<h3>File-based MemoryTool</h3>
+							<ul>
+								<li>Durable + local, but manual/tool-driven and not semantic</li>
+								<li>Great for deterministic “facts”; weaker for natural-language extraction</li>
+							</ul>
+						</div>
+					</div>
+					<div class="card" style="margin-top: 16px">
+						<h3>Graphiti adds</h3>
+						<ul>
+							<li><span class="tag ok">Automatic extraction</span> from chat history (facts + relations) with semantic retrieval</li>
+							<li><span class="tag ok">Scopes</span> session/workspace (auto) + user (promotion-only by default)</li>
+							<li><span class="tag ok">Queryable</span> via Graphiti REST for debugging and trust-building</li>
+							<li><span class="tag warn">Fail-open</span> time-bounded recall; async ingestion never blocks the response path</li>
+						</ul>
+					</div>
+				</section>
+
+				<section class="slide" data-title="Architecture">
+					<h2>Architecture overview</h2>
+					<p class="lead">
+						The integration is a “sidecar” memory layer: recall happens before prompt render; ingestion happens after turn completion.
+					</p>
+					<pre><code>Chat turn ──┬─&gt; Model response ──┬─&gt; Render output
+            │                   │
+            │                   └─&gt; Ingest (async, queued) ──&gt; Graphiti /messages
+            │
+            └─&gt; Recall (bounded, time-limited) ─────────────&gt; Graphiti /search
+                             │
+                             └─&gt; Inject &lt;graphiti_memory&gt; into prompt</code></pre>
+					<div class="card" style="margin-top: 16px">
+						<h3>Entry points (Copilot Chat)</h3>
+						<ul>
+							<li>Turn finalization hook: <a href="../../../../src/extension/prompt/node/chatParticipantRequestHandler.ts">chatParticipantRequestHandler.ts</a></li>
+							<li>Recall prompt element: <a href="../../../../src/extension/prompts/node/agent/graphitiMemoryContext.tsx">graphitiMemoryContext.tsx</a></li>
+							<li>Client + services: <a href="../../../../src/extension/memory/graphiti/node/graphitiClient.ts">graphitiClient.ts</a>, <a href="../../../../src/extension/memory/graphiti/node/graphitiMemoryService.ts">graphitiMemoryService.ts</a>, <a href="../../../../src/extension/memory/graphiti/node/graphitiRecallService.ts">graphitiRecallService.ts</a></li>
+						</ul>
+					</div>
+				</section>
+
+				<section class="slide" data-title="Scopes & Schema">
+					<h2>Scopes & schema</h2>
+					<div class="grid-2">
+						<div class="card">
+							<h3>Scopes</h3>
+							<ul>
+								<li><span class="tag ok">Session</span> auto-ingest + recall (grouped by session id)</li>
+								<li><span class="tag ok">Workspace</span> auto-ingest + recall (hashed workspace identifier)</li>
+								<li><span class="tag warn">User</span> promotion-only by default (keyed by logged-in GitHub id; legacy fallback)</li>
+							</ul>
+							<div class="kv">
+								<div class="k">Design goal</div>
+								<div class="v">useful persistence without leaking paths or identities by default</div>
+							</div>
+						</div>
+						<div class="card">
+							<h3>Episodes (promotion)</h3>
+							<p>
+								Promotions are wrapped so Graphiti can treat them as explicit, typed “episodes”.
+							</p>
+							<pre><code>&lt;graphiti_episode kind="Lesson Learned"&gt;
+Always run npm run lint before committing.
+&lt;/graphiti_episode&gt;</code></pre>
+							<p style="margin-top: 10px">
+								Templates: <a href="../../../../src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts">graphitiPromotionTemplates.ts</a>
+							</p>
+						</div>
+					</div>
+				</section>
+
+				<section class="slide" data-title="Safety & Privacy">
+					<h2>Safety & privacy</h2>
+					<ul>
+						<li><span class="tag warn">Off by default</span>: no automatic network calls when disabled</li>
+						<li><span class="tag warn">Workspace trust gated</span>: untrusted workspaces disable ingest + recall</li>
+						<li><span class="tag warn">Endpoint consent</span>: consent record is tied to the configured Graphiti endpoint</li>
+						<li><span class="tag ok">Ownership context (optional)</span>: enable <span class="inline-code">includeSystemMessages</span> to ingest owner/session/workspace context</li>
+						<li><span class="tag ok">No paths by default</span>: hashed group ids; optional git metadata avoids filesystem paths</li>
+						<li><span class="tag ok">Fail-open</span>: errors/timeouts never block answering; memories are assistive context</li>
+					</ul>
+					<div class="card" style="margin-top: 16px">
+						<h3>Config keys (Copilot Chat)</h3>
+						<pre><code>github.copilot.chat.memory.graphiti.enabled
+github.copilot.chat.memory.graphiti.endpoint
+github.copilot.chat.memory.graphiti.includeSystemMessages
+github.copilot.chat.memory.graphiti.includeGitMetadata
+github.copilot.chat.memory.graphiti.recall.enabled
+github.copilot.chat.memory.graphiti.recall.scopes</code></pre>
+					</div>
+				</section>
+
+				<section class="slide" data-title="Performance">
+					<h2>Performance: keep the agent loop fast</h2>
+					<ul>
+						<li><span class="tag ok">Async ingestion queue</span>: bounded, deterministic drop policy, backoff retries</li>
+						<li><span class="tag ok">Bounded recall</span>: strict timeout + cap by count/size to avoid prompt bloat</li>
+						<li><span class="tag ok">Early-exit recall</span>: start queries concurrently but stop once <span class="inline-code">max_facts</span> reached</li>
+					</ul>
+					<div class="grid-2">
+						<div class="card">
+							<h3>Recall behavior</h3>
+							<p>
+								Scopes are queried in priority order (e.g. session then workspace). Requests start in parallel, but we only wait for
+								as much as we need.
+							</p>
+							<p>Implementation: <a href="../../../../src/extension/memory/graphiti/node/graphitiRecallService.ts">graphitiRecallService.ts</a></p>
+						</div>
+						<div class="card">
+							<h3>Ingestion behavior</h3>
+							<p>Enqueue is synchronous and cheap; actual network work happens on a background worker with retries.</p>
+							<p>Implementation: <a href="../../../../src/extension/memory/graphiti/node/graphitiMemoryService.ts">graphitiMemoryService.ts</a></p>
+						</div>
+					</div>
+				</section>
+
+				<section class="slide" data-title="Operability">
+					<h2>Operability: test, debug, demo</h2>
+					<ul>
+						<li><span class="tag ok">Command</span> “Test Graphiti Connection” (read-only)</li>
+						<li><span class="tag ok">Command</span> “Test Graphiti Connection (Smoke)” (write + cleanup)</li>
+						<li><span class="tag ok">Command</span> “Promote to Graphiti Memory” (curated episodes)</li>
+						<li><span class="tag ok">Demo guide</span> with end-to-end steps + <span class="tag ok">redeploy runbook</span></li>
+					</ul>
+					<pre><code># Quick service check (inside Docker networks)
+curl -fsS http://graph:8000/healthcheck
+curl -fsS http://graph:8000/openapi.json | head
+
+# Optional: real-service E2E smoke test (writes + deletes a temp group)
+GRAPHITI_E2E=1 GRAPHITI_ENDPOINT=http://graph:8000 \
+  npx vitest run ../../../../src/extension/memory/graphiti/test/node/graphiti.e2e.spec.ts</code></pre>
+				</section>
+
+				<section class="slide" data-title="Quality & CI">
+					<h2>Quality & CI hardening</h2>
+					<ul>
+						<li><span class="tag ok">Unit tests</span> cover mapping, queueing, gating, recall, and templates</li>
+						<li><span class="tag ok">E2E smoke</span> is opt-in via env (<span class="inline-code">GRAPHITI_E2E=1</span>), runs against a real service</li>
+						<li><span class="tag ok">Simulation harness fix</span> registers <span class="inline-code">IGraphitiMemoryService</span> for CI simulations</li>
+					</ul>
+					<div class="card" style="margin-top: 16px">
+						<h3>Simulation binding</h3>
+						<p>Fix location: <a href="../../../../src/extension/test/node/services.ts">src/extension/test/node/services.ts</a></p>
+					</div>
+				</section>
+
+				<section class="slide" data-title="Cross-Client Memory">
+					<h2>Cross-client shared memory</h2>
+					<p class="lead">
+						Copilot Chat and Codex now share the same durable <span class="inline-code">user</span> and <span class="inline-code">workspace</span> memory in Graphiti.
+					</p>
+					<ul>
+						<li><span class="tag ok">Canonical ids</span>: <span class="inline-code">graphiti_user_*</span> + <span class="inline-code">graphiti_workspace_*</span> derived from stable keys</li>
+						<li><span class="tag ok">Shared identity</span>: prefer <span class="inline-code">github_login:&lt;login&gt;</span> across clients</li>
+						<li><span class="tag ok">Migration</span>: recall also queries legacy per-client ids to avoid dropping older memories</li>
+						<li><span class="tag ok">Fork PRs</span>:
+							<a href="https://github.com/yulongbai-nov/graphiti/pull/2">Graphiti</a>,
+							<a href="https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51">Copilot Chat</a>,
+							<a href="https://github.com/yulongbai-nov/codex/pull/1">Codex</a>
+						</li>
+					</ul>
+					<pre><code># Cross-client demo (high level)
+# 1) Promote in Copilot Chat:
+preference (user): I prefer rg over grep. marker: shared-memory-&lt;timestamp&gt;
+
+# 2) Recall in Codex:
+What is my preference for searching in this repo?</code></pre>
+				</section>
+
+				<section class="slide" data-title="Next Steps">
+					<h2>Next steps (ideas)</h2>
+					<ul>
+						<li><span class="tag ok">Richer relations</span>: add project-management edges (task → commit → file → decision)</li>
+						<li><span class="tag ok">Episode taxonomy</span>: standardize kinds (Decision, Lesson, Procedure, Preference, Incident)</li>
+						<li><span class="tag ok">UI affordances</span>: browse/review/promote with traceability in VS Code</li>
+						<li><span class="tag ok">MCP adapter</span>: optional MCP-based Graphiti access when available</li>
+					</ul>
+					<div class="card" style="margin-top: 16px">
+						<h3>Thanks!</h3>
+						<p>Demo it via: <a href="../README.md">docs/demos/graphiti-memory-integration/README.md</a></p>
+					</div>
+				</section>
+			</main>
+
+			<footer>
+				<div>
+					Press <span class="inline-code">t</span> for Table of Contents • Press <span class="inline-code">?</span> for shortcuts
+				</div>
+				<div class="controls">
+					<button id="prevBtn" type="button">Prev</button>
+					<button id="nextBtn" type="button">Next</button>
+				</div>
+			</footer>
+		</div>
+
+		<script>
+			const slides = Array.from(document.querySelectorAll('.slide'));
+			const counterEl = document.getElementById('counter');
+			const tocEl = document.getElementById('toc');
+			const tocList = document.getElementById('tocList');
+			const prevBtn = document.getElementById('prevBtn');
+			const nextBtn = document.getElementById('nextBtn');
+
+			let index = 0;
+
+			function clamp(i) {
+				return Math.max(0, Math.min(slides.length - 1, i));
+			}
+
+			function slideTitle(i) {
+				return slides[i]?.dataset?.title || `Slide ${i + 1}`;
+			}
+
+			function renderToc() {
+				tocList.innerHTML = '';
+				for (let i = 0; i < slides.length; i++) {
+					const li = document.createElement('li');
+					const a = document.createElement('a');
+					a.href = `#${i + 1}`;
+					a.textContent = slideTitle(i);
+					a.addEventListener('click', () => {
+						toggleToc(false);
+					});
+					li.appendChild(a);
+					tocList.appendChild(li);
+				}
+			}
+
+			function toggleToc(force) {
+				const shouldShow = typeof force === 'boolean' ? force : !tocEl.classList.contains('visible');
+				tocEl.classList.toggle('visible', shouldShow);
+				tocEl.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+			}
+
+			function setIndex(next) {
+				index = clamp(next);
+				for (let i = 0; i < slides.length; i++) {
+					slides[i].classList.toggle('active', i === index);
+				}
+				counterEl.textContent = `${index + 1} / ${slides.length}`;
+				document.title = `Graphiti Memory Integration — ${slideTitle(index)}`;
+				location.hash = `#${index + 1}`;
+			}
+
+			function go(delta) {
+				setIndex(index + delta);
+			}
+
+			function showHelp() {
+				alert(
+					[
+						'Shortcuts:',
+						'  ← / PgUp  : previous slide',
+						'  → / PgDn  : next slide',
+						'  t         : toggle table of contents',
+						'  ?         : show this help',
+					].join('\\n'),
+				);
+			}
+
+			window.addEventListener('keydown', (e) => {
+				if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+					e.preventDefault();
+					go(1);
+				} else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+					e.preventDefault();
+					go(-1);
+				} else if (e.key === 't' || e.key === 'T') {
+					e.preventDefault();
+					toggleToc();
+				} else if (e.key === '?') {
+					e.preventDefault();
+					showHelp();
+				} else if (/^[0-9]$/.test(e.key)) {
+					// Quick jump: 1..9 goes to that slide number (if available).
+					const n = Number(e.key);
+					if (n >= 1) {
+						setIndex(n - 1);
+					}
+				}
+			});
+
+			prevBtn.addEventListener('click', () => go(-1));
+			nextBtn.addEventListener('click', () => go(1));
+
+			renderToc();
+
+			const fromHash = () => {
+				const h = location.hash.replace('#', '');
+				const n = Number(h);
+				if (Number.isFinite(n) && n >= 1) {
+					setIndex(n - 1);
+				} else {
+					setIndex(0);
+				}
+			};
+			window.addEventListener('hashchange', fromHash);
+			fromHash();
+		</script>
+	</body>
+</html>
