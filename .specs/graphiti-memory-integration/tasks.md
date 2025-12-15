@@ -26,12 +26,22 @@
 - [x] 19. Update docs/demo to explain identity + ownership behavior _Requirements: 5.1, 7.1_
 - [x] 20. Add/adjust tests for identity + ownership behavior _Requirements: 7.1, 7.4, 7.5_
 
+## Extension: Auto scope selection + auto-promotion
+
+- [x] 21. Add `recall.scopes=auto` setting + docs _Requirements: 8.1, 8.2_
+- [x] 22. Implement dynamic scope selection in `GraphitiRecallService` _Requirements: 8.1, 8.2_
+- [x] 23. Add `autoPromote.enabled` setting + directive parser _Requirements: 8.3, 8.4, 8.5_
+- [x] 24. Enqueue directive episodes on ingestion path _Requirements: 8.3, 8.4_
+- [x] 25. Add unit tests for auto recall + auto-promotion _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+- [x] 26. Update demo guide with directive examples _Requirements: 5.1, 8.3_
+
 ## Implementation Notes
 
 - Automatic behavior is always best-effort and fail-open.
 - Default scopes: ingest `session` + `workspace`; recall disabled until explicitly enabled.
 - Group ids use hashed strategy by default to prevent leaking identifying strings.
 - User scope is promotion-only by default.
+- Auto-promotion (when enabled) should require explicit user intent (Memory Directives) and should prefer least-persistent scope when ambiguous.
 
 ## Testing Priority
 
@@ -50,4 +60,5 @@
 - Completed: ingestion + recall + promotion, demo guide, tests, and spec alignment.
 - PR: https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51
 - Completed (post-PR hardening): recall parallelization, promotion `<graphiti_episode>` formatting, and demo runbook notes.
-- Next: address review feedback and merge.
+- Completed (extension): `recall.scopes=auto` + `autoPromote.enabled` (Memory Directives).
+- Next: address PR review feedback and merge.

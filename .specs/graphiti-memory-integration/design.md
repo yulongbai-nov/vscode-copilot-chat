@@ -113,6 +113,16 @@ Mapping helper: [`src/extension/memory/graphiti/node/graphitiMessageMapping.ts#L
 - Returned facts are rendered into a single `<graphiti_memory>` section:
   - It is intentionally framed as “optional context” to reduce over-reliance on possibly-stale facts.
 
+### Dynamic recall scope selection (`recall.scopes=auto`)
+
+To avoid always querying the user scope (privacy/latency) while still answering “my preferences / my terminology / my owned assets” queries, an optional `auto` mode dynamically selects which scopes to query per turn:
+
+- Always include `session`.
+- Include `workspace` when the query is likely project-specific (e.g. “in this repo”, “this project”, “branch”, “PR”, “CI”, “workspace”).
+- Include `user` when the query indicates user-specific memory (e.g. “my preference”, “what do I call …”, “my terminology”, “my setup”, “my workflow”).
+
+Selection is heuristic, best-effort, and bounded by the same recall timeout/caps.
+
 ### User scope (global) and “episodes”
 
 User scope is a third grouping boundary intended for generic lessons/preferences that transcend a workspace.
@@ -125,6 +135,19 @@ User scope is a third grouping boundary intended for generic lessons/preferences
   - Prefer the logged-in GitHub account id when available (stable across machines and sessions).
   - Fall back to a stable, random key stored in global state (legacy behavior).
   - Key storage: [`src/extension/memory/graphiti/common/graphitiStorageKeys.ts#L6`](../../src/extension/memory/graphiti/common/graphitiStorageKeys.ts#L6)
+
+### Auto-promotion from Memory Directives (optional)
+
+To reduce the friction of manual promotion while keeping safety and performance, an optional auto-promotion mode can detect explicit “Memory Directives” in user messages (e.g. `preference: …`, `terminology: …`) and enqueue an additional synthetic message containing a `<graphiti_episode kind="…">…</graphiti_episode>` block.
+
+Key properties:
+
+- **Opt-in** via `github.copilot.chat.memory.graphiti.autoPromote.enabled`.
+- **Non-blocking**: promotion is enqueued on the same bounded ingestion pipeline.
+- **Scope inference**:
+  - Supports explicit scope markers like `preference (user): …` / `decision (workspace): …`.
+  - Defaults to a least-persistent scope when ambiguous (prefer `workspace` over `user`).
+- **Secret guard**: heuristically refuses to auto-promote when the directive content looks like credentials or private keys.
 
 ### Actor identity + ownership context (recommended)
 
@@ -191,6 +214,10 @@ Suggested relations:
 - `IMPLEMENTS` (PR → Task/Requirement)
 - `BLOCKS` / `DEPENDS_ON` (Task → Task)
 - `USES_TOOL` (Procedure/Turn → Tool)
+- `PREFERS` (User → Tool/Style/Workflow)
+- `ALIAS_OF` / `TERMINOLOGY_FOR` (Term → Term/Concept)
+- `FOLLOWS` (Procedure → Procedure step)
+- `CREATED` / `AUTHORED` (User → PR/Commit/Decision)
 
 ## Risks and Mitigations
 
@@ -205,3 +232,4 @@ Suggested relations:
 - Add more promotion kinds and/or structured episode formats (YAML → JSON) for easier parsing.
 - UI to browse/pin promoted memories per workspace.
 - Cross-window or cross-machine sync (explicitly opt-in) for user scope.
+- Add UI affordances to author Memory Directives (snippets / quick pick) and to review/undo auto-promoted episodes.

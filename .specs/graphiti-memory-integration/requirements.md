@@ -20,6 +20,7 @@ This feature integrates the Graphiti service with Copilot Chat so that Copilot c
 - **Graphiti**: External service providing knowledge-graph storage and retrieval via REST.
 - **Fact**: A Graphiti-extracted statement returned from `POST /search`.
 - **Memory**: Facts retrieved from Graphiti and injected into the prompt.
+- **Memory Directive**: A user-authored prefix (e.g. `preference:`) that requests auto-promotion into Graphiti.
 - **Scope**: The grouping boundary for memory (`session`, `workspace`, `user`).
 - **Actor / Owner**: The logged-in user identity associated with a scope (used to express “my” preferences/assets).
 - **Workspace Trust**: VS Code’s trust state; untrusted workspaces disable automatic Graphiti behavior.
@@ -103,3 +104,15 @@ This feature integrates the Graphiti service with Copilot Chat so that Copilot c
 7.3 THE Copilot Chat system SHALL NOT attempt to fetch the user’s email address for Graphiti identity by default.
 7.4 WHEN Graphiti recall scopes are configured as `all`, THE Copilot Chat system SHALL recall from a user-scope group derived from the logged-in GitHub account id when available, and SHALL also recall from any legacy stored user scope key when present.
 7.5 WHEN promoting a memory to user scope, THE Copilot Chat system SHALL store it into the user-scope group derived from the logged-in GitHub account id when available, otherwise falling back to the legacy stored user scope key.
+
+### Requirement 8 — Automatic scope selection and auto-promotion (optional)
+
+**User Story:** As a user, I want “my” preferences/terminology/owned context to be recalled across workspaces and sessions when relevant, and I want a lightweight way to auto-promote key facts without slowing down the agent loop.
+
+#### Acceptance Criteria
+
+8.1 WHEN `github.copilot.chat.memory.graphiti.recall.scopes` is configured as `auto`, THE Copilot Chat system SHALL dynamically choose recall scopes per turn based on the user query (including `user` scope for “my …”/preference/terminology queries, and excluding it otherwise).
+8.2 WHEN recall scopes are configured as `auto`, THE Copilot Chat system SHALL always include `session` scope recall.
+8.3 WHEN `github.copilot.chat.memory.graphiti.autoPromote.enabled` is enabled, THE Copilot Chat system SHALL detect supported Memory Directives in user messages and SHALL enqueue an additional Graphiti message containing a `<graphiti_episode kind="…">…</graphiti_episode>` block without blocking the response path.
+8.4 WHEN auto-promotion is triggered, THE Copilot Chat system SHALL support explicit scope overrides in the directive (e.g. `(user)` / `(workspace)`), otherwise inferring a scope with a default that prefers the least persistent scope when ambiguous.
+8.5 THE Copilot Chat system SHALL refuse auto-promotion when the directive content appears to contain secrets (e.g. tokens/passwords/private keys) and SHALL log a debug reason.
