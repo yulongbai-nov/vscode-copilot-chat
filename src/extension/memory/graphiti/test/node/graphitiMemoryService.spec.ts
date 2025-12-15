@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import { beforeEach, afterEach, suite, test, vi } from 'vitest';
+import { IAuthenticationService } from '../../../../../platform/authentication/common/authentication';
 import { ConfigKey, IConfigurationService } from '../../../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../../../platform/extContext/common/extensionContext';
 import { IGitService } from '../../../../../platform/git/common/gitService';
@@ -154,9 +155,15 @@ suite('GraphitiMemoryService', () => {
 			createFakeResponse(202, { message: 'ok', success: true }),
 		]);
 
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: undefined,
+		} as unknown as IAuthenticationService;
+
 		const service = new GraphitiMemoryService(
 			configService,
 			extensionContext,
+			authenticationService,
 			trustService,
 			workspaceService,
 			fetcher,
@@ -231,6 +238,11 @@ suite('GraphitiMemoryService', () => {
 			repositories: [],
 		} as unknown as IGitService;
 
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: undefined,
+		} as unknown as IAuthenticationService;
+
 		const fetcher = new SequencedFetcherService([
 			createFakeResponse(202, { message: 'ok', success: true }),
 		]);
@@ -238,6 +250,7 @@ suite('GraphitiMemoryService', () => {
 		const service = new GraphitiMemoryService(
 			configService,
 			extensionContext,
+			authenticationService,
 			trustService,
 			workspaceService,
 			fetcher,
@@ -302,6 +315,11 @@ suite('GraphitiMemoryService', () => {
 			repositories: [],
 		} as unknown as IGitService;
 
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: undefined,
+		} as unknown as IAuthenticationService;
+
 		const fetcher = new SequencedFetcherService([
 			createFakeResponse(202, { message: 'ok', success: true }),
 			createFakeResponse(202, { message: 'ok', success: true }),
@@ -311,6 +329,7 @@ suite('GraphitiMemoryService', () => {
 		const service = new GraphitiMemoryService(
 			configService,
 			extensionContext,
+			authenticationService,
 			trustService,
 			workspaceService,
 			fetcher,
@@ -341,6 +360,81 @@ suite('GraphitiMemoryService', () => {
 		await vi.advanceTimersByTimeAsync(2000);
 
 		assert.strictEqual(fetcher.calls.length, callsAfterFirstSnapshot);
+
+		service.dispose();
+	});
+
+	test('includes an ownership context episode when system messages are enabled', async () => {
+		const endpoint = 'http://graph:8000';
+		const configValues = new Map<string, unknown>([
+			[ConfigKey.MemoryGraphitiEnabled.fullyQualifiedId, true],
+			[ConfigKey.MemoryGraphitiEndpoint.fullyQualifiedId, endpoint],
+			[ConfigKey.MemoryGraphitiTimeoutMs.fullyQualifiedId, 1000],
+			[ConfigKey.MemoryGraphitiMaxBatchSize.fullyQualifiedId, 10],
+			[ConfigKey.MemoryGraphitiMaxQueueSize.fullyQualifiedId, 200],
+			[ConfigKey.MemoryGraphitiMaxMessageChars.fullyQualifiedId, 1000],
+			[ConfigKey.MemoryGraphitiScopes.fullyQualifiedId, 'session'],
+			[ConfigKey.MemoryGraphitiGroupIdStrategy.fullyQualifiedId, 'raw'],
+			[ConfigKey.MemoryGraphitiIncludeSystemMessages.fullyQualifiedId, true],
+		]);
+		const configService = new TestConfigurationService(configValues);
+
+		const workspaceState = new MapMemento();
+		await workspaceState.update(GraphitiWorkspaceConsentStorageKey, { version: 1, endpoint, consentedAt: '2025-01-01T00:00:00.000Z' });
+		const extensionContext = {
+			_serviceBrand: undefined,
+			workspaceState,
+			globalState: new MapMemento(),
+		} as unknown as IVSCodeExtensionContext;
+
+		const trustService = {
+			_serviceBrand: undefined,
+			isTrusted: true,
+			onDidGrantWorkspaceTrust: new Emitter<void>().event,
+		} satisfies IWorkspaceTrustService;
+
+		const workspaceService = {
+			_serviceBrand: undefined,
+			getWorkspaceFolders: () => [{ path: '/a/b/repo' }],
+		} as unknown as IWorkspaceService;
+
+		const gitService = {
+			_serviceBrand: undefined,
+			activeRepository: { get: () => undefined },
+			repositories: [],
+		} as unknown as IGitService;
+
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
+		} as unknown as IAuthenticationService;
+
+		const fetcher = new SequencedFetcherService([createFakeResponse(202, { message: 'ok', success: true })]);
+
+		const service = new GraphitiMemoryService(
+			configService,
+			extensionContext,
+			authenticationService,
+			trustService,
+			workspaceService,
+			fetcher,
+			gitService,
+			silentLogService,
+		);
+
+		service.enqueueConversationSnapshot('session_1', [
+			{ turnId: 'turn_1', userMessage: 'hello', assistantMessage: 'world', timestampMs: Date.parse('2025-01-02T03:04:05.000Z') },
+		]);
+
+		await vi.advanceTimersByTimeAsync(250);
+		assert.strictEqual(fetcher.calls.length, 1);
+
+		const messages = fetcher.calls[0].options.json.messages;
+		assert.strictEqual(messages[0].role_type, 'system');
+		assert.ok(String(messages[0].content).includes('<graphiti_episode kind="ownership_context">'));
+		assert.ok(String(messages[0].content).includes('scope: session'));
+		assert.ok(String(messages[0].content).includes('octocat'));
+		assert.ok(String(messages[0].content).includes('Workspace folders (basenames): repo.'));
 
 		service.dispose();
 	});

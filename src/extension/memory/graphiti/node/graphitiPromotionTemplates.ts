@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export type GraphitiPromotionKind = 'decision' | 'lesson_learned' | 'preference' | 'procedure' | 'task_update';
+export type GraphitiPromotionKind = 'decision' | 'lesson_learned' | 'preference' | 'procedure' | 'task_update' | 'terminology';
 export type GraphitiPromotionScope = 'workspace' | 'user';
 
 export function formatGraphitiPromotionEpisode(kind: GraphitiPromotionKind, scope: GraphitiPromotionScope, text: string, now: Date = new Date()): string {

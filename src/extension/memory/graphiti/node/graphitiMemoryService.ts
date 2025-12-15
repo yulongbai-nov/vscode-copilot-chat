@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
 import { IGitService } from '../../../../platform/git/common/gitService';
@@ -13,11 +14,13 @@ import { IWorkspaceTrustService } from '../../../../platform/workspace/common/wo
 import { createServiceIdentifier } from '../../../../util/common/services';
 import { Disposable } from '../../../../util/vs/base/common/lifecycle';
 import { GraphitiWorkspaceConsentStorageKey, isGraphitiConsentRecord } from '../common/graphitiConsent';
+import { getGraphitiActorIdentityFromGitHubSession } from '../common/graphitiIdentity';
 import { normalizeGraphitiEndpoint } from '../common/graphitiEndpoint';
 import { GraphitiClient } from './graphitiClient';
 import { computeGraphitiGroupId, computeWorkspaceKey } from './graphitiGroupIds';
 import { GraphitiIngestionQueue } from './graphitiIngestionQueue';
 import { mapChatTurnToGraphitiMessages } from './graphitiMessageMapping';
+import { formatGraphitiOwnershipContextEpisode } from './graphitiOwnershipContext';
 
 export const IGraphitiMemoryService = createServiceIdentifier<IGraphitiMemoryService>('IGraphitiMemoryService');
 
@@ -41,6 +44,7 @@ type ResolvedGraphitiIngestionConfig = {
 	readonly maxMessageChars: number;
 	readonly scopes: 'session' | 'workspace' | 'both';
 	readonly groupIdStrategy: 'raw' | 'hashed';
+	readonly includeSystemMessages: boolean;
 	readonly includeGitMetadata: boolean;
 };
 
@@ -52,6 +56,8 @@ const MAX_BACKOFF_MS = 30_000;
 const MAX_BACKFILL_TURNS_PER_TICK = 25;
 const MAX_SEEN_TURNS_PER_GROUP = 500;
 const MAX_SEEN_GROUPS = 50;
+
+const OWNERSHIP_CONTEXT_TURN_ID = 'copilotchat.graphiti.ownership_context.v1';
 
 type PendingBackfillState = {
 	turns: readonly GraphitiConversationTurnForIngestion[];
@@ -108,6 +114,7 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
+		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
 		@IWorkspaceTrustService private readonly _workspaceTrustService: IWorkspaceTrustService,
 		@IWorkspaceService private readonly _workspaceService: IWorkspaceService,
 		@IFetcherService private readonly _fetcherService: IFetcherService,
@@ -124,6 +131,8 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiMaxBatchSize.fullyQualifiedId)
 				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiMaxQueueSize.fullyQualifiedId)
 				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiGroupIdStrategy.fullyQualifiedId)
+				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiIncludeSystemMessages.fullyQualifiedId)
+				|| e.affectsConfiguration(ConfigKey.MemoryGraphitiIncludeGitMetadata.fullyQualifiedId)
 			) {
 				this.clearQueueAndTimers();
 			}
@@ -172,6 +181,9 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 		for (const target of targets) {
 			const groupId = target.groupId;
 			const seen = this.getSeenTurnsForGroup(groupId);
+
+			this.maybeEnqueueOwnershipContext(config, target.scope, groupId, seen, timestamp, git);
+
 			if (seen.has(turn.turnId)) {
 				continue;
 			}
@@ -198,6 +210,67 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 
 		this._logService.trace(`Graphiti ingestion queued message(s); pending=${this._queue.size}.`);
 		this.scheduleFlush();
+	}
+
+	private maybeEnqueueOwnershipContext(
+		config: ResolvedGraphitiIngestionConfig,
+		scope: 'session' | 'workspace',
+		groupId: string,
+		seen: LruSet,
+		now: Date,
+		git: { branch?: string; commit?: string; dirty?: boolean } | undefined,
+	): void {
+		if (!config.includeSystemMessages) {
+			return;
+		}
+
+		if (seen.has(OWNERSHIP_CONTEXT_TURN_ID)) {
+			return;
+		}
+		seen.add(OWNERSHIP_CONTEXT_TURN_ID);
+
+		const owner = getGraphitiActorIdentityFromGitHubSession(this._authenticationService.anyGitHubSession);
+		const workspaceFolderBasenames = this.getWorkspaceFolderBasenames();
+
+		const content = formatGraphitiOwnershipContextEpisode({
+			scope,
+			owner,
+			workspaceFolderBasenames,
+			git: config.includeGitMetadata ? git : undefined,
+			now,
+		});
+
+		const sourceDescription = config.includeGitMetadata
+			? JSON.stringify({ source: 'copilotchat', event: 'ownership_context', scope, ...(git ? { git } : {}) })
+			: undefined;
+
+		const sourceDescriptionFields = sourceDescription ? { source_description: sourceDescription } : {};
+		const message = {
+			role_type: 'system' as const,
+			role: 'system',
+			name: `copilotchat.ownership_context.${scope}`,
+			content,
+			timestamp: now.toISOString(),
+			...sourceDescriptionFields,
+		};
+
+		const { droppedCount } = this._queue.enqueue(groupId, [message], config.maxQueueSize);
+		if (droppedCount > 0) {
+			this._logService.warn(`Graphiti ingestion queue full; dropped ${droppedCount} queued message(s).`);
+		}
+	}
+
+	private getWorkspaceFolderBasenames(): string[] {
+		const basenames: string[] = [];
+		for (const folder of this._workspaceService.getWorkspaceFolders()) {
+			const path = folder.path ?? '';
+			const parts = path.split('/').filter(Boolean);
+			const name = parts.at(-1) ?? '';
+			if (name) {
+				basenames.push(name);
+			}
+		}
+		return basenames;
 	}
 
 	private getSeenTurnsForGroup(groupId: string): LruSet {
@@ -251,6 +324,7 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 			maxMessageChars: this._configurationService.getConfig(ConfigKey.MemoryGraphitiMaxMessageChars),
 			scopes: this._configurationService.getConfig(ConfigKey.MemoryGraphitiScopes),
 			groupIdStrategy: this._configurationService.getConfig(ConfigKey.MemoryGraphitiGroupIdStrategy),
+			includeSystemMessages: this._configurationService.getConfig(ConfigKey.MemoryGraphitiIncludeSystemMessages),
 			includeGitMetadata: this._configurationService.getConfig(ConfigKey.MemoryGraphitiIncludeGitMetadata),
 		};
 	}
@@ -443,12 +517,20 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 					continue;
 				}
 
-				const requiredMessages = 2 * missing.length;
+				let requiredMessages = 2 * missing.length;
+				if (config.includeSystemMessages) {
+					for (const { seen } of missing) {
+						if (!seen.has(OWNERSHIP_CONTEXT_TURN_ID)) {
+							requiredMessages += 1;
+						}
+					}
+				}
 				if (this._queue.size + requiredMessages > config.maxQueueSize) {
 					break;
 				}
 
 				for (const { target, seen } of missing) {
+					this.maybeEnqueueOwnershipContext(config, target.scope, target.groupId, seen, new Date(turn.timestampMs), git);
 					seen.add(turn.turnId);
 
 					const sourceDescription = config.includeGitMetadata

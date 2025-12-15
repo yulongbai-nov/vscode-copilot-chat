@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
 import { IGitService } from '../../../../platform/git/common/gitService';
@@ -15,6 +16,7 @@ import { IWorkspaceTrustService } from '../../../../platform/workspace/common/wo
 import { Disposable } from '../../../../util/vs/base/common/lifecycle';
 import { generateUuid } from '../../../../util/vs/base/common/uuid';
 import { GraphitiClient } from '../node/graphitiClient';
+import { getGraphitiUserScopeKeyFromGitHubSession } from '../common/graphitiIdentity';
 import { computeGraphitiGroupId, computeWorkspaceKey } from '../node/graphitiGroupIds';
 import { formatGraphitiPromotionEpisode, GraphitiPromotionKind, GraphitiPromotionScope } from '../node/graphitiPromotionTemplates';
 import { GraphitiWorkspaceConsentStorageKey, isGraphitiConsentRecord } from '../common/graphitiConsent';
@@ -31,6 +33,7 @@ export class GraphitiMemoryContribution extends Disposable {
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
+		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
 		@IWorkspaceTrustService private readonly _workspaceTrustService: IWorkspaceTrustService,
 		@IWorkspaceService private readonly _workspaceService: IWorkspaceService,
 		@IFetcherService private readonly _fetcherService: IFetcherService,
@@ -94,11 +97,21 @@ export class GraphitiMemoryContribution extends Disposable {
 
 		const allowLabel = l10n.t('Allow');
 		const cancelLabel = l10n.t('Cancel');
+		const includeSystemMessages = this._configurationService.getConfig(ConfigKey.MemoryGraphitiIncludeSystemMessages);
+		const includeGitMetadata = this._configurationService.getConfig(ConfigKey.MemoryGraphitiIncludeGitMetadata);
+		const extras: string[] = [];
+		if (includeSystemMessages) {
+			extras.push(l10n.t('system/context messages'));
+		}
+		if (includeGitMetadata) {
+			extras.push(l10n.t('git metadata'));
+		}
+		const extrasSuffix = extras.length ? l10n.t(' and {0}', extras.join(' + ')) : '';
 		const choice = await vscode.window.showWarningMessage(
 			l10n.t('Enable Graphiti memory integration?'),
 			{
 				modal: true,
-				detail: l10n.t('This will send chat text (user + assistant) to: {0}', normalizedEndpoint),
+				detail: l10n.t('This will send chat text (user + assistant){0} to: {1}', extrasSuffix, normalizedEndpoint),
 			},
 			allowLabel,
 			cancelLabel,
@@ -348,6 +361,7 @@ export class GraphitiMemoryContribution extends Disposable {
 				{ label: l10n.t('Preference'), value: 'preference' as const },
 				{ label: l10n.t('Procedure'), value: 'procedure' as const },
 				{ label: l10n.t('Task Update'), value: 'task_update' as const },
+				{ label: l10n.t('Terminology'), value: 'terminology' as const },
 			],
 			{ placeHolder: l10n.t('Select a memory kind') },
 		);
@@ -378,10 +392,14 @@ export class GraphitiMemoryContribution extends Disposable {
 			const workspaceKey = computeWorkspaceKey(workspaceFolders);
 			groupId = computeGraphitiGroupId('workspace', groupIdStrategy, workspaceKey);
 		} else {
-			let userScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
+			const identityUserScopeKey = getGraphitiUserScopeKeyFromGitHubSession(this._authenticationService.anyGitHubSession);
+			let userScopeKey = identityUserScopeKey;
 			if (!userScopeKey) {
-				userScopeKey = generateUuid();
-				await this._extensionContext.globalState.update(GraphitiUserScopeKeyStorageKey, userScopeKey);
+				userScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
+				if (!userScopeKey) {
+					userScopeKey = generateUuid();
+					await this._extensionContext.globalState.update(GraphitiUserScopeKeyStorageKey, userScopeKey);
+				}
 			}
 			groupId = computeGraphitiGroupId('user', groupIdStrategy, userScopeKey);
 		}

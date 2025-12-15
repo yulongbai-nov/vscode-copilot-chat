@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import { suite, test } from 'vitest';
+import { IAuthenticationService } from '../../../../../platform/authentication/common/authentication';
 import { ConfigKey, IConfigurationService } from '../../../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../../../platform/log/common/logService';
@@ -137,6 +138,11 @@ suite('GraphitiRecallService', () => {
 			getWorkspaceFolders: () => [],
 		} as unknown as IWorkspaceService;
 
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
+		} as unknown as IAuthenticationService;
+
 		const fetcher = new SequencedFetcherService([
 			createFakeResponse(200, {
 				facts: [
@@ -156,7 +162,7 @@ suite('GraphitiRecallService', () => {
 			}),
 		]);
 
-		const svc = new GraphitiRecallService(configService, extensionContext, trustService, workspaceService, fetcher, silentLogService);
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
 		const facts = await svc.recallFacts({ sessionId: 'session_1', query: 'how do we build' });
 
 		assert.deepStrictEqual(facts.map(f => [f.scope, f.fact.fact]), [
@@ -169,7 +175,7 @@ suite('GraphitiRecallService', () => {
 		assert.strictEqual(fetcher.calls[0].url, `${endpoint}/search`);
 		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, ['copilotchat_session_session_1']);
 		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, ['copilotchat_workspace_no-workspace-folders']);
-		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, ['copilotchat_user_user-key-1']);
+		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, ['copilotchat_user_github_gh-id-1', 'copilotchat_user_user-key-1']);
 	});
 
 	test('does not call Graphiti when recall is disabled', async () => {
@@ -198,8 +204,13 @@ suite('GraphitiRecallService', () => {
 			getWorkspaceFolders: () => [],
 		} as unknown as IWorkspaceService;
 
+		const authenticationService = {
+			_serviceBrand: undefined,
+			anyGitHubSession: undefined,
+		} as unknown as IAuthenticationService;
+
 		const fetcher = new SequencedFetcherService([]);
-		const svc = new GraphitiRecallService(configService, extensionContext, trustService, workspaceService, fetcher, silentLogService);
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
 		const facts = await svc.recallFacts({ sessionId: 's', query: 'q' });
 		assert.deepStrictEqual(facts, []);
 		assert.strictEqual(fetcher.calls.length, 0);

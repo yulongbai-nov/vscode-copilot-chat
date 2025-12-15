@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
 import { ILogService } from '../../../../platform/log/common/logService';
@@ -11,6 +12,7 @@ import { IWorkspaceService } from '../../../../platform/workspace/common/workspa
 import { IWorkspaceTrustService } from '../../../../platform/workspace/common/workspaceTrustService';
 import { createServiceIdentifier } from '../../../../util/common/services';
 import { GraphitiWorkspaceConsentStorageKey, isGraphitiConsentRecord } from '../common/graphitiConsent';
+import { getGraphitiUserScopeKeys } from '../common/graphitiIdentity';
 import { normalizeGraphitiEndpoint } from '../common/graphitiEndpoint';
 import { GraphitiUserScopeKeyStorageKey } from '../common/graphitiStorageKeys';
 import { GraphitiClient } from './graphitiClient';
@@ -43,6 +45,7 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 	constructor(
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
+		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
 		@IWorkspaceTrustService private readonly _workspaceTrustService: IWorkspaceTrustService,
 		@IWorkspaceService private readonly _workspaceService: IWorkspaceService,
 		@IFetcherService private readonly _fetcherService: IFetcherService,
@@ -78,12 +81,12 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 			}
 		};
 
-		const searchTargets: Array<{ scope: GraphitiRecalledFact['scope']; groupId: string }> = [];
+		const searchTargets: Array<{ scope: GraphitiRecalledFact['scope']; groupIds: readonly string[] }> = [];
 
 		if ((config.scopes === 'session' || config.scopes === 'both' || config.scopes === 'all') && args.sessionId) {
 			searchTargets.push({
 				scope: 'session',
-				groupId: computeGraphitiGroupId('session', config.groupIdStrategy, args.sessionId),
+				groupIds: [computeGraphitiGroupId('session', config.groupIdStrategy, args.sessionId)],
 			});
 		}
 
@@ -92,22 +95,25 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 			const workspaceKey = computeWorkspaceKey(workspaceFolders);
 			searchTargets.push({
 				scope: 'workspace',
-				groupId: computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKey),
+				groupIds: [computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKey)],
 			});
 		}
 
 		if (config.scopes === 'all') {
-			const userScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
-			if (userScopeKey) {
-				searchTargets.push({
-					scope: 'user',
-					groupId: computeGraphitiGroupId('user', config.groupIdStrategy, userScopeKey),
-				});
+			const legacyUserScopeKey = this._extensionContext.globalState.get<string>(GraphitiUserScopeKeyStorageKey);
+			const userScopeKeys = getGraphitiUserScopeKeys({
+				gitHubSession: this._authenticationService.anyGitHubSession,
+				legacyUserScopeKey,
+			});
+
+			const groupIds = userScopeKeys.map(key => computeGraphitiGroupId('user', config.groupIdStrategy, key));
+			if (groupIds.length) {
+				searchTargets.push({ scope: 'user', groupIds });
 			}
 		}
 
-		const searchPromises = searchTargets.map(({ scope, groupId }) => {
-			return client.search({ query, group_ids: [groupId], max_facts: config.maxFacts })
+		const searchPromises = searchTargets.map(({ scope, groupIds }) => {
+			return client.search({ query, group_ids: groupIds, max_facts: config.maxFacts })
 				.then(res => ({ scope, res }))
 				.catch(() => {
 					this._logService.debug(`Graphiti recall failed for ${scope} scope.`);
