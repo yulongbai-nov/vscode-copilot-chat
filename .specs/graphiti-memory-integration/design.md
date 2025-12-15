@@ -120,9 +120,23 @@ User scope is a third grouping boundary intended for generic lessons/preferences
 - Automatic ingestion does **not** write to user scope.
 - Promotion writes a single synthetic message containing a structured `<graphiti_episode kind="…">…</graphiti_episode>` block:
   - Template: [`src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L6`](../../src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L6)
-  - Kinds: `decision`, `lesson_learned`, `preference`, `procedure`, `task_update`
-- User scope group id uses a stable, random key stored in global state:
+  - Kinds: `decision`, `lesson_learned`, `preference`, `procedure`, `task_update`, `terminology`
+- User scope group id uses a stable user key:
+  - Prefer the logged-in GitHub account id when available (stable across machines and sessions).
+  - Fall back to a stable, random key stored in global state (legacy behavior).
   - Key storage: [`src/extension/memory/graphiti/common/graphitiStorageKeys.ts#L6`](../../src/extension/memory/graphiti/common/graphitiStorageKeys.ts#L6)
+
+### Actor identity + ownership context (recommended)
+
+For “my preferences / my terminology / my owned assets” recall, Graphiti needs an explicit notion of the **actor** (logged-in user) and what they “own” within the memory scopes.
+
+When `github.copilot.chat.memory.graphiti.includeSystemMessages` is enabled, the ingestion layer prepends a one-time `system` message to each active scope/group containing an `<graphiti_episode kind="ownership_context">…</graphiti_episode>` block that describes:
+
+- The owner identity (GitHub account id/label, when available without extra network calls).
+- The scope identity (session/workspace/user) and a short natural-language ownership statement (“Owner owns this workspace/session scope”).
+- Optional, safe metadata such as git branch/commit/dirty (when enabled) and workspace folder basenames (no absolute paths).
+
+This context is sent at most once per group to avoid repeated noise and to keep ingestion inexpensive.
 
 ## Integration Points
 
@@ -171,6 +185,7 @@ Suggested entities: `Repository`, `Branch`, `Commit`, `PullRequest`, `File`, `Sy
 
 Suggested relations:
 - `APPLIES_TO` (Preference/Lesson → Repository/Workspace)
+- `OWNS` (User → Session/Workspace/Repository)
 - `HAPPENED_ON` (Incident → Branch/Commit)
 - `MODIFIES` (Commit/PR → File/Symbol)
 - `IMPLEMENTS` (PR → Task/Requirement)

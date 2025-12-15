@@ -20,6 +20,11 @@
 - [x] 13. Add Graphiti redeploy/runbook notes to the demo guide _Requirements: 5.1_
 - [x] 14. Register Graphiti ingestion service in simulation harness _Requirements: 2.1_
 - [x] 15. Add presentation deck to showcase the feature _Requirements: 5.1_
+- [x] 16. Add user identity-based user scope key (with legacy fallback) _Requirements: 7.4, 7.5_
+- [x] 17. Ingest ownership context system episode per group _Requirements: 7.1, 7.2_
+- [x] 18. Add a `terminology` promotion kind _Requirements: 4.3, 7.1_
+- [x] 19. Update docs/demo to explain identity + ownership behavior _Requirements: 5.1, 7.1_
+- [x] 20. Add/adjust tests for identity + ownership behavior _Requirements: 7.1, 7.4, 7.5_
 
 ## Implementation Notes
 

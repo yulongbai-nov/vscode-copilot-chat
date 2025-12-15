@@ -21,6 +21,7 @@ This feature integrates the Graphiti service with Copilot Chat so that Copilot c
 - **Fact**: A Graphiti-extracted statement returned from `POST /search`.
 - **Memory**: Facts retrieved from Graphiti and injected into the prompt.
 - **Scope**: The grouping boundary for memory (`session`, `workspace`, `user`).
+- **Actor / Owner**: The logged-in user identity associated with a scope (used to express “my” preferences/assets).
 - **Workspace Trust**: VS Code’s trust state; untrusted workspaces disable automatic Graphiti behavior.
 - **Consent Record**: Per-workspace record indicating the user approved sending chat text to a specific Graphiti endpoint.
 - **Promotion**: A curated, manually created “episode” (decision/lesson/etc.) written to Graphiti.
@@ -90,3 +91,15 @@ This feature integrates the Graphiti service with Copilot Chat so that Copilot c
 6.1 THE Copilot Chat system SHALL avoid storing absolute filesystem paths in group ids or metadata by default.
 6.2 THE Copilot Chat system SHALL use hashed group ids by default.
 6.3 WHEN enabled, THE Copilot Chat system SHALL include basic git metadata (branch, commit, dirty) in `source_description` without including file paths.
+
+### Requirement 7 — User identity and ownership context
+
+**User Story:** As a user, I want Graphiti memories to be associated with my identity and ownership relationships, so that asking about “my” preferences/terminology/assets recalls relevant facts across sessions and workspaces.
+
+#### Acceptance Criteria
+
+7.1 WHEN `github.copilot.chat.memory.graphiti.includeSystemMessages` is enabled, THE Copilot Chat system SHALL ingest an ownership context `system` message at most once per Graphiti group.
+7.2 WHEN a GitHub authentication session is available, THE Copilot Chat system SHALL include a stable user identifier (GitHub account id and label) in the ownership context without making additional network calls.
+7.3 THE Copilot Chat system SHALL NOT attempt to fetch the user’s email address for Graphiti identity by default.
+7.4 WHEN Graphiti recall scopes are configured as `all`, THE Copilot Chat system SHALL recall from a user-scope group derived from the logged-in GitHub account id when available, and SHALL also recall from any legacy stored user scope key when present.
+7.5 WHEN promoting a memory to user scope, THE Copilot Chat system SHALL store it into the user-scope group derived from the logged-in GitHub account id when available, otherwise falling back to the legacy stored user scope key.
