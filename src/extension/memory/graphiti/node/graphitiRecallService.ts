@@ -6,6 +6,7 @@
 import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
 import { ConfigKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService';
 import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
+import { IGitService } from '../../../../platform/git/common/gitService';
 import { ILogService } from '../../../../platform/log/common/logService';
 import { IFetcherService } from '../../../../platform/networking/common/fetcherService';
 import { IWorkspaceService } from '../../../../platform/workspace/common/workspaceService';
@@ -16,7 +17,8 @@ import { getGraphitiUserScopeKeys } from '../common/graphitiIdentity';
 import { normalizeGraphitiEndpoint } from '../common/graphitiEndpoint';
 import { GraphitiUserScopeKeyStorageKey } from '../common/graphitiStorageKeys';
 import { GraphitiClient } from './graphitiClient';
-import { computeGraphitiGroupId, computeWorkspaceKey } from './graphitiGroupIds';
+import { computeGraphitiGroupId, computeLegacyCopilotChatGraphitiGroupId } from './graphitiGroupIds';
+import { computeGraphitiWorkspaceScopeKeys } from './graphitiScopeKeys';
 import { GraphitiFactResult } from './graphitiTypes';
 
 export const IGraphitiRecallService = createServiceIdentifier<IGraphitiRecallService>('IGraphitiRecallService');
@@ -67,6 +69,7 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
 		@IWorkspaceTrustService private readonly _workspaceTrustService: IWorkspaceTrustService,
 		@IWorkspaceService private readonly _workspaceService: IWorkspaceService,
+		@IGitService private readonly _gitService: IGitService,
 		@IFetcherService private readonly _fetcherService: IFetcherService,
 		@ILogService private readonly _logService: ILogService,
 	) { }
@@ -105,16 +108,21 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 		if ((config.scopes === 'session' || config.scopes === 'both' || config.scopes === 'auto' || config.scopes === 'all') && args.sessionId) {
 			searchTargets.push({
 				scope: 'session',
-				groupIds: [computeGraphitiGroupId('session', config.groupIdStrategy, args.sessionId)],
+				groupIds: [
+					computeGraphitiGroupId('session', config.groupIdStrategy, `copilotchat_session:${args.sessionId}`),
+					computeLegacyCopilotChatGraphitiGroupId('session', config.groupIdStrategy, args.sessionId),
+				],
 			});
 		}
 
 		if (config.scopes === 'workspace' || config.scopes === 'both' || config.scopes === 'auto' || config.scopes === 'all') {
-			const workspaceFolders = this._workspaceService.getWorkspaceFolders().map(u => u.toString());
-			const workspaceKey = computeWorkspaceKey(workspaceFolders);
+			const workspaceKeys = computeGraphitiWorkspaceScopeKeys({ gitService: this._gitService, workspaceService: this._workspaceService });
 			searchTargets.push({
 				scope: 'workspace',
-				groupIds: [computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKey)],
+				groupIds: [
+					computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKeys.primary),
+					...(workspaceKeys.legacy ? [computeLegacyCopilotChatGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKeys.legacy)] : []),
+				],
 			});
 		}
 
@@ -125,9 +133,12 @@ export class GraphitiRecallService implements IGraphitiRecallService {
 				legacyUserScopeKey,
 			});
 
-			const groupIds = userScopeKeys.map(key => computeGraphitiGroupId('user', config.groupIdStrategy, key));
+			const groupIds = userScopeKeys.flatMap(key => [
+				computeGraphitiGroupId('user', config.groupIdStrategy, key),
+				computeLegacyCopilotChatGraphitiGroupId('user', config.groupIdStrategy, key),
+			]);
 			if (groupIds.length) {
-				searchTargets.push({ scope: 'user', groupIds });
+				searchTargets.push({ scope: 'user', groupIds: Array.from(new Set(groupIds)) });
 			}
 		}
 

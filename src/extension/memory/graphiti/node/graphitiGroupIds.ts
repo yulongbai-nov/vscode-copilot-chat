@@ -10,6 +10,7 @@ export type GraphitiGroupIdStrategy = 'raw' | 'hashed';
 
 const MAX_RAW_GROUP_KEY_CHARS = 80;
 const RAW_GROUP_KEY_HASH_CHARS = 16;
+const CANONICAL_HASH_CHARS = 32;
 
 export function computeWorkspaceKey(workspaceFolderUris: readonly string[]): string {
 	const normalizedFolders = [...workspaceFolderUris].map(s => s.trim()).filter(Boolean).sort();
@@ -27,8 +28,23 @@ function sanitizeRawGroupKey(key: string): string {
 	return `${safe.slice(0, MAX_RAW_GROUP_KEY_CHARS - RAW_GROUP_KEY_HASH_CHARS - 1)}_${hashSuffix}`;
 }
 
-export function computeGraphitiGroupId(scope: GraphitiIngestionScope, strategy: GraphitiGroupIdStrategy, key: string): string {
+export function computeCanonicalGraphitiGroupId(scope: GraphitiIngestionScope, strategy: GraphitiGroupIdStrategy, key: string): string {
+	const normalizedKey = key.trim() || `no-${scope}-key`;
+	// Canonical group ids are always hashed to ensure:
+	// - privacy-safe ids by default
+	// - stable cross-client shared memory
+	// - compatibility with Graphiti server-side group id resolution (when available)
+	void strategy;
+	const groupKey = getCachedSha256Hash(normalizedKey).slice(0, CANONICAL_HASH_CHARS);
+	return `graphiti_${scope}_${groupKey}`;
+}
+
+export function computeLegacyCopilotChatGraphitiGroupId(scope: GraphitiIngestionScope, strategy: GraphitiGroupIdStrategy, key: string): string {
 	const normalizedKey = key.trim() || `no-${scope}-key`;
 	const groupKey = strategy === 'hashed' ? getCachedSha256Hash(normalizedKey) : sanitizeRawGroupKey(normalizedKey);
 	return `copilotchat_${scope}_${groupKey}`;
+}
+
+export function computeGraphitiGroupId(scope: GraphitiIngestionScope, strategy: GraphitiGroupIdStrategy, key: string): string {
+	return computeCanonicalGraphitiGroupId(scope, strategy, key);
 }

@@ -15,7 +15,9 @@ import { IWorkspaceService } from '../../../../../platform/workspace/common/work
 import { IWorkspaceTrustService } from '../../../../../platform/workspace/common/workspaceTrustService';
 import { Emitter } from '../../../../../util/vs/base/common/event';
 import { GraphitiWorkspaceConsentStorageKey } from '../../common/graphitiConsent';
+import { getGraphitiUserScopeKeys } from '../../common/graphitiIdentity';
 import { GraphitiUserScopeKeyStorageKey } from '../../common/graphitiStorageKeys';
+import { computeGraphitiGroupId, computeLegacyCopilotChatGraphitiGroupId } from '../../node/graphitiGroupIds';
 import { GraphitiRecallService } from '../../node/graphitiRecallService';
 
 class MapMemento {
@@ -138,6 +140,12 @@ suite('GraphitiRecallService', () => {
 			getWorkspaceFolders: () => [],
 		} as unknown as IWorkspaceService;
 
+		const gitService = {
+			_serviceBrand: undefined,
+			activeRepository: { get: () => undefined },
+			repositories: [],
+		} as any;
+
 		const authenticationService = {
 			_serviceBrand: undefined,
 			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
@@ -162,7 +170,7 @@ suite('GraphitiRecallService', () => {
 			}),
 		]);
 
-		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, gitService, fetcher, silentLogService);
 		const facts = await svc.recallFacts({ sessionId: 'session_1', query: 'how do we build' });
 
 		assert.deepStrictEqual(facts.map(f => [f.scope, f.fact.fact]), [
@@ -173,9 +181,24 @@ suite('GraphitiRecallService', () => {
 
 		assert.strictEqual(fetcher.calls.length, 3);
 		assert.strictEqual(fetcher.calls[0].url, `${endpoint}/search`);
-		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, ['copilotchat_session_session_1']);
-		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, ['copilotchat_workspace_no-workspace-folders']);
-		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, ['copilotchat_user_github_gh-id-1', 'copilotchat_user_user-key-1']);
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, [
+			computeGraphitiGroupId('session', 'raw', 'copilotchat_session:session_1'),
+			computeLegacyCopilotChatGraphitiGroupId('session', 'raw', 'session_1'),
+		]);
+		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, [
+			computeGraphitiGroupId('workspace', 'raw', 'no-workspace-folders'),
+			computeLegacyCopilotChatGraphitiGroupId('workspace', 'raw', 'no-workspace-folders'),
+		]);
+
+		const userScopeKeys = getGraphitiUserScopeKeys({
+			gitHubSession: authenticationService.anyGitHubSession as any,
+			legacyUserScopeKey: 'user-key-1',
+		});
+		const expectedUserGroupIds = Array.from(new Set(userScopeKeys.flatMap(key => [
+			computeGraphitiGroupId('user', 'raw', key),
+			computeLegacyCopilotChatGraphitiGroupId('user', 'raw', key),
+		])));
+		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, expectedUserGroupIds);
 	});
 
 	test('includes user scope in auto mode for user-specific queries', async () => {
@@ -213,6 +236,12 @@ suite('GraphitiRecallService', () => {
 			getWorkspaceFolders: () => [],
 		} as unknown as IWorkspaceService;
 
+		const gitService = {
+			_serviceBrand: undefined,
+			activeRepository: { get: () => undefined },
+			repositories: [],
+		} as any;
+
 		const authenticationService = {
 			_serviceBrand: undefined,
 			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
@@ -224,13 +253,28 @@ suite('GraphitiRecallService', () => {
 			createFakeResponse(200, { facts: [] }),
 		]);
 
-		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, gitService, fetcher, silentLogService);
 		await svc.recallFacts({ sessionId: 'session_1', query: 'what is my preference for linting' });
 
 		assert.strictEqual(fetcher.calls.length, 3);
-		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, ['copilotchat_session_session_1']);
-		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, ['copilotchat_workspace_no-workspace-folders']);
-		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, ['copilotchat_user_github_gh-id-1', 'copilotchat_user_user-key-1']);
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, [
+			computeGraphitiGroupId('session', 'raw', 'copilotchat_session:session_1'),
+			computeLegacyCopilotChatGraphitiGroupId('session', 'raw', 'session_1'),
+		]);
+		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, [
+			computeGraphitiGroupId('workspace', 'raw', 'no-workspace-folders'),
+			computeLegacyCopilotChatGraphitiGroupId('workspace', 'raw', 'no-workspace-folders'),
+		]);
+
+		const userScopeKeys = getGraphitiUserScopeKeys({
+			gitHubSession: authenticationService.anyGitHubSession as any,
+			legacyUserScopeKey: 'user-key-1',
+		});
+		const expectedUserGroupIds = Array.from(new Set(userScopeKeys.flatMap(key => [
+			computeGraphitiGroupId('user', 'raw', key),
+			computeLegacyCopilotChatGraphitiGroupId('user', 'raw', key),
+		])));
+		assert.deepStrictEqual(fetcher.calls[2].options.json.group_ids, expectedUserGroupIds);
 	});
 
 	test('excludes user scope in auto mode for non-user-specific queries', async () => {
@@ -271,17 +315,29 @@ suite('GraphitiRecallService', () => {
 			anyGitHubSession: { account: { id: 'gh-id-1', label: 'octocat' } },
 		} as unknown as IAuthenticationService;
 
+		const gitService = {
+			_serviceBrand: undefined,
+			activeRepository: { get: () => undefined },
+			repositories: [],
+		} as any;
+
 		const fetcher = new SequencedFetcherService([
 			createFakeResponse(200, { facts: [] }),
 			createFakeResponse(200, { facts: [] }),
 		]);
 
-		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, gitService, fetcher, silentLogService);
 		await svc.recallFacts({ sessionId: 'session_1', query: 'how do we build' });
 
 		assert.strictEqual(fetcher.calls.length, 2);
-		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, ['copilotchat_session_session_1']);
-		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, ['copilotchat_workspace_no-workspace-folders']);
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_ids, [
+			computeGraphitiGroupId('session', 'raw', 'copilotchat_session:session_1'),
+			computeLegacyCopilotChatGraphitiGroupId('session', 'raw', 'session_1'),
+		]);
+		assert.deepStrictEqual(fetcher.calls[1].options.json.group_ids, [
+			computeGraphitiGroupId('workspace', 'raw', 'no-workspace-folders'),
+			computeLegacyCopilotChatGraphitiGroupId('workspace', 'raw', 'no-workspace-folders'),
+		]);
 	});
 
 	test('does not call Graphiti when recall is disabled', async () => {
@@ -315,8 +371,14 @@ suite('GraphitiRecallService', () => {
 			anyGitHubSession: undefined,
 		} as unknown as IAuthenticationService;
 
+		const gitService = {
+			_serviceBrand: undefined,
+			activeRepository: { get: () => undefined },
+			repositories: [],
+		} as any;
+
 		const fetcher = new SequencedFetcherService([]);
-		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, fetcher, silentLogService);
+		const svc = new GraphitiRecallService(configService, extensionContext, authenticationService, trustService, workspaceService, gitService, fetcher, silentLogService);
 		const facts = await svc.recallFacts({ sessionId: 's', query: 'q' });
 		assert.deepStrictEqual(facts, []);
 		assert.strictEqual(fetcher.calls.length, 0);

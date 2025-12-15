@@ -16,6 +16,7 @@ import { IWorkspaceService } from '../../../../../platform/workspace/common/work
 import { IWorkspaceTrustService } from '../../../../../platform/workspace/common/workspaceTrustService';
 import { Emitter } from '../../../../../util/vs/base/common/event';
 import { GraphitiWorkspaceConsentStorageKey } from '../../common/graphitiConsent';
+import { computeGraphitiGroupId } from '../../node/graphitiGroupIds';
 import { GraphitiMemoryService } from '../../node/graphitiMemoryService';
 
 class MapMemento {
@@ -179,7 +180,7 @@ suite('GraphitiMemoryService', () => {
 		await vi.advanceTimersByTimeAsync(250);
 		assert.strictEqual(fetcher.calls.length, 1);
 		assert.strictEqual(fetcher.calls[0].url, `${endpoint}/messages`);
-		assert.strictEqual(fetcher.calls[0].options.json.group_id, 'copilotchat_session_session_1');
+		assert.strictEqual(fetcher.calls[0].options.json.group_id, computeGraphitiGroupId('session', 'raw', 'copilotchat_session:session_1'));
 		assert.strictEqual(fetcher.calls[0].options.json.messages[0].content, 'hello');
 		assert.strictEqual(fetcher.calls[0].options.json.messages[1].content, 'world');
 		assert.strictEqual(typeof fetcher.calls[0].options.json.messages[0].timestamp, 'string');
@@ -513,8 +514,8 @@ suite('GraphitiMemoryService', () => {
 		await vi.advanceTimersByTimeAsync(250);
 		assert.strictEqual(fetcher.calls.length, 2);
 
-		assert.deepStrictEqual(fetcher.calls[0].options.json.group_id, 'copilotchat_session_session_1');
-		assert.deepStrictEqual(fetcher.calls[1].options.json.group_id, 'copilotchat_user_github_gh-id-1');
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_id, computeGraphitiGroupId('session', 'raw', 'copilotchat_session:session_1'));
+		assert.deepStrictEqual(fetcher.calls[1].options.json.group_id, computeGraphitiGroupId('user', 'raw', 'github_login:octocat'));
 
 		const promoted = fetcher.calls[1].options.json.messages;
 		assert.strictEqual(promoted.length, 1);
@@ -595,7 +596,7 @@ suite('GraphitiMemoryService', () => {
 
 		await vi.advanceTimersByTimeAsync(250);
 		assert.strictEqual(fetcher.calls.length, 1);
-		assert.deepStrictEqual(fetcher.calls[0].options.json.group_id, 'copilotchat_session_session_1');
+		assert.deepStrictEqual(fetcher.calls[0].options.json.group_id, computeGraphitiGroupId('session', 'raw', 'copilotchat_session:session_1'));
 
 		service.dispose();
 	});

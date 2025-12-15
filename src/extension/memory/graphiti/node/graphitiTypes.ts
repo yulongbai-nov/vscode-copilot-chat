@@ -29,6 +29,8 @@ export interface GraphitiHealthcheckResponse {
 	readonly status: string;
 }
 
+export type GraphitiScope = 'session' | 'workspace' | 'user';
+
 export interface GraphitiFactResult {
 	readonly uuid: string;
 	readonly name: string;
@@ -60,3 +62,11 @@ export interface GraphitiGetMemoryResponse {
 	readonly facts: readonly GraphitiFactResult[];
 }
 
+export interface GraphitiResolveGroupRequest {
+	readonly scope: GraphitiScope;
+	readonly key: string;
+}
+
+export interface GraphitiResolveGroupResponse {
+	readonly group_id: string;
+}

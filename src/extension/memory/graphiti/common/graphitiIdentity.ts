@@ -23,13 +23,34 @@ export function getGraphitiActorIdentityFromGitHubSession(session: Authenticatio
 	};
 }
 
+function getGraphitiUserScopeKeyFromGitHubLogin(identity: GraphitiActorIdentity): string | undefined {
+	const login = identity.accountLabel.trim();
+	if (!login) {
+		return undefined;
+	}
+	return `github_login:${login.toLowerCase()}`;
+}
+
+function getGraphitiUserScopeKeyFromGitHubAccountId(identity: GraphitiActorIdentity): string {
+	return `github_account_id:${identity.accountId}`;
+}
+
 export function getGraphitiUserScopeKeyFromGitHubSession(session: AuthenticationSession | undefined): string | undefined {
 	const identity = getGraphitiActorIdentityFromGitHubSession(session);
 	if (!identity) {
 		return undefined;
 	}
 
-	// Prefix to avoid collisions with legacy random keys.
+	return getGraphitiUserScopeKeyFromGitHubLogin(identity) ?? getGraphitiUserScopeKeyFromGitHubAccountId(identity);
+}
+
+export function getGraphitiLegacyUserScopeKeyFromGitHubSession(session: AuthenticationSession | undefined): string | undefined {
+	const identity = getGraphitiActorIdentityFromGitHubSession(session);
+	if (!identity) {
+		return undefined;
+	}
+
+	// Back-compat: older builds used this format directly.
 	return `github:${identity.accountId}`;
 }
 
@@ -39,9 +60,22 @@ export function getGraphitiUserScopeKeys(args: {
 }): readonly string[] {
 	const keys: string[] = [];
 
-	const primary = getGraphitiUserScopeKeyFromGitHubSession(args.gitHubSession);
-	if (primary) {
-		keys.push(primary);
+	const identity = getGraphitiActorIdentityFromGitHubSession(args.gitHubSession);
+	if (identity) {
+		const loginKey = getGraphitiUserScopeKeyFromGitHubLogin(identity);
+		if (loginKey) {
+			keys.push(loginKey);
+		}
+
+		const accountIdKey = getGraphitiUserScopeKeyFromGitHubAccountId(identity);
+		if (!keys.includes(accountIdKey)) {
+			keys.push(accountIdKey);
+		}
+
+		const legacyFormat = getGraphitiLegacyUserScopeKeyFromGitHubSession(args.gitHubSession);
+		if (legacyFormat && !keys.includes(legacyFormat)) {
+			keys.push(legacyFormat);
+		}
 	}
 
 	// Back-compat: include the legacy random user scope key if present.
@@ -51,4 +85,3 @@ export function getGraphitiUserScopeKeys(args: {
 
 	return keys;
 }
-

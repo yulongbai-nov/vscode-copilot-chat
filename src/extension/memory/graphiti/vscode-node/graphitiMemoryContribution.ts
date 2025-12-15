@@ -17,7 +17,8 @@ import { Disposable } from '../../../../util/vs/base/common/lifecycle';
 import { generateUuid } from '../../../../util/vs/base/common/uuid';
 import { GraphitiClient } from '../node/graphitiClient';
 import { getGraphitiUserScopeKeyFromGitHubSession } from '../common/graphitiIdentity';
-import { computeGraphitiGroupId, computeWorkspaceKey } from '../node/graphitiGroupIds';
+import { computeGraphitiGroupId } from '../node/graphitiGroupIds';
+import { computeGraphitiWorkspaceScopeKeys } from '../node/graphitiScopeKeys';
 import { formatGraphitiPromotionEpisode, GraphitiPromotionKind, GraphitiPromotionScope } from '../node/graphitiPromotionTemplates';
 import { GraphitiWorkspaceConsentStorageKey, isGraphitiConsentRecord } from '../common/graphitiConsent';
 import { normalizeGraphitiEndpoint } from '../common/graphitiEndpoint';
@@ -260,6 +261,19 @@ export class GraphitiMemoryContribution extends Disposable {
 			this.logToOutputLine(`! GET /openapi.json failed (optional): ${this.formatError(err)}`);
 		}
 
+		// Optional: verify canonical group id resolution endpoint (newer Graphiti deployments).
+		try {
+			const probeKey = 'github_login:graphiti-smoketest';
+			const local = computeGraphitiGroupId('user', 'hashed', probeKey);
+			const resolved = await client.resolveGroupId({ scope: 'user', key: probeKey });
+			this.logToOutputLine(`✓ POST /groups/resolve (optional): ${resolved.group_id}`);
+			if (resolved.group_id !== local) {
+				this.logToOutputLine(`! /groups/resolve mismatch (local=${local})`);
+			}
+		} catch (err) {
+			this.logToOutputLine(`! POST /groups/resolve failed (optional): ${this.formatError(err)}`);
+		}
+
 		// Best-effort DB reachability check (should return 404, not 500).
 		try {
 			const timeoutMs = this._configurationService.getConfig(ConfigKey.MemoryGraphitiTimeoutMs);
@@ -279,7 +293,7 @@ export class GraphitiMemoryContribution extends Disposable {
 		}
 
 		if (mode.value === 'smoke') {
-			const smokeGroupId = `copilotchat_smoketest_${Date.now()}_${generateUuid()}`;
+			const smokeGroupId = `graphiti_smoketest_${Date.now()}_${generateUuid()}`;
 			this.logToOutputLine(`Smoke test group_id: ${smokeGroupId}`);
 
 			const message: GraphitiMessage = {
@@ -388,9 +402,8 @@ export class GraphitiMemoryContribution extends Disposable {
 		let groupId: string;
 
 		if (promotionScope === 'workspace') {
-			const workspaceFolders = this._workspaceService.getWorkspaceFolders().map(u => u.toString());
-			const workspaceKey = computeWorkspaceKey(workspaceFolders);
-			groupId = computeGraphitiGroupId('workspace', groupIdStrategy, workspaceKey);
+			const workspaceKeys = computeGraphitiWorkspaceScopeKeys({ gitService: this._gitService, workspaceService: this._workspaceService });
+			groupId = computeGraphitiGroupId('workspace', groupIdStrategy, workspaceKeys.primary);
 		} else {
 			const identityUserScopeKey = getGraphitiUserScopeKeyFromGitHubSession(this._authenticationService.anyGitHubSession);
 			let userScopeKey = identityUserScopeKey;

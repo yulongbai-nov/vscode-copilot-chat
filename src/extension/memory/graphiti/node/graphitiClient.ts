@@ -5,7 +5,7 @@
 
 import { ILogService } from '../../../../platform/log/common/logService';
 import { FetchOptions, IFetcherService } from '../../../../platform/networking/common/fetcherService';
-import { GraphitiAddMessagesRequest, GraphitiGetMemoryRequest, GraphitiGetMemoryResponse, GraphitiHealthcheckResponse, GraphitiMessage, GraphitiResult, GraphitiSearchQuery, GraphitiSearchResults } from './graphitiTypes';
+import { GraphitiAddMessagesRequest, GraphitiGetMemoryRequest, GraphitiGetMemoryResponse, GraphitiHealthcheckResponse, GraphitiMessage, GraphitiResolveGroupRequest, GraphitiResolveGroupResponse, GraphitiResult, GraphitiSearchQuery, GraphitiSearchResults } from './graphitiTypes';
 
 export interface GraphitiClientOptions {
 	readonly endpoint: string;
@@ -50,6 +50,10 @@ export class GraphitiClient {
 
 	async getMemory(request: GraphitiGetMemoryRequest): Promise<GraphitiGetMemoryResponse> {
 		return this.requestJson('POST', '/get-memory', request);
+	}
+
+	async resolveGroupId(request: GraphitiResolveGroupRequest): Promise<GraphitiResolveGroupResponse> {
+		return this.requestJson('POST', '/groups/resolve', request);
 	}
 
 	private buildUrl(path: string): string {

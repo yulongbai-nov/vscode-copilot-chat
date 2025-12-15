@@ -18,13 +18,14 @@ import { getGraphitiActorIdentityFromGitHubSession, getGraphitiUserScopeKeyFromG
 import { normalizeGraphitiEndpoint } from '../common/graphitiEndpoint';
 import { GraphitiUserScopeKeyStorageKey } from '../common/graphitiStorageKeys';
 import { GraphitiClient } from './graphitiClient';
-import { computeGraphitiGroupId, computeWorkspaceKey } from './graphitiGroupIds';
+import { computeGraphitiGroupId } from './graphitiGroupIds';
 import { GraphitiIngestionQueue } from './graphitiIngestionQueue';
 import { mapChatTurnToGraphitiMessages, truncateForGraphiti } from './graphitiMessageMapping';
 import { looksLikeSecretForAutoPromotion, parseGraphitiMemoryDirectives } from './graphitiMemoryDirectives';
 import { formatGraphitiOwnershipContextEpisode } from './graphitiOwnershipContext';
 import { formatGraphitiPromotionEpisode } from './graphitiPromotionTemplates';
 import { generateUuid } from '../../../../util/vs/base/common/uuid';
+import { computeGraphitiWorkspaceScopeKeys } from './graphitiScopeKeys';
 
 export const IGraphitiMemoryService = createServiceIdentifier<IGraphitiMemoryService>('IGraphitiMemoryService');
 
@@ -287,9 +288,8 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 		const groupIdStrategy = config.groupIdStrategy;
 		const includeGitMetadata = config.includeGitMetadata;
 
-		const workspaceFolders = this._workspaceService.getWorkspaceFolders().map(u => u.toString());
-		const workspaceKey = computeWorkspaceKey(workspaceFolders);
-		const workspaceGroupId = computeGraphitiGroupId('workspace', groupIdStrategy, workspaceKey);
+		const workspaceKeys = computeGraphitiWorkspaceScopeKeys({ gitService: this._gitService, workspaceService: this._workspaceService });
+		const workspaceGroupId = computeGraphitiGroupId('workspace', groupIdStrategy, workspaceKeys.primary);
 
 		let userGroupId: string | undefined;
 		const getUserGroupId = (): string => {
@@ -436,13 +436,12 @@ export class GraphitiMemoryService extends Disposable implements IGraphitiMemory
 		const targets: Array<{ scope: 'session' | 'workspace'; groupId: string }> = [];
 
 		if (config.scopes === 'session' || config.scopes === 'both') {
-			targets.push({ scope: 'session', groupId: computeGraphitiGroupId('session', config.groupIdStrategy, sessionId) });
+			targets.push({ scope: 'session', groupId: computeGraphitiGroupId('session', config.groupIdStrategy, `copilotchat_session:${sessionId}`) });
 		}
 
 		if (config.scopes === 'workspace' || config.scopes === 'both') {
-			const workspaceFolders = this._workspaceService.getWorkspaceFolders().map(u => u.toString());
-			const workspaceKey = computeWorkspaceKey(workspaceFolders);
-			targets.push({ scope: 'workspace', groupId: computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKey) });
+			const workspaceKeys = computeGraphitiWorkspaceScopeKeys({ gitService: this._gitService, workspaceService: this._workspaceService });
+			targets.push({ scope: 'workspace', groupId: computeGraphitiGroupId('workspace', config.groupIdStrategy, workspaceKeys.primary) });
 		}
 
 		return targets;
