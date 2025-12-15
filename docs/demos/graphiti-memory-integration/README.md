@@ -26,6 +26,12 @@ curl -fsS http://graph:8000/healthcheck
 curl -fsS http://graph:8000/openapi.json | head
 ```
 
+Optional (newer Graphiti deployments): canonical group id resolver (may return 404 on older builds):
+```bash
+curl -fsS -X POST http://graph:8000/groups/resolve -H 'content-type: application/json' \
+  -d '{"scope":"user","key":"github_login:octocat"}' || true
+```
+
 Optional: run the env-gated repo E2E smoke test (writes + deletes a temp group):
 ```bash
 GRAPHITI_E2E=1 GRAPHITI_ENDPOINT=http://graph:8000 \
@@ -128,6 +134,40 @@ curl -fsS -X POST http://graph:8000/search -H 'content-type: application/json' \
 
 Promotion templates: [`src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L9`](../../../src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L9)
 
+## Step 6 — Demo: Cross-client Shared Memory (Copilot Chat + Codex CLI)
+
+This step demonstrates the “shared memory” upgrade: Copilot Chat and Codex CLI can now share the same Graphiti `user` and `workspace` memories by using the same canonical `graphiti_*` group ids (while still recalling legacy per-client ids for migration).
+
+### Prereqs
+
+- Both clients point at the same Graphiti endpoint (`http://graph:8000`).
+- You are logged into GitHub in VS Code (Copilot Chat) and the GitHub CLI (Codex) under the same login:
+  - VS Code identity source: GitHub auth session label.
+  - Codex identity source: `gh auth status` (auto-detected) or `graphiti.user_scope_key` override.
+- The repo has a GitHub remote (e.g. `origin`) so workspace identity can be derived as `github_repo:<host>/<org>/<repo>`.
+
+### 6A) Copilot Chat → Codex recall (user scope)
+1. In Copilot Chat, with auto-promotion enabled, send:
+   - `preference (user): I prefer rg over grep for searches. marker: shared-memory-<timestamp>`
+2. In Codex (Graphiti enabled, Global enabled, recall scopes auto or include global), ask:
+   - `What is my preference for searching in this repo?`
+3. Confirm Codex response includes the preference (and optionally inspect injected `<graphiti_memory>`).
+
+### 6B) Codex → Copilot Chat recall (user scope)
+1. In Codex, send:
+   - `preference (global): Keep diffs small and avoid inline comments. marker: shared-memory-<timestamp>`
+2. In Copilot Chat, ask:
+   - `What is my preference for diffs and comments?`
+3. Confirm the prompt contains a `<graphiti_memory>` section that includes the preference (Request Logger recommended).
+
+### Why this is better than the “old” cross-tool story
+- Before canonical ids, Copilot Chat and Codex wrote to different per-client namespaces (e.g. `copilotchat_user_*` vs `codex-global-*`), so a preference learned in one tool was not recalled by the other.
+- With canonical ids, both write/read the same `graphiti_user_*` / `graphiti_workspace_*` groups (derived from stable keys like `github_login:<login>` and `github_repo:<host>/<org>/<repo>`).
+
+### Debug tips
+- Codex: `codex graphiti status` prints both canonical and legacy derived group ids.
+- Copilot Chat: `GitHub Copilot Chat: Test Graphiti Connection` logs whether `/groups/resolve` is available (optional) and runs a write/poll/delete smoke test.
+
 ## Why This Can Be Better Than The “Old One”
 
 ### Compared to baseline (no external memory)
@@ -168,4 +208,5 @@ From the Graphiti repo:
 Common failure modes:
 - Neo4j not healthy → `docker compose logs neo4j` (and verify credentials/volumes).
 - `/search` returns errors or no facts → Graphiti may need model/provider env vars (e.g., `OPENAI_API_KEY`, `OPENAI_BASE_URL`), and ingestion is async (wait ~5–15s before retrying).
+- `POST /groups/resolve` returns 404 → you’re likely running an older Graphiti build; either redeploy a version that includes the canonical group id resolver or rely on the client-side deterministic fallback (`graphiti_<scope>_<sha256(key)[:32]>`).
 - `graph-falkordb` hostname not resolvable → optional service; ignore unless you explicitly run the FalkorDB variant.

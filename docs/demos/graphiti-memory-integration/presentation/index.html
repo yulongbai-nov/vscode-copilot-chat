@@ -506,16 +506,27 @@ GRAPHITI_E2E=1 GRAPHITI_ENDPOINT=http://graph:8000 \
 					</div>
 				</section>
 
-				<section class="slide" data-title="Codex Status">
-					<h2>Codex integration status</h2>
+				<section class="slide" data-title="Cross-Client Memory">
+					<h2>Cross-client shared memory</h2>
 					<p class="lead">
-						The Codex PR implements the same high-level loop (ingest + recall), but CI is blocked on a human CLA comment.
+						Copilot Chat and Codex now share the same durable <span class="inline-code">user</span> and <span class="inline-code">workspace</span> memory in Graphiti.
 					</p>
 					<ul>
-						<li><span class="tag warn">Action needed</span>: comment the exact CLA phrase on <a href="https://github.com/openai/codex/pull/8026">PR #8026</a></li>
-						<li>CLA text: <a href="https://github.com/openai/codex/blob/main/docs/CLA.md">docs/CLA.md</a></li>
+						<li><span class="tag ok">Canonical ids</span>: <span class="inline-code">graphiti_user_*</span> + <span class="inline-code">graphiti_workspace_*</span> derived from stable keys</li>
+						<li><span class="tag ok">Shared identity</span>: prefer <span class="inline-code">github_login:&lt;login&gt;</span> across clients</li>
+						<li><span class="tag ok">Migration</span>: recall also queries legacy per-client ids to avoid dropping older memories</li>
+						<li><span class="tag ok">Fork PRs</span>:
+							<a href="https://github.com/yulongbai-nov/graphiti/pull/2">Graphiti</a>,
+							<a href="https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51">Copilot Chat</a>,
+							<a href="https://github.com/yulongbai-nov/codex/pull/1">Codex</a>
+						</li>
 					</ul>
-					<pre><code>I have read the CLA Document and I hereby sign the CLA</code></pre>
+					<pre><code># Cross-client demo (high level)
+# 1) Promote in Copilot Chat:
+preference (user): I prefer rg over grep. marker: shared-memory-&lt;timestamp&gt;
+
+# 2) Recall in Codex:
+What is my preference for searching in this repo?</code></pre>
 				</section>
 
 				<section class="slide" data-title="Next Steps">
