@@ -102,8 +102,8 @@ This feature integrates the Graphiti service with Copilot Chat so that Copilot c
 7.1 WHEN `github.copilot.chat.memory.graphiti.includeSystemMessages` is enabled, THE Copilot Chat system SHALL ingest an ownership context `system` message at most once per Graphiti group.
 7.2 WHEN a GitHub authentication session is available, THE Copilot Chat system SHALL include a stable user identifier (GitHub account id and label) in the ownership context without making additional network calls.
 7.3 THE Copilot Chat system SHALL NOT attempt to fetch the user’s email address for Graphiti identity by default.
-7.4 WHEN Graphiti recall scopes are configured as `all`, THE Copilot Chat system SHALL recall from a user-scope group derived from the logged-in GitHub account id when available, and SHALL also recall from any legacy stored user scope key when present.
-7.5 WHEN promoting a memory to user scope, THE Copilot Chat system SHALL store it into the user-scope group derived from the logged-in GitHub account id when available, otherwise falling back to the legacy stored user scope key.
+7.4 WHEN Graphiti recall scopes are configured as `all`, THE Copilot Chat system SHALL recall from a user-scope group derived from the logged-in GitHub login when available, and SHALL also recall from any fallback identity key(s) (GitHub account id and/or legacy stored user scope key) when present.
+7.5 WHEN promoting a memory to user scope, THE Copilot Chat system SHALL store it into the user-scope group derived from the logged-in GitHub login when available, otherwise falling back to a GitHub account id and/or the legacy stored user scope key.
 
 ### Requirement 8 — Automatic scope selection and auto-promotion (optional)
 
@@ -116,3 +116,15 @@ This feature integrates the Graphiti service with Copilot Chat so that Copilot c
 8.3 WHEN `github.copilot.chat.memory.graphiti.autoPromote.enabled` is enabled, THE Copilot Chat system SHALL detect supported Memory Directives in user messages and SHALL enqueue an additional Graphiti message containing a `<graphiti_episode kind="…">…</graphiti_episode>` block without blocking the response path.
 8.4 WHEN auto-promotion is triggered, THE Copilot Chat system SHALL support explicit scope overrides in the directive (e.g. `(user)` / `(workspace)`), otherwise inferring a scope with a default that prefers the least persistent scope when ambiguous.
 8.5 THE Copilot Chat system SHALL refuse auto-promotion when the directive content appears to contain secrets (e.g. tokens/passwords/private keys) and SHALL log a debug reason.
+
+### Requirement 9 — Canonical group ids for cross-client shared memory
+
+**User Story:** As a user, I want Copilot Chat to use canonical Graphiti group ids, so that my memories can be shared across different agent clients without per-client silos.
+
+#### Acceptance Criteria
+
+9.1 THE Copilot Chat system SHALL write new Graphiti messages to canonical group ids with a `graphiti_<scope>_...` prefix derived from a stable `(scope, key)` mapping.
+9.2 WHEN the connected Graphiti server supports `POST /groups/resolve`, THE Copilot Chat system SHALL be able to use it to resolve canonical group ids, and WHEN it does not, THE Copilot Chat system SHALL fall back to a local deterministic algorithm that matches the server’s resolution behavior.
+9.3 WHEN deriving a `workspace` key, THE Copilot Chat system SHALL prefer a repository identity (e.g. GitHub remote host + org/repo) when available, otherwise falling back to a stable workspace-folder based key.
+9.4 WHEN deriving a `user` key, THE Copilot Chat system SHALL prefer a GitHub login-based key when available, otherwise falling back to a GitHub account id-based key and/or the legacy stored key.
+9.5 WHEN recalling from `workspace` or `user` scope, THE Copilot Chat system SHOULD include legacy group ids in the search target set for a transition period to avoid dropping previously ingested memories.

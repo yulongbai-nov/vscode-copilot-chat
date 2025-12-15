@@ -35,6 +35,15 @@
 - [x] 25. Add unit tests for auto recall + auto-promotion _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 - [x] 26. Update demo guide with directive examples _Requirements: 5.1, 8.3_
 
+## Extension: Cross-client shared group ids
+
+- [x] 27. Switch to canonical `graphiti_*` group ids _Requirements: 2.4, 3.1, 7.4, 7.5, 9.1_
+  - [x] 27.1 Derive `workspace` key from repo identity _Requirements: 9.3_
+  - [x] 27.2 Prefer GitHub login-based `user` key _Requirements: 7.4, 7.5, 9.4_
+  - [x] 27.3 Support Graphiti `POST /groups/resolve` with fallback _Requirements: 9.2_
+  - [x] 27.4 Include legacy `copilotchat_*` ids in recall _Requirements: 9.5_
+- [x] 28. Add cross-client end-to-end demo (Copilot Chat + Codex) _Requirements: 5.1, 9.5_
+
 ## Implementation Notes
 
 - Automatic behavior is always best-effort and fail-open.
@@ -57,8 +66,8 @@
 ## Current Status Summary
 
 - Phase: implementation.
-- Completed: ingestion + recall + promotion, demo guide, tests, and spec alignment.
+- Completed: ingestion + recall + promotion, demo guide, tests, and canonical cross-client group ids.
 - PR: https://github.com/yulongbai-nov/vscode-copilot-chat/pull/51
 - Completed (post-PR hardening): recall parallelization, promotion `<graphiti_episode>` formatting, and demo runbook notes.
 - Completed (extension): `recall.scopes=auto` + `autoPromote.enabled` (Memory Directives).
-- Next: address PR review feedback and merge.
+- Next: add an end-to-end demo shared with Codex (shared memory across clients).

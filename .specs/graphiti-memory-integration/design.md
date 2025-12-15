@@ -63,7 +63,7 @@ Chat turn ──┬─> Model response ──┬─> Render output
 
 - `GraphitiMemoryService`: [`src/extension/memory/graphiti/node/graphitiMemoryService.ts`](../../src/extension/memory/graphiti/node/graphitiMemoryService.ts)
   - Gating: enabled + trusted workspace + per-workspace consent.
-  - Scope → group id mapping (`session` / `workspace`) with hashed-by-default identifiers.
+  - Scope key → canonical group id mapping (`session` / `workspace`) with hashed-by-default identifiers (supports cross-client shared ids).
   - Bounded ingestion queue with deterministic drop policy and exponential backoff retries.
   - Optional git metadata in `source_description` (`branch`, `commit`, `dirty`) without file paths.
 
@@ -95,8 +95,8 @@ Chat turn ──┬─> Model response ──┬─> Render output
 Each successful chat turn is mapped to a pair of Graphiti `/messages` calls (user + assistant), grouped by `group_id`:
 
 - `group_id`: derived from scope and a stable key (hashed by default).
-  - `session`: based on Copilot Chat `Conversation.sessionId`
-  - `workspace`: based on workspace folder URIs (stable hash)
+  - `session`: based on Copilot Chat `Conversation.sessionId` (tool-local)
+  - `workspace`: based on the repository identity when available (git remote), otherwise workspace folder URIs (stable hash)
 - `role_type`: `user` / `assistant`
 - `content`: truncated to `github.copilot.chat.memory.graphiti.maxMessageChars`
 - `timestamp`: ISO timestamp
@@ -104,6 +104,26 @@ Each successful chat turn is mapped to a pair of Graphiti `/messages` calls (use
 - `source_description` (optional): includes safe git metadata if enabled
 
 Mapping helper: [`src/extension/memory/graphiti/node/graphitiMessageMapping.ts#L22`](../../src/extension/memory/graphiti/node/graphitiMessageMapping.ts#L22)
+
+### Canonical group ids (shared memory across clients)
+
+To support shared memory between Copilot Chat and other agent clients (e.g. Codex CLI), group ids are derived from the same `(scope, key)` mapping:
+
+- `scope`: `session | workspace | user`
+- `key`: stable string (see conventions below)
+- `group_id`: canonical id string safe for Graphiti group lookups
+
+Preferred resolution is via Graphiti `POST /groups/resolve` when available. For backward compatibility with older Graphiti deployments, clients must fall back to the same deterministic algorithm locally:
+
+`group_id = "graphiti_" + scope + "_" + sha256(key).slice(0, 32)`
+
+Key conventions:
+
+- `user`: `github_login:<login>` (from the GitHub auth session label); fall back to `github_account_id:<id>` and then the legacy stored random key.
+- `workspace`: `github_repo:<host>/<org>/<repo>` when the workspace maps to a GitHub remote; fall back to a stable hash of workspace folder URIs.
+- `session`: `copilotchat_session:<sessionId>` (tool-local; not intended to be shared across clients).
+
+Migration note: recall may query both the canonical `graphiti_*` group id and the legacy `copilotchat_*` group id to avoid dropping previously ingested memories during the transition.
 
 ### Recall query and formatting
 
@@ -132,8 +152,8 @@ User scope is a third grouping boundary intended for generic lessons/preferences
   - Template: [`src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L6`](../../src/extension/memory/graphiti/node/graphitiPromotionTemplates.ts#L6)
   - Kinds: `decision`, `lesson_learned`, `preference`, `procedure`, `task_update`, `terminology`
 - User scope group id uses a stable user key:
-  - Prefer the logged-in GitHub account id when available (stable across machines and sessions).
-  - Fall back to a stable, random key stored in global state (legacy behavior).
+  - Prefer the logged-in GitHub login when available (stable across tools).
+  - Fall back to a GitHub account id, then a stable, random key stored in global state (legacy behavior).
   - Key storage: [`src/extension/memory/graphiti/common/graphitiStorageKeys.ts#L6`](../../src/extension/memory/graphiti/common/graphitiStorageKeys.ts#L6)
 
 ### Auto-promotion from Memory Directives (optional)
