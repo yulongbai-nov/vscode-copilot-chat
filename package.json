@@ -1316,7 +1316,7 @@
 				"locations": [
 					"editor"
 				],
-			"commands": [
+				"commands": [
 					{
 						"name": "generate",
 						"when": "!config.inlineChat.enableV2",
@@ -1666,60 +1666,60 @@
 					}
 				]
 			},
-				{
-					"id": "github.copilot.chatReplay",
-					"name": "chatReplay",
-					"fullName": "Chat Replay",
-					"when": "debugType == 'vscode-chat-replay'",
-					"locations": [
-						"panel"
-					]
-				},
-				{
-					"id": "claude-code",
-					"name": "claude",
-					"fullName": "Claude Code CLI Agent",
-					"when": "config.github.copilot.chat.advanced.claudeCode.enabled",
-					"locations": [
-						"panel"
-					]
-				},
-				{
-					"id": "copilotcli",
-					"name": "cli",
-					"fullName": "Background Agent",
-					"locations": [
-						"panel"
-					]
-				},
-				{
-					"id": "copilot-cloud-agent",
-					"name": "cloud",
-					"fullName": "Cloud Agent",
-					"locations": [
-						"panel"
-					]
-				},
-				{
-					"id": "copilot-live-replay",
-					"name": "copilotReplay",
-					"fullName": "Copilot Replay",
-					"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
-					"locations": [
-						"panel"
-					]
-				},
-				{
-					"id": "copilot-live-replay-fork",
-					"name": "copilotReplayFork",
-					"fullName": "Copilot Replay Fork",
-					"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
-					"locations": [
-						"panel"
-					]
-				}
-			],
-			"languageModelChatProviders": [
+			{
+				"id": "github.copilot.chatReplay",
+				"name": "chatReplay",
+				"fullName": "Chat Replay",
+				"when": "debugType == 'vscode-chat-replay'",
+				"locations": [
+					"panel"
+				]
+			},
+			{
+				"id": "claude-code",
+				"name": "claude",
+				"fullName": "Claude Code CLI Agent",
+				"when": "config.github.copilot.chat.advanced.claudeCode.enabled",
+				"locations": [
+					"panel"
+				]
+			},
+			{
+				"id": "copilotcli",
+				"name": "cli",
+				"fullName": "Background Agent",
+				"locations": [
+					"panel"
+				]
+			},
+			{
+				"id": "copilot-cloud-agent",
+				"name": "cloud",
+				"fullName": "Cloud Agent",
+				"locations": [
+					"panel"
+				]
+			},
+			{
+				"id": "copilot-live-replay",
+				"name": "copilotReplay",
+				"fullName": "Copilot Replay",
+				"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"locations": [
+					"panel"
+				]
+			},
+			{
+				"id": "copilot-live-replay-fork",
+				"name": "copilotReplayFork",
+				"fullName": "Copilot Replay Fork",
+				"when": "config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"locations": [
+					"panel"
+				]
+			}
+		],
+		"languageModelChatProviders": [
 			{
 				"vendor": "copilot",
 				"displayName": "Copilot"
@@ -2126,71 +2126,71 @@
 				"category": "Chat"
 			},
 			{
-			"command": "github.copilot.liveRequestEditor.show",
-			"title": "Copilot: Show Prompt Inspector",
-			"icon": "$(open-preview)",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.replayPrompt",
-			"title": "%github.copilot.command.liveRequestEditor.replayPrompt%",
-			"icon": "$(history)",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.startReplayChat",
-			"title": "Copilot: Start chatting from replay",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.toggleReplayView",
-			"title": "Copilot: Toggle replay view (payload/projection)",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.debugReplaySample",
-			"title": "Copilot: Show sample replay (debug)",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.reset",
-			"title": "Live Request Editor: Reset",
-			"icon": "$(refresh)",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.setMode",
-			"title": "%github.copilot.command.liveRequestEditor.setMode%",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.configureAutoOverrideScope",
-			"title": "%github.copilot.command.liveRequestEditor.configureAutoOverrideScope%",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.configureAutoOverridePreviewLimit",
-			"title": "%github.copilot.command.liveRequestEditor.configureAutoOverridePreviewLimit%",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestEditor.clearAutoOverrides",
-			"title": "%github.copilot.command.liveRequestEditor.clearAutoOverrides%",
-			"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
-			"category": "Chat"
-		},
-		{
-			"command": "github.copilot.liveRequestMetadata.configureFields",
-			"title": "Live Request Metadata: Configure Fields",
+				"command": "github.copilot.liveRequestEditor.show",
+				"title": "Copilot: Show Prompt Inspector",
+				"icon": "$(open-preview)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.replayPrompt",
+				"title": "%github.copilot.command.liveRequestEditor.replayPrompt%",
+				"icon": "$(history)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.startReplayChat",
+				"title": "Copilot: Start chatting from replay",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.toggleReplayView",
+				"title": "Copilot: Toggle replay view (payload/projection)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.debugReplaySample",
+				"title": "Copilot: Show sample replay (debug)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled && config.github.copilot.chat.liveRequestEditor.timelineReplay.enabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.reset",
+				"title": "Live Request Editor: Reset",
+				"icon": "$(refresh)",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.setMode",
+				"title": "%github.copilot.command.liveRequestEditor.setMode%",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.configureAutoOverrideScope",
+				"title": "%github.copilot.command.liveRequestEditor.configureAutoOverrideScope%",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.configureAutoOverridePreviewLimit",
+				"title": "%github.copilot.command.liveRequestEditor.configureAutoOverridePreviewLimit%",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestEditor.clearAutoOverrides",
+				"title": "%github.copilot.command.liveRequestEditor.clearAutoOverrides%",
+				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
+				"category": "Chat"
+			},
+			{
+				"command": "github.copilot.liveRequestMetadata.configureFields",
+				"title": "Live Request Metadata: Configure Fields",
 				"icon": "$(gear)",
 				"enablement": "github.copilot-chat.activated && config.github.copilot.advanced.livePromptEditorEnabled",
 				"category": "Chat"
@@ -2489,20 +2489,20 @@
 				"command": "github.copilot.cloud.resetWorkspaceConfirmations",
 				"title": "%github.copilot.command.resetCloudAgentWorkspaceConfirmations%"
 			},
-				{
-					"command": "github.copilot.cloud.sessions.openInBrowser",
-					"title": "%github.copilot.command.openCopilotAgentSessionsInBrowser%",
-					"icon": "$(link-external)"
-				},
-				{
-					"command": "github.copilot.cloud.sessions.refresh",
-					"title": "%github.copilot.command.refreshCloudAgentSessions%",
-					"icon": "$(refresh)"
-				},
-				{
-					"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
-					"title": "%github.copilot.command.closeChatSessionPullRequest.title%"
-				},
+			{
+				"command": "github.copilot.cloud.sessions.openInBrowser",
+				"title": "%github.copilot.command.openCopilotAgentSessionsInBrowser%",
+				"icon": "$(link-external)"
+			},
+			{
+				"command": "github.copilot.cloud.sessions.refresh",
+				"title": "%github.copilot.command.refreshCloudAgentSessions%",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
+				"title": "%github.copilot.command.closeChatSessionPullRequest.title%"
+			},
 			{
 				"command": "github.copilot.chat.openSuggestionsPanel",
 				"title": "Open Completions Panel",
@@ -2758,40 +2758,40 @@
 								"Display whether the current request has unsaved edits (dirty state)."
 							]
 						},
-				"markdownDescription": "Configure which metadata fields render inside the Live Request Metadata view when the Live Request Editor is enabled. Leave empty to hide the metadata section."
-				},
-				"github.copilot.chat.liveRequestEditor.autoOverride.enabled": {
-					"type": "boolean",
-					"default": true,
-					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.enabled%"
-				},
-				"github.copilot.chat.liveRequestEditor.autoOverride.previewLimit": {
-					"type": "number",
-					"default": 3,
-					"minimum": 1,
-					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.previewLimit%"
-				},
-				"github.copilot.chat.liveRequestEditor.autoOverride.scopePreference": {
-					"type": "string",
-					"enum": [
-						"session",
-						"workspace",
-						"global"
-					],
-					"enumDescriptions": [
-						"%github.copilot.config.liveRequestEditor.autoOverride.scope.session%",
-						"%github.copilot.config.liveRequestEditor.autoOverride.scope.workspace%",
-						"%github.copilot.config.liveRequestEditor.autoOverride.scope.global%"
-					],
-					"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.scopePreference%"
-				},
-				"github.copilot.chat.liveRequestEditor.timelineReplay.enabled": {
-					"type": "boolean",
-					"default": false,
-					"markdownDescription": "%github.copilot.config.liveRequestEditor.timelineReplay.enabled%"
+						"markdownDescription": "Configure which metadata fields render inside the Live Request Metadata view when the Live Request Editor is enabled. Leave empty to hide the metadata section."
+					},
+					"github.copilot.chat.liveRequestEditor.autoOverride.enabled": {
+						"type": "boolean",
+						"default": true,
+						"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.enabled%"
+					},
+					"github.copilot.chat.liveRequestEditor.autoOverride.previewLimit": {
+						"type": "number",
+						"default": 3,
+						"minimum": 1,
+						"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.previewLimit%"
+					},
+					"github.copilot.chat.liveRequestEditor.autoOverride.scopePreference": {
+						"type": "string",
+						"enum": [
+							"session",
+							"workspace",
+							"global"
+						],
+						"enumDescriptions": [
+							"%github.copilot.config.liveRequestEditor.autoOverride.scope.session%",
+							"%github.copilot.config.liveRequestEditor.autoOverride.scope.workspace%",
+							"%github.copilot.config.liveRequestEditor.autoOverride.scope.global%"
+						],
+						"markdownDescription": "%github.copilot.config.liveRequestEditor.autoOverride.scopePreference%"
+					},
+					"github.copilot.chat.liveRequestEditor.timelineReplay.enabled": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "%github.copilot.config.liveRequestEditor.timelineReplay.enabled%"
+					}
 				}
-			}
-		},
+			},
 			{
 				"id": "preview",
 				"properties": {
@@ -4505,18 +4505,18 @@
 					"command": "github.copilot.cli.sessions.resumeInTerminal",
 					"when": "false"
 				},
-					{
-						"command": "github.copilot.cloud.sessions.openInBrowser",
-						"when": "false"
-					},
-					{
-						"command": "github.copilot.cloud.sessions.refresh",
-						"when": "false"
-					},
-					{
-						"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
-						"when": "false"
-					},
+				{
+					"command": "github.copilot.cloud.sessions.openInBrowser",
+					"when": "false"
+				},
+				{
+					"command": "github.copilot.cloud.sessions.refresh",
+					"when": "false"
+				},
+				{
+					"command": "github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest",
+					"when": "false"
+				},
 				{
 					"command": "github.copilot.chat.applyCopilotCLIAgentSessionChanges",
 					"when": "false"
@@ -4868,22 +4868,22 @@
 					"when": "chatSessionType == copilot-cloud-agent",
 					"group": "context"
 				},
-        {
-          "command": "github.copilot.cli.sessions.delete",
-          "when": "chatSessionType == copilotcli && config.chat.agentSessionsViewLocation == 'single-view'",
-          "group": "context"
-        },
-        {
-          "command": "github.copilot.cli.sessions.rename",
-          "when": "chatSessionType == copilotcli",
-          "group": "context@5"
-        },
-        {
-          "command": "github.copilot.cli.sessions.replaySampleNative",
-          "when": "chatSessionType == copilotcli",
-          "group": "context@10"
-        }
-      ]
+				{
+					"command": "github.copilot.cli.sessions.delete",
+					"when": "chatSessionType == copilotcli && config.chat.agentSessionsViewLocation == 'single-view'",
+					"group": "context"
+				},
+				{
+					"command": "github.copilot.cli.sessions.rename",
+					"when": "chatSessionType == copilotcli",
+					"group": "context@5"
+				},
+				{
+					"command": "github.copilot.cli.sessions.replaySampleNative",
+					"when": "chatSessionType == copilotcli",
+					"group": "context@10"
+				}
+			]
 		},
 		"icons": {
 			"copilot-logo": {
