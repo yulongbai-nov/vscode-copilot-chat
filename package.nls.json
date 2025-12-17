@@ -424,20 +424,11 @@
 	"github.copilot.config.inlineEdits.nextCursorPrediction.currentFileMaxTokens": "Maximum tokens for current file in next cursor prediction.",
 	"github.copilot.config.inlineEdits.renameSymbolSuggestions": "Enable rename symbol suggestions in inline edits.",
 	"github.copilot.config.nextEditSuggestions.preferredModel": "Preferred model for next edit suggestions.",
-<<<<<<< HEAD
-		"github.copilot.command.deleteAgentSession": "Delete",
-		"github.copilot.command.cli.sessions.resumeInTerminal": "Resume in Terminal",
-		"github.copilot.command.openCopilotAgentSessionsInBrowser": "Open in Browser",
-		"github.copilot.command.refreshCloudAgentSessions": "Refresh Sessions",
-		"github.copilot.command.closeChatSessionPullRequest.title": "Close Pull Request",
-		"github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply": "Apply",
-		"github.copilot.command.applyCopilotCLIAgentSessionChanges": "Apply Changes to Workspace",
 	"github.copilot.command.liveRequestEditor.setMode": "Copilot: Set Live Request Editor Mode",
 	"github.copilot.command.liveRequestEditor.configureAutoOverrideScope": "Live Request Editor: Configure Auto Override Scope",
 	"github.copilot.command.liveRequestEditor.configureAutoOverridePreviewLimit": "Live Request Editor: Configure Auto Override Preview Limit",
 	"github.copilot.command.liveRequestEditor.clearAutoOverrides": "Live Request Editor: Clear Auto Override Overrides",
 	"github.copilot.command.liveRequestEditor.replayPrompt": "Live Request Editor: Replay Edited Prompt",
-=======
 	"github.copilot.command.deleteAgentSession": "Delete",
 	"github.copilot.command.cli.sessions.resumeInTerminal": "Resume in Terminal",
 	"github.copilot.command.openCopilotAgentSessionsInBrowser": "Open in Browser",
@@ -445,7 +436,6 @@
 	"github.copilot.command.installPRExtension.title": "Install GitHub Pull Request Extension",
 	"github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply": "Apply",
 	"github.copilot.command.applyCopilotCLIAgentSessionChanges": "Apply Changes to Workspace",
->>>>>>> upstream/main
 	"github.copilot.config.githubMcpServer.enabled": "Enable built-in support for the GitHub MCP Server.",
 	"github.copilot.config.githubMcpServer.toolsets": "Specify toolsets to use from the GitHub MCP Server.",
 	"github.copilot.config.githubMcpServer.readonly": "Enable read-only mode for the GitHub MCP Server. When enabled, only read tools are available.",
